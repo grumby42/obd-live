@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261104-2002Z">
-<meta name="build-timestamp-utc" content="2026-11-04T20:02:46Z">
+<meta name="build-id" content="OBD-20261104-2003Z">
+<meta name="build-timestamp-utc" content="2026-11-04T20:03:17Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261104-2002Z", BUILD_UTC = "2026-11-04T20:02:46Z";
+const BUILD_ID = "OBD-20261104-2003Z", BUILD_UTC = "2026-11-04T20:03:17Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1652,7 +1652,8 @@ function nodeColor(m, v) { if (v === null || v === undefined) return "#2a2a28"; 
 R.sysmap = (w, box) => {
   const veh = vehicles[vid], cyl = (veh.engine && veh.engine.cyl) || 8, V = veh.layout === "V" || (!veh.layout && cyl >= 6), bank1 = veh.bank1Cyls || (V ? null : Array.from({ length: cyl }, (_, i) => i + 1));
   const svg = sv("svg", { viewBox: "0 0 820 560", width: "100%", style: "flex:1;min-height:0;font-family:system-ui;font-size:11px" }), note = el("div", { class: "sub", style: "white-space:normal" });
-  box.append(header(w, "System map: " + veh.name, "Schematic"), el("div", { class: "body" }, svg, note));
+  const wrap = el("div", { style: "flex:1;min-height:0;overflow:auto" }); wrap.append(svg); box.append(header(w, "System map: " + veh.name, "Schematic"), el("div", { class: "body" }, wrap, note));
+  const size = () => { const narrow = box.getBoundingClientRect().width < 700; svg.style.width = narrow ? "820px" : "100%"; svg.style.height = narrow ? "560px" : "100%"; svg.style.flex = narrow ? "none" : "1"; }; size(); addEventListener("resize", size);
   const nodes = {};
   const path = (d, col) => svg.append(sv("path", { d, fill: "none", stroke: col, "stroke-width": 3, "marker-end": "url(#arr)", opacity: .7 }));
   const defs = sv("defs", {}, sv("marker", { id: "arr", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: "auto-start-reverse" }, sv("path", { d: "M0,0 L10,5 L0,10 z", fill: "#8f8e85" }))); svg.append(defs);
@@ -1679,7 +1680,7 @@ R.sysmap = (w, box) => {
   if (V) { node("o2v5", 150, 460, 120, "B2 front O2 V"); node("cat2", 330, 460, 130, "Catalyst B2 °F"); node("o2v6", 510, 460, 120, "B2 rear O2 V"); node("stft2", 680, 460, 120, "B2 short trim"); }
   // Loops (bottom)
   lbl(20, 505, "LOOPS"); node("ect", 110, 530, 110, "Coolant °F"); node("oilt", 230, 530, 100, "Oil °F"); node("oilp", 340, 530, 100, "Oil psi"); node("trans", 460, 530, 110, "Trans fluid °F"); node("gear", 570, 530, 80, "Gear"); node("slip", 670, 530, 100, "TCC slip rpm"); node("volt", 770, 530, 80, "Volts");
-  note.textContent = "Order of sensors is exact; positions are schematic. Color: dim = low, bright = high within each gauge's range; green and red follow that gauge's limit. Amber dot = cylinder-deactivation cylinder. Tap any box to drill in. " + (veh.bankNote || "");
+  note.textContent = (box.getBoundingClientRect().width < 700 ? "Scroll sideways or pinch to zoom. " : "") + "Order of sensors is exact; positions are schematic. Color: dim = low, bright = high within each gauge's range; green and red follow that gauge's limit. Amber dot = cylinder-deactivation cylinder. Tap any box to drill in. " + (veh.bankNote || "");
   return () => { for (const id in nodes) { const n = nodes[id], m = n.m; if (!m) continue; const v = latest[id] ?? null, st = mstate[id] || {}; const col = nodeColor(m, v), bright = col.startsWith("rgb") && Number(col.match(/\d+/g)[2]) > 170; n.rect.setAttribute("fill", col); n.rect.setAttribute("stroke", v === null ? "#383835" : "#8f8e85"); n.t2.setAttribute("fill", bright ? "#0b0b0b" : "#f0efec"); if (n.t1) n.t1.setAttribute("fill", bright ? "#0b0b0b" : "#f0efec"); n.t2.textContent = v === null ? (st.status === "unsupported" || st.status === "failed" ? "n/a" : "--") : fmt(m, v) + (n.cyl ? "" : " " + m.unit); } };
 };
 R.phone = (w, box) => {
