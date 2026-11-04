@@ -119,6 +119,7 @@ r = rep(drive("interstate", { noBank2: true, cyl: 4 }), { name: "Equinox", engin
 r = rep(drive("interstate"), sierra, { codes: { stored: ["P0304"], pending: [], permanent: [] } }); assert(has(r, /trouble code/, "attention")); assert(r.findings.find(f => /trouble code/.test(f.title)).evidence.includes("Ignition or misfire"));
 r = rep(drive("interstate"), sierra, { mode06: [{ mid: 0x21, name: "Catalyst bank 1", tid: 0x80, val: 100, min: 0, max: 80, pass: false }] }); assert(has(r, /outside the computer's limits/, "attention"));
 r = rep(drive("interstate"), sierra, { mode06: [{ mid: 0x21, name: "Catalyst bank 1", tid: 0x80, val: 40, min: 0, max: 80, pass: true }] }); assert(has(r, /within the computer's limits/, "good"));
+{ const six = { ...sierra, trans: "6L80 (RPO MYC)", gears: 6 }, d = drive("interstate", { transMax: 255 }); r = rep(d, six); assert(r.findings.find(f => /very hot/.test(f.title)).next.join().includes("6L80")); d.forEach(x => x.gear = 8); r = rep(d, six); assert.strictEqual(r.validation.gear, "suspect", "6-speed can't report gear 8"); }
 assert.strictEqual(api.analyzeDrive({ rows: [] }).verdict.level, "nodata");
 // Baseline only compares same kind of drive
 const past = [1, 2, 3].map(i => ({ id: "h" + i, review: { stats: { kind: "Interstate / highway", transPeak: 170, ectPlateau: 205, mpg: 20 } } }));

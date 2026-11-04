@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261104-1648Z">
-<meta name="build-timestamp-utc" content="2026-11-04T16:48:11Z">
+<meta name="build-id" content="OBD-20261104-1653Z">
+<meta name="build-timestamp-utc" content="2026-11-04T16:53:43Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -97,7 +97,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261104-1648Z", BUILD_UTC = "2026-11-04T16:48:11Z";
+const BUILD_ID = "OBD-20261104-1653Z", BUILD_UTC = "2026-11-04T16:53:43Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -269,7 +269,7 @@ const METRICS = [
  std("mon","Monitor status","Diagnostics","01","codes","slow",0,0,127,b=>b[0]&0x7f,{rule:{hi:0,note:"Confirmed emissions codes reported through the standard J1979 status."}}),
  gm("trans","Trans fluid","Transmission","1940","°F","med",0,-20,300,tempF,{rule:{hi:220,when:"running",note:GUIDE+" GM TechLink uses 190°F as a diagnostic warm-up reference, not a limit."}}),
  gm("gear","Current gear","Transmission","199A","","fast",0,0,10,b=>b[0]),
- gm("slip","TCC slip","Transmission","1991","rpm","fast",0,-1500,1500,b=>s16(b[0],b[1])/8,{rule:{hi:50,lo:-50,when:"cruise",sustainMs:3000,note:GUIDE+" Rated only during steady cruise. GM bulletin 16-NA-175 expects zero in its locked test, but normal driving can intentionally slip."}}),
+ gm("slip","TCC slip","Transmission","1991","rpm","fast",0,-1500,1500,b=>s16(b[0],b[1])/8,{rule:{hi:50,lo:-50,when:"cruise",sustainMs:3000,note:GUIDE+" Rated only during steady cruise, because normal driving can intentionally slip."}}),
  gm("sh12","1-2 shift time","Transmission","1993","s","slow",2,0,6,b=>b[0]/40),
  gm("sh23","2-3 shift time","Transmission","1994","s","slow",2,0,6,b=>b[0]/40),
  gm("sh34","3-4 shift time","Transmission","1995","s","slow",2,0,6,b=>b[0]/40),
@@ -404,13 +404,14 @@ function annotate(rowsIn) {
   return rows;
 }
 // A community GM request only counts as trustworthy if the truck's own physics agree with it.
-function validateSignals(rows, meta) {
+function validateSignals(rows, meta, vehicle = {}) {
   const out = {}, drive = rows.filter(r => r._running), mins = secondsTrue(rows, r => r._running) / 60;
   const has = k => nums(rows, k).length >= 5;
   if (has("gear")) {
     const g = {}; rows.forEach(r => { if (Number.isInteger(r.gear) && r._ratio) (g[r.gear] = g[r.gear] || []).push(r._ratio); });
     const med = Object.keys(g).filter(k => g[k].length >= 5).map(Number).sort((a, b) => a - b).map(k => pctl(g[k], .5));
-    out.gear = med.length < 2 ? "unknown" : med.every((v, i) => !i || v < med[i - 1]) ? "ok" : "suspect";
+    const tooHigh = vehicle.gears && rows.some(r => r.gear > vehicle.gears);
+    out.gear = tooHigh ? "suspect" : med.length < 2 ? "unknown" : med.every((v, i) => !i || v < med[i - 1]) ? "ok" : "suspect";
   }
   const flat = k => { const a = nums(drive, k); return mins >= 5 && a.length >= 30 && Math.max(...a) - Math.min(...a) < 1e-6; };
   if (has("slip")) { const a = nums(drive, "slip"); out.slip = flat("slip") || (a.length && mins >= 3 && pctl(a.map(Math.abs), .5) >= 900) ? "suspect" : "unknown"; }
@@ -495,7 +496,7 @@ const dtcFamily = c => {
 function analyzeDrive(input) {
   const { rows: rawRows = [], meta = {}, vehicle = {}, history = [] } = input;
   const rows = annotate(rawRows), F = [], na = [], tested = [];
-  const trip = classify(rows), val = validateSignals(rows, meta), engine = vehicle.engine || {}, L = engine.L || null, cyl = engine.cyl || null;
+  const trip = classify(rows), val = validateSignals(rows, meta, vehicle), engine = vehicle.engine || {}, L = engine.L || null, cyl = engine.cyl || null;
   const add = (system, level, title, evidence, meaning, causes = [], next = [], basis = LIT.guide) => F.push({ system, level, title, evidence, meaning, causes, next, basis });
   const need = (system, why) => na.push({ system, why });
   const usable = k => val[k] !== "suspect" && nums(rows, k).length >= 5;
@@ -632,10 +633,11 @@ function analyzeDrive(input) {
   const usesTrans = usable("trans");
   if (usesTrans) {
     tested.push("Transmission temperature");
+    const tb = /6L80/.test(vehicle.trans || "") ? " GM TechLink (2022) covers overheating diagnosis on 6L80 trucks, including the thermal bypass valve." : "";
     const a = nums(rows, "trans"), pk = pctl(a, .99), hot = secondsTrue(rows, r => r.trans > 220), hotter = secondsTrue(rows, r => r.trans > 240); stats.transPeak = pk; stats.transAboveGuideSeconds = hot;
     const cruiseT = nums(rows, "trans", r => r._cruise); if (cruiseT.length >= 60) stats.transCruise = pctl(cruiseT, .5);
-    if (hotter >= 60 || pk >= 250) add("Transmission", "attention", "Transmission fluid ran very hot", "Peak " + rnd(pk) + "°F, above 240°F for " + rnd(hotter) + " seconds." + unverified("trans"), "Sustained heat ages fluid and clutches quickly.", ["Towing or grades", "Converter slip", "Cooler flow or thermal bypass fault"], ["Check the fluid condition and cooler flow. Keep the data for your transmission shop."]);
-    else if (hot >= 60) add("Transmission", "watch", "Transmission fluid spent time above the guide", "Peak " + rnd(pk) + "°F, above 220°F for " + rnd(hot) + " seconds." + unverified("trans"), "This may be load-related, but it's worth comparing with similar drives.", ["Load, heat, or stop-and-go traffic", "Converter slip"], ["Note the conditions at the hottest point."]);
+    if (hotter >= 60 || pk >= 250) add("Transmission", "attention", "Transmission fluid ran very hot", "Peak " + rnd(pk) + "°F, above 240°F for " + rnd(hotter) + " seconds." + unverified("trans"), "Sustained heat ages fluid and clutches quickly.", ["Towing or grades", "Converter slip", "Cooler flow or thermal bypass fault"], ["Check the fluid condition and cooler flow. Keep the data for your transmission shop." + tb]);
+    else if (hot >= 60) add("Transmission", "watch", "Transmission fluid spent time above the guide", "Peak " + rnd(pk) + "°F, above 220°F for " + rnd(hot) + " seconds." + unverified("trans"), "This may be load-related, but it's worth comparing with similar drives.", ["Load, heat, or stop-and-go traffic", "Converter slip"], ["Note the conditions at the hottest point." + tb]);
     else if (trip.runningSeconds >= 600 && val.trans === "ok") add("Transmission", "good", "Transmission temperature stayed moderate", "Peak " + rnd(pk) + "°F" + (stats.transCruise ? ", " + rnd(stats.transCruise) + "°F at steady cruise." : "."), "No heat concern on this drive. GM uses 190°F as a diagnostic warm-up reference.", [], [], LIT.techlink);
     if (trip.runningSeconds >= 900 && pk < 120) add("Transmission", "info", "Transmission never warmed much", "Peak " + rnd(pk) + "°F after " + rnd(trip.runningSeconds / 60) + " minutes.", "Either the fluid warms slowly or this reading needs checking.", [], ["Compare with a scan tool you trust."]);
   } else need("Transmission temperature", "No trustworthy transmission temperature reading.");
@@ -731,7 +733,7 @@ function el(tag, props = {}, ...kids) {
   return e;
 }
 const DEFAULT_VEHICLES = {
-  sierra: { id: "sierra", name: "2016 GMC Sierra 1500", engine: { label: "5.3L V8", L: 5.3, cyl: 8 }, layout: "V", afm: true, afmCyls: [1, 4, 6, 7], trans: "", notes: "", match: { wmi: ["1GT"], year: "G" } },
+  sierra: { id: "sierra", name: "2016 GMC Sierra 1500", engine: { label: "5.3L V8", L: 5.3, cyl: 8 }, layout: "V", afm: true, afmCyls: [1, 4, 6, 7], trans: "6L80 (RPO MYC)", gears: 6, notes: "", match: { wmi: ["1GT"], year: "G" } },
   equinox: { id: "equinox", name: "2014 Chevrolet Equinox", engine: null, layout: null, afm: false, trans: "", notes: "", match: { wmi: ["2GN", "2CN"], year: "E" } }
 };
 const ENGINE_CHOICES = { equinox: [{ label: "2.4L 4-cylinder", L: 2.4, cyl: 4, layout: "I" }, { label: "3.6L V6", L: 3.6, cyl: 6, layout: "V" }] };
@@ -762,7 +764,7 @@ function buildDash(name) {
 }
 let vehicles = store.get("vehicles", null);
 if (!vehicles || typeof vehicles !== "object") vehicles = {};
-for (const k in DEFAULT_VEHICLES) vehicles[k] = { ...DEFAULT_VEHICLES[k], ...(vehicles[k] || {}) };
+for (const k in DEFAULT_VEHICLES) { const saved = vehicles[k] || {}; vehicles[k] = { ...DEFAULT_VEHICLES[k], ...saved }; if (!saved.trans) vehicles[k].trans = DEFAULT_VEHICLES[k].trans; }
 let vid = store.get("vid", "sierra"); if (!vehicles[vid]) vid = "sierra";
 const vkey = k => "v." + vid + "." + k;
 function saveVehicles() { store.set("vehicles", vehicles); }
@@ -1347,7 +1349,7 @@ function openMore() {
    ["OBD-II PIDs summary (Wikipedia)", "https://en.wikipedia.org/wiki/OBD-II_PIDs", "Public, not official: PID formulas, bitmasks and monitor bit layout."],
    ["CARB 13 CCR 1968.2", "https://ww2.arb.ca.gov/sites/default/files/classic/msprog/obdprog/1968.2_feb072006.pdf", "Public regulation behind readiness, freeze frame and code reporting (2006 text)."],
    ["GM TechLink: 6-speed overheating", "https://gm-techlink.com/?p=16905", "Official GM: 190°F warm-up reference and thermal bypass details for 6L80/6L90 trucks."],
-   ["GM bulletin 16-NA-175 (via NHTSA)", "https://static.nhtsa.gov/odi/tsbs/2016/SB-10081963-2280.pdf", "Official GM: shudder test conditions for 2016 8L90 trucks, including zero TCC slip in its locked test."],
+   ["GM bulletin 16-NA-175 (via NHTSA)", "https://static.nhtsa.gov/odi/tsbs/2016/SB-10081963-2280.pdf", "Official GM: shudder test conditions for 2016 8L90 trucks. It does not apply to a 6L80."],
    ["GM/ACDelco diagnostic resources", "https://www.gmparts.com/technical-resources/diagnostic-support-resources", "Paid Service Information and GDS2. This is where official PID definitions and limits live."],
    ["2016 Sierra Denali owner's manual", "https://contentdelivery.ext.gm.com/content/dam/cope/en_us/public/pdf_assets/active/owners_manuals_browse/2k16sierraden1stPrint.pdf", "Official GM owner information. I found no usable numeric limits in the text I could read."],
    ["STN/OBDLink documentation", "https://www.obdsol.com/stn1110/", "Official adapter docs and ELM327 command compatibility."],
