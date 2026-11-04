@@ -169,5 +169,10 @@ r = rep(drive("interstate", { slip: 180, transMax: 170 })); assert(has(r, /pulls
 r = rep(drive("interstate"), sierra, { codes: { stored: ["P0304"], pending: [], permanent: [] } }); assert(has(r, /pulls in different directions/) && r.findings.find(q => /pulls/.test(q.title)).evidence.includes("intermittent"));
 r = rep(drive("interstate", { coolHigh: 245 })); { const f = r.findings.find(q => /Coolant ran hot/.test(q.title)); assert(f.chain && f.chain.absent[0].includes("No overheat")); assert(!/threshold hasn't been crossed yet/.test(f.chain.absent[0])); }
 assert(api.reportMarkdown(rep(drive("mixed", { leak: true })), sierra, {}).includes("What would settle it"));
+// Phone sensors
+{ const d = drive("interstate"); d.forEach(x => { if (x.mph >= 30) { x.gmph = x.mph / 1.06; x.speedo = (x.mph / x.gmph - 1) * 100; x.gacc = 20; } }); r = rep(d); assert(has(r, /differs from GPS by 6/, "watch"), "speedo " + bad(r));
+  const h = drive("interstate"); h.forEach(x => { x.grade = 5; }); r = rep(h); assert(r.notAssessed.some(n => /Gear ratio/.test(n.system)), "hills excluded from cruise");
+  const v = drive("mixed"); v.forEach(x => { x.vib = x.mph >= 60 ? .9 : .3; }); r = rep(v); assert(has(r, /Vibration peaks around 60/, "watch"), "vib " + bad(r));
+  const q = drive("mixed"); q.forEach(x => { x.vib = .3; }); r = rep(q); assert(has(r, /No speed-dependent vibration/, "good")); }
 assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 console.log("all tests passed");

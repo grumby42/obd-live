@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261104-1908Z">
-<meta name="build-timestamp-utc" content="2026-11-04T19:08:58Z">
+<meta name="build-id" content="OBD-20261104-1920Z">
+<meta name="build-timestamp-utc" content="2026-11-04T19:20:10Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -101,6 +101,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
  <button id="addBtn" hidden>+ Add widget</button>
  <button id="resetBtn" hidden>Reset tab</button>
  <button id="markBtn">Mark</button>
+ <button id="phoneBtn">Phone sensors</button>
  <button id="reviewBtn" class="primary">Drive review</button>
  <button id="screensBtn">Screens</button>
  <button id="moreBtn">Data &amp; sources</button>
@@ -114,7 +115,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261104-1908Z", BUILD_UTC = "2026-11-04T19:08:58Z";
+const BUILD_ID = "OBD-20261104-1920Z", BUILD_UTC = "2026-11-04T19:20:10Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -301,6 +302,15 @@ const METRICS = [
  { id:"ratio",label:"Engine rpm per mph",group:"Transmission",unit:"rpm/mph",digits:1,min:0,max:200,basis:"derived",need:["rpm","mph"],calc:v=>v.mph>5&&v.rpm>0?v.rpm/v.mph:null },
  { id:"fflow",label:"Estimated fuel flow",group:"Fuel",unit:"gal/h",digits:2,min:0,max:40,basis:"derived",need:["maf"],calc:v=>v.maf>0?v.maf/(14.7*(v.lambda>0?v.lambda:1))*3600/(6.17*454):null },
  { id:"alt",label:"Estimated altitude",group:"Driving",unit:"ft",digits:0,min:-500,max:12000,basis:"derived",need:["baro"],calc:v=>v.baro>0?(1-Math.pow(v.baro/101.325,0.1903))*145366:null },
+ { id:"gmph",label:"GPS speed",group:"Phone",unit:"mph",digits:0,min:0,max:120,basis:"phone",tier:"med" },
+ { id:"galt",label:"GPS altitude",group:"Phone",unit:"ft",digits:0,min:-500,max:12000,basis:"phone",tier:"med" },
+ { id:"gacc",label:"GPS accuracy",group:"Phone",unit:"ft",digits:0,min:0,max:500,basis:"phone",tier:"med" },
+ { id:"grade",label:"Road grade",group:"Phone",unit:"%",digits:1,min:-15,max:15,basis:"phone",tier:"med" },
+ { id:"vib",label:"Vibration",group:"Phone",unit:"m/s²",digits:2,min:0,max:5,basis:"phone",tier:"med" },
+ { id:"vibhz",label:"Vibration frequency",group:"Phone",unit:"Hz",digits:1,min:0,max:30,basis:"phone",tier:"med" },
+ { id:"noise",label:"Cabin noise",group:"Phone",unit:"dB rel",digits:0,min:-90,max:0,basis:"phone",tier:"med" },
+ { id:"noisehz",label:"Loudest frequency",group:"Phone",unit:"Hz",digits:0,min:0,max:4000,basis:"phone",tier:"med" },
+ { id:"speedo",label:"Speedometer vs GPS",group:"Phone",unit:"%",digits:1,min:-20,max:20,basis:"derived",need:["mph","gmph"],calc:v=>v.gmph>=30&&v.mph>0?(v.mph/v.gmph-1)*100:null },
  { id:"mpg",label:"Estimated MPG",group:"Fuel",unit:"mpg",digits:1,min:0,max:60,basis:"derived",need:["mph","maf"],calc:v=>v.mph>2&&v.maf>0?Math.min(99,11.44*v.mph/v.maf):null },
  { id:"hp",label:"Estimated power",group:"Engine",unit:"hp",digits:0,min:0,max:450,basis:"derived",need:["torq","reftq","rpm"],calc:v=>v.reftq>0&&v.rpm>0?Math.max(0,v.torq/100*v.reftq*v.rpm/5252):null }
 ];
@@ -417,7 +427,8 @@ function annotate(rowsIn) {
     r._idle = r._running && r.mph < 1 && r.rpm < 1300;
     const mphSp = sp("mph"), tpsSp = sp("tps");
     r._steady = mphSp !== null && mphSp <= 3 && (tpsSp === null || tpsSp <= 5);
-    r._cruise = r._running && r.mph >= 40 && r._steady;
+    r._hill = typeof r.grade === "number" && Math.abs(r.grade) >= 3;
+    r._cruise = r._running && r.mph >= 40 && r._steady && !r._hill;
     r._highload = r._running && (r.load >= 75 || r.tps >= 70);
     const decelCut = r.fuelstat === 4 || (r._acc < -0.3 && r.tps < 18 && r.mph > 5);
     r._closed = r.fuelstat !== undefined ? r.fuelstat === 2 : (r._warm && !decelCut && !(r.load >= 85));
@@ -726,6 +737,19 @@ function analyzeDrive(input) {
   if (anyBad("Cooling") && (F.some(f => f.system === "Transmission" && f.level !== "good" && f.level !== "info"))) links.push("Coolant and transmission heat rising together suggests load or cooling capacity. The transmission cooler also depends on engine cooling.");
   links.forEach(t => add("Connecting the findings", "info", "How these findings may connect", t, "This is a hypothesis to test, not a diagnosis.", [], [], "Cross-signal reasoning"));
 
+  // Phone sensors, when present
+  const sp = rows.filter(r => typeof r.speedo === "number" && r.gacc !== undefined && r.gacc < 50);
+  if (sp.length >= 60) { tested.push("Speedometer vs GPS"); const med = pctl(nums(sp, "speedo"), .5); stats.speedo = med;
+    if (Math.abs(med) >= 4) add("Driving context", "watch", "Speed reading differs from GPS by " + rnd(med, 1) + "%", "Median over " + sp.length + " samples at 30 mph and above with good GPS accuracy.", "Vehicle speed sensors usually agree with GPS within a few percent. A larger gap often means non-stock tire size, and it also skews this app's mph-based checks.", ["Tire size different from original", "GPS speed lag in turns or under trees"], ["Compare on a straight, open road."], "Physics check");
+    else add("Driving context", "good", "Speed reading agrees with GPS", "Median difference " + rnd(med, 1) + "% over " + sp.length + " samples.", "The vehicle's speed signal looks trustworthy, which also supports the gear-ratio checks.", [], [], "Physics check"); }
+  const hills = secondsTrue(rows, r => r._hill); if (hills >= 60) add("Driving context", "info", rnd(hills / 60, 1) + " minutes on grades of 3% or more", "From GPS altitude. Those stretches were excluded from steady-cruise checks.", "Grades change rpm, load, and temperature without any fault.", [], [], "Phone GPS");
+  const vb = rows.filter(r => typeof r.vib === "number" && typeof r.mph === "number" && r.mph >= 20);
+  if (vb.length >= 120) { tested.push("Vibration vs speed"); const bins = {}; vb.forEach(r => { const k = Math.floor(r.mph / 10) * 10; (bins[k] = bins[k] || []).push(r.vib); }); const rowsB = Object.keys(bins).map(Number).sort((x, y) => x - y).filter(k => bins[k].length >= 20).map(k => [k, pctl(bins[k], .5)]);
+    if (rowsB.length >= 3) { const base = Math.min(...rowsB.map(x => x[1])), peak = rowsB.reduce((m, x) => x[1] > m[1] ? x : m); stats.vibPeakMph = peak[0];
+      if (base > 0 && peak[1] >= base * 2 && peak[0] >= 40) add("Ride and driveline", "watch", "Vibration peaks around " + peak[0] + "–" + (peak[0] + 10) + " mph", rowsB.map(x => x[0] + "s: " + rnd(x[1], 2)).join(", ") + " m/s².", "A vibration that grows with road speed and peaks in one band is the common signature of wheel balance or a tire problem; engine-related vibration follows rpm instead. Road surface changes can mimic it.", ["Wheel balance or tire", "Driveshaft or axle"], ["Repeat on a smooth road and see if the band holds. Check whether it changes with gear at the same speed."], "Phone motion sensor");
+      else add("Ride and driveline", "good", "No speed-dependent vibration band", rowsB.map(x => x[0] + "s: " + rnd(x[1], 2)).join(", ") + " m/s².", "Vibration didn't single out one speed band on this drive.", [], [], "Phone motion sensor"); } }
+  const marksN = markSnapshots(rows); if (marksN.length && rows.some(r => typeof r.noise === "number")) { const at = marksN.map(m => { const w = rows.filter(r => Math.abs(r.t - m.t) <= 5000 && typeof r.noise === "number"); return w.length ? [m.label, pctl(nums(w, "noise"), .5), pctl(nums(w, "noisehz"), .5)] : null; }).filter(Boolean), baseN = pctl(nums(rows, "noise"), .5);
+    if (at.length) add("Driving context", "info", "Cabin noise at your marks", at.map(x => x[0] + ": " + rnd(x[1]) + " dB rel" + (x[2] ? ", loudest " + rnd(x[2]) + " Hz" : "")).join("; ") + ". Drive median " + rnd(baseN) + " dB rel.", "Relative levels from the phone microphone. A pitch that changes with fan speed points at the blower; one that changes with road speed points at wheels or tires.", [], [], "Phone microphone"); }
   const xc = crossChecks(rows, 100000), disagree = xc.filter(x => x.status === "disagree" && x.n >= 60); xc.filter(x => x.status === "agree").length && tested.push("Sensor cross-checks");
   if (disagree.length) add("Sensor checks", "watch", "Related sensors didn't move together", disagree.map(x => x.name + " (correlation " + rnd(x.r, 2) + ")").join("; ") + ".", "Redundant or related signals should broadly agree. Disagreement can mean a sensor issue, or just slow one-second sampling.", ["Sensor or wiring fault", "Sampling timing"], ["Check whether this repeats, and compare codes."], "Physics check");
   if (meta.fpChanged) add("Computer identity", "watch", "Computer software fingerprint changed since last connect", "Calibration or verification number differs from the value stored on this device.", "This usually means a dealer update, reprogramming, or module replacement. If nothing like that happened, ask why.", ["Dealer software update", "Module replacement", "Aftermarket tune"], ["Check your service records."], LIT.j1979);
@@ -1060,6 +1084,7 @@ const PRESETS = {
    W("line",["trans"],[4,4],[6,5],{win:15}), W("share",[],[4,4],[4,4],{share:"gear",view:"bars"}), W("share",[],[4,4],[4,4],{share:"temp",view:"donut"}),
    W("share",[],[4,4],[4,4],{share:"drive",view:"donut"}), W("number",["sh12"],[2,3],[3,3]), W("number",["sh23"],[2,3],[3,3]), W("number",["sh34"],[2,3],[3,3]), W("number",["ratio"],[2,3],[3,3]), W("history",["trans"],[4,4],[12,4],{stat:"max"}) ],
  Electrical: [ W("elab",[],[4,3],[4,3]), W("needle",["volt"],[2,4],[4,4]), W("number",["atrv"],[2,4],[4,4]), W("line",["volt","atrv"],[4,4],[12,4],{win:15}), W("history",["volt"],[4,4],[12,4],{stat:"min"}) ],
+ Phone: [ W("phone",[],[4,3],[4,3]), W("number",["speedo"],[2,3],[4,3]), W("number",["grade"],[2,3],[4,3]), W("line",["mph","gmph"],[4,4],[6,4],{win:5}), W("line",["vib"],[4,4],[6,4],{win:5}), W("line",["noise"],[4,4],[6,4],{win:5}), W("scatter",["mph","vib"],[4,5],[6,5]) ],
  Engine: [ W("misfire",[],[4,4],[6,4]), W("line",["ect","oilt","trans"],[4,4],[6,4],{win:15}), W("line",["stft1","stft2","ltft1","ltft2"],[4,4],[6,4],{win:5}),
    W("line",["rpm"],[4,3],[6,4],{win:5}), W("number",["oilp"],[2,3],[3,3]), W("number",["oilt"],[2,3],[3,3]), W("number",["knock"],[2,3],[3,3]), W("number",["timing"],[2,3],[3,3]), W("number",["load"],[2,3],[3,3]), W("number",["hp"],[2,3],[3,3]), W("number",["oill"],[2,3],[3,3]), W("number",["map"],[2,3],[3,3]) ],
  Fuel: [ W("number",["mpg"],[2,3],[3,3]), W("needle",["fuel"],[2,3],[3,3]), W("number",["ltft1"],[2,3],[3,3]), W("number",["ltft2"],[2,3],[3,3]), W("line",["mpg"],[4,4],[6,4],{win:15}),
@@ -1147,7 +1172,7 @@ function tick(now) { // once per second
   if (latest.trans !== undefined && latest.trans !== null) addShare("temp", tempBand(latest.trans));
   // Log only fresh values: a stale reading must not count as a new sample in the review.
   const MAX_AGE = { fast: 3000, med: 8000, slow: 1100 };
-  const r = { t: now }; if (markPending) { r.mark = markPending; markPending = null; } METRICS.forEach(m => { const v = latest[m.id], st = mstate[m.id] || {}; if (v === null || v === undefined || (m.tier && now - (st.updated || 0) > MAX_AGE[m.tier])) return; r[m.id] = typeof v === "number" ? Number(v.toFixed(4)) : v; }); rows.push(r);
+  phoneTick(now); const r = { t: now }; if (markPending) { r.mark = markPending; markPending = null; } if (phone.route && latest.lat !== undefined) { r.lat = latest.lat; r.lon = latest.lon; } METRICS.forEach(m => { const v = latest[m.id], st = mstate[m.id] || {}; if (v === null || v === undefined || (m.tier && now - (st.updated || 0) > MAX_AGE[m.tier])) return; r[m.id] = typeof v === "number" ? Number(v.toFixed(4)) : v; }); rows.push(r);
 }
 
 /* ---------- Adapter link ---------- */
@@ -1373,7 +1398,7 @@ function canvasCtx(c) {
   return { g, W: r.width, H: r.height };
 }
 const fmt = (m, v) => v === null || v === undefined ? "--" : typeof v === "string" ? v : v.toFixed(m.digits);
-const TAG = { standard: "Standard", community: "Unverified", derived: "Estimate", adapter: "Adapter" };
+const TAG = { standard: "Standard", community: "Unverified", derived: "Estimate", adapter: "Adapter", phone: "Phone" };
 function emptyText(m) {
   const s = mstate[m.id];
   if (!session) return "Not connected";
@@ -1585,6 +1610,10 @@ R.crosscheck = (w, box) => {
   const list = el("div", { class: "scroll" }); box.append(header(w, "Do related sensors agree?", "Standard"), el("div", { class: "body" }, list));
   let n = 0; return () => { if (n++ % 8) return; list.textContent = ""; crossChecks(rows).forEach(c => list.append(el("div", { class: "row" }, el("span", { textContent: c.name }), el("span", { class: "pill " + (c.status === "agree" ? "good" : c.status === "disagree" ? "bad" : ""), textContent: ({ agree: "✓ ", disagree: "✕ " }[c.status] || "") + c.label })))); };
 };
+R.phone = (w, box) => {
+  const st = el("div", { class: "sub", style: "white-space:normal" }); box.append(header(w, "Phone sensors", "Phone"), el("div", { class: "body" }, st, el("button", { class: "primary", textContent: "Phone sensor settings", onclick: openPhone })));
+  return () => { st.textContent = ["GPS " + (phone.gps ? "on" : "off"), "motion " + (phone.motion ? (phone.motionHz ? "on, " + phone.motionHz.toFixed(0) + " Hz" : "waiting") : "off"), "microphone " + (phone.mic ? "on" : "off")].join(" · "); };
+};
 R.elab = (w, box) => {
   box.append(header(w, "Electrical Lab", ""), el("div", { class: "body" }, el("div", { class: "sub", style: "white-space:normal", textContent: "Parked tests for starting voltage and accessory load, including a blower test." }), el("button", { class: "primary", textContent: "Open Electrical Lab", onclick: openLab })));
   return () => {};
@@ -1723,7 +1752,7 @@ function commit() { dashNoNodes(); save(); renderGrid(); }
 function dashNoNodes() { Object.values(dash).flat().forEach(w => { if (w._node) delete w._node; }); }
 function openAdd() {
   $("dlg").classList.remove("wide");
-  const t = el("select", {}, [["number","Number with sparkline"],["needle","Active needle"],["line","Line graph"],["scatter","RPM vs speed scatter"],["share","Pie/bars: share of time"],["history","Per-drive history"],["gearbox","Gear and slip"],["misfire","Misfire by cylinder"],["status","Check-engine status"],["readiness","Emissions monitors"],["codes","Trouble codes"],["truck","Truck identity"],["mode06","Computer self-tests"],["crosscheck","Sensor cross-checks"],["elab","Electrical Lab"],["healthcheck","Guided health check"],["healthcard","Total health"],["allsensors","Every reading"]].map(([k, v]) => el("option", { value: k, textContent: v })));
+  const t = el("select", {}, [["number","Number with sparkline"],["needle","Active needle"],["line","Line graph"],["scatter","RPM vs speed scatter"],["share","Pie/bars: share of time"],["history","Per-drive history"],["gearbox","Gear and slip"],["misfire","Misfire by cylinder"],["status","Check-engine status"],["readiness","Emissions monitors"],["codes","Trouble codes"],["truck","Truck identity"],["mode06","Computer self-tests"],["crosscheck","Sensor cross-checks"],["phone","Phone sensors"],["elab","Electrical Lab"],["healthcheck","Guided health check"],["healthcard","Total health"],["allsensors","Every reading"]].map(([k, v]) => el("option", { value: k, textContent: v })));
   const m = el("select", {}, metricOptions("trans"));
   showDlg("Add widget", el("label", { textContent: "Widget" }), t, el("label", { textContent: "Reading (when the widget uses one)" }), m, el("div", { class: "bar" }, el("button", { class: "primary", textContent: "Add", onclick: () => {
     const type = t.value, w = { id: "u" + Date.now().toString(36), type, metrics: ["number","needle","line","history"].includes(type) ? [m.value] : type === "scatter" ? ["mph","rpm"] : [], win: 5, stat: "max", share: "drive", view: "donut", pos: {} };
@@ -1869,11 +1898,11 @@ function openScreens() {
 const ABOUT = {
  rpm:"How fast the engine is turning.", mph:"Road speed from the vehicle's sensors. It can differ slightly from GPS.", load:"How hard the engine is working compared with its capacity.", tps:"How far the throttle is open.", pedal:"How far you're pressing the accelerator.", map:"Pressure in the intake. It's low at idle and near outside pressure at full throttle.", maf:"How much air is entering the engine.", timing:"When the spark fires. The computer moves it constantly.", torq:"The computer's estimate of engine twist.", ect:"Engine coolant temperature, which is the main sign of engine heat.", iat:"Temperature of air entering the engine.", amb:"Outside air temperature.", cat1:"Estimated or measured catalytic converter heat.", volt:"Electrical supply at the computer, reflecting battery and alternator health.", stft1:"Fast fuel correction on bank 1. Positive means adding fuel.", ltft1:"Learned fuel correction on bank 1. It reveals longer-term problems.", stft2:"Fast fuel correction on bank 2.", ltft2:"Learned fuel correction on bank 2.", lambda:"Air-fuel mix being requested. 1.00 is chemically ideal.", frate:"Fuel use reported by the computer, when available.", fuel:"Fuel tank level.", baro:"Outside air pressure, which falls with altitude.", runtime:"Time since this engine start.", clrdist:"Miles since codes were cleared. Low numbers mean less history.", warmups:"Warm-ups since codes were cleared.", mildist:"Miles driven with the check-engine light on.", reftq:"The engine torque figure used to calculate percentage torque.", odo:"Odometer, on vehicles that report it.", gratio:"Current gear ratio, on vehicles that report it.", trans:"Transmission fluid heat. Sustained heat ages the fluid.", gear:"The gear the transmission reports.", slip:"Speed difference across the torque converter. Lots at steady cruise creates heat.", sh12:"Time taken for the 1-2 shift.", sh23:"Time taken for the 2-3 shift.", sh34:"Time taken for the 3-4 shift.", oilt:"Engine oil heat.", oilts:"Engine oil heat from the standard data set.", oilp:"Oil pressure, if this request is valid on this vehicle.", oill:"Calculated oil life. It's not a measurement of the oil.", knock:"Timing pulled back to prevent engine knock.", ratio:"Engine rpm for each mph. It's steady in a locked gear.", mpg:"Fuel economy estimated from airflow. Use it for comparison.", hp:"Power estimated from reported torque and rpm.", fuelstat:"Fuel control mode. 2 means closed loop using O2 feedback.", fuelp:"Fuel pressure, where reported.", purge:"How much fuel vapor is being drawn from the tank system.", egrc:"Commanded exhaust gas recirculation.", egre:"Difference between requested and actual EGR.", absload:"Air per intake stroke, a load figure that can exceed 100%.", cmdtps:"Throttle opening the computer is requesting.", demtq:"Torque you're requesting with the pedal.", ethanol:"Reported ethanol fuel percentage.", miltime:"Engine time with the check-engine light on.", clrtime:"Engine time since codes were cleared."
 };
-function aboutOf(m) { if (ABOUT[m.id]) return ABOUT[m.id]; if (m.id === "atrv") return "Voltage at the diagnostic port, measured by the adapter itself."; if (m.id === "fflow") return "Fuel flow estimated from airflow. It isn't a measurement at the injectors."; if (m.id === "cylfuel") return "Fuel per stroke reported by the computer, on vehicles that support it."; if (m.id === "alt") return "Altitude estimated from barometric pressure."; if (/^o2v/.test(m.id)) return "Oxygen sensor signal. Sensor 1 is before the catalyst and sensor 2 is after."; if (/^o2t/.test(m.id)) return "Fuel correction tied to this oxygen sensor."; if (/^wb|^wc/.test(m.id)) return "Wide-range oxygen sensor reading. It measures air-fuel mix directly."; if (/^mis/.test(m.id)) return "Recent misfire count for this cylinder from the computer's monitor."; if (/^so2/.test(m.id)) return "Fuel correction from the sensor after the catalyst."; if (/^cat/.test(m.id)) return "Catalytic converter heat, often calculated."; if (/^evap/.test(m.id)) return "Fuel vapor system pressure, used in leak checks."; if (/^rail/.test(m.id)) return "Fuel rail pressure, where reported."; if (/^tps|^pedal|^reltps|^relpedal/.test(m.id)) return "A related throttle or pedal sensor. Duplicates let the computer cross-check them."; if (/^(p|r)[0-9A-F]/.test(m.id)) return "Raw value this vehicle answered. Its meaning isn't known yet."; if (m.group === "Custom") return "A reading you added."; if (m.inj) return ""; return m.label + "."; }
+function aboutOf(m) { if (ABOUT[m.id]) return ABOUT[m.id]; if (m.basis === "phone") return { gmph: "Speed from the phone's GPS. Compare with the vehicle's reported speed.", galt: "Altitude from GPS, which can wander by tens of feet.", gacc: "How accurate the GPS fix is right now.", grade: "Road slope estimated from altitude change over distance. Rough; hills explain many rpm and temperature changes.", vib: "How much the phone is shaking, with gravity removed. Mount matters.", vibhz: "The strongest shake frequency up to about 30 Hz. Wheel problems often track road speed.", noise: "Cabin sound level relative to the microphone's maximum. Not calibrated to real decibels.", noisehz: "The loudest pitch in the cabin. A blower whine tends to rise with fan speed." }[m.id]; if (m.id === "speedo") return "How far the vehicle's speed reading is from GPS at 30 mph and above.";  if (m.id === "atrv") return "Voltage at the diagnostic port, measured by the adapter itself."; if (m.id === "fflow") return "Fuel flow estimated from airflow. It isn't a measurement at the injectors."; if (m.id === "cylfuel") return "Fuel per stroke reported by the computer, on vehicles that support it."; if (m.id === "alt") return "Altitude estimated from barometric pressure."; if (/^o2v/.test(m.id)) return "Oxygen sensor signal. Sensor 1 is before the catalyst and sensor 2 is after."; if (/^o2t/.test(m.id)) return "Fuel correction tied to this oxygen sensor."; if (/^wb|^wc/.test(m.id)) return "Wide-range oxygen sensor reading. It measures air-fuel mix directly."; if (/^mis/.test(m.id)) return "Recent misfire count for this cylinder from the computer's monitor."; if (/^so2/.test(m.id)) return "Fuel correction from the sensor after the catalyst."; if (/^cat/.test(m.id)) return "Catalytic converter heat, often calculated."; if (/^evap/.test(m.id)) return "Fuel vapor system pressure, used in leak checks."; if (/^rail/.test(m.id)) return "Fuel rail pressure, where reported."; if (/^tps|^pedal|^reltps|^relpedal/.test(m.id)) return "A related throttle or pedal sensor. Duplicates let the computer cross-check them."; if (/^(p|r)[0-9A-F]/.test(m.id)) return "Raw value this vehicle answered. Its meaning isn't known yet."; if (m.group === "Custom") return "A reading you added."; if (m.inj) return ""; return m.label + "."; }
 function evWidgets() {
   const F = (type, about, extra = {}, big = true) => ({ w: { id: "ev" + type + (extra.share || (extra.metrics || []).join("")), type, metrics: [], ...extra }, about, big });
   const views = [
-    ["Vehicle status", [F("status", "Whether the check-engine light is on, and code counts."), F("gearbox", "Current gear and converter slip together."), F("misfire", "Recent misfires per cylinder, which shows whether a problem is localized."), F("readiness", "Which emissions self-tests have finished."), F("codes", "Stored, pending, and permanent trouble codes, plus freeze frame."), F("mode06", "Computer self-test results against the vehicle's own limits."), F("truck", "VIN, software fingerprint, and which computers answer. It stays on this device."), F("crosscheck", "Whether related sensors move together."), F("elab", "Parked tests for starting voltage and accessory load.")]],
+    ["Vehicle status", [F("status", "Whether the check-engine light is on, and code counts."), F("gearbox", "Current gear and converter slip together."), F("misfire", "Recent misfires per cylinder, which shows whether a problem is localized."), F("readiness", "Which emissions self-tests have finished."), F("codes", "Stored, pending, and permanent trouble codes, plus freeze frame."), F("mode06", "Computer self-test results against the vehicle's own limits."), F("truck", "VIN, software fingerprint, and which computers answer. It stays on this device."), F("crosscheck", "Whether related sensors move together."), F("phone", "Opt-in GPS, motion, and microphone capture."), F("elab", "Parked tests for starting voltage and accessory load.")]],
     ["Gauges", ["rpm","mph","trans","ect","volt","fuel"].map(i => F("needle", "Needle gauge. Colors show its limit, if one exists.", { metrics: [i] }, false))],
     ["Graphs and pies", [F("line", "Fuel corrections over time.", { metrics: ["stft1","ltft1","stft2","ltft2"], win: 5 }), F("line", "All major heat readings together.", { metrics: ["ect","oilt","trans"], win: 15 }), F("line", "Converter slip over time.", { metrics: ["slip"], win: 5 }), F("scatter", "Each point is engine speed against road speed. Each locked gear forms a straight ray.", { metrics: ["mph","rpm"] }), F("share", "Time in each gear.", { share: "gear", view: "bars" }), F("share", "Time in each transmission temperature band.", { share: "temp", view: "donut" }), F("share", "Time stopped, cruising, accelerating, and slowing.", { share: "drive", view: "donut" }), F("history", "Transmission temperature peak on each saved drive.", { metrics: ["trans"], stat: "max" }), F("history", "Estimated fuel economy on each saved drive.", { metrics: ["mpg"], stat: "avg" })]],
     ["Health", [F("healthcheck", "The guided steps that exercise more of the vehicle."), F("healthcard", "System-by-system status for this session.")]]
@@ -1934,6 +1963,64 @@ function openDrill(id) {
   const lo = el("input", { type: "number", step: "any", value: rule && rule.lo != null ? rule.lo : "", "aria-label": "Red below" }), hi = el("input", { type: "number", step: "any", value: rule && rule.hi != null ? rule.hi : "", "aria-label": "Red above" });
   lo.onchange = hi.onchange = () => { const o = { off: lo.value === "" && hi.value === "", when: (m.rule || {}).when, sustainMs: (m.rule || {}).sustainMs, note: "Your own limit." }; if (lo.value !== "") o.lo = Number(lo.value); else o.lo = undefined; if (hi.value !== "") o.hi = Number(hi.value); else o.hi = undefined; rules[m.id] = o; store.set(vkey("rules"), rules); };
   showDlg(m.label + (m.unit ? " (" + m.unit + ")" : ""), tips, statusLine, statsBox, el("h3", { textContent: "Over time" }), winSel, lineHost, el("h3", { textContent: "Distribution" }), hist, histLabel, el("h3", { textContent: "By driving condition" }), condBox, el("h3", { textContent: "Compared with" }), xSel, xHost, el("h3", { textContent: "Across saved drives (peak)" }), fixed("history", { metrics: [id], stat: "max" }, 180), el("h3", { textContent: "Limits" }), el("p", { textContent: (rule && rule.note) || "No limit set, so this stays neutral." }), el("div", { class: "fields" }, el("div", {}, el("label", { textContent: "Red below" }), lo), el("div", {}, el("label", { textContent: "Red above" }), hi)), el("div", { class: "bar" }, el("button", { textContent: "Copy to…", onclick: () => { $("dlg").close(); openCopy({ type: "number", metrics: [id], win: 5, stat: "max" }); } })));
+}
+/* ---------- Phone sensors (opt-in, device-level) ---------- */
+const phone = { gps: false, motion: false, mic: false, route: false, watch: null, motionHz: 0, buf: [], last: null, prevPos: null, altHist: [], audio: null };
+const phonePrefs = store.get("phone", {});
+function startGps() {
+  if (!navigator.geolocation || phone.watch !== null) return;
+  phone.watch = navigator.geolocation.watchPosition(p => {
+    const c = p.coords, t = p.timestamp || Date.now();
+    if (typeof c.speed === "number" && c.speed >= 0) record("gmph", c.speed * 2.236936, t);
+    if (typeof c.altitude === "number") record("galt", c.altitude * 3.28084, t);
+    if (typeof c.accuracy === "number") record("gacc", c.accuracy * 3.28084, t);
+    if (phone.route) { latest.lat = Number(c.latitude.toFixed(5)); latest.lon = Number(c.longitude.toFixed(5)); }
+    if (typeof c.altitude === "number" && typeof c.speed === "number") {
+      phone.altHist.push({ t, alt: c.altitude, sp: c.speed }); phone.altHist = phone.altHist.filter(x => t - x.t <= 20000);
+      const h = phone.altHist; if (h.length >= 4) { let dist = 0; for (let i = 1; i < h.length; i++) dist += (h[i].sp + h[i - 1].sp) / 2 * (h[i].t - h[i - 1].t) / 1000; if (dist >= 150) record("grade", Math.max(-20, Math.min(20, (h[h.length - 1].alt - h[0].alt) / dist * 100)), t); }
+    }
+    phone.gps = true;
+  }, e => { toast("GPS: " + e.message); phone.gps = false; }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 });
+}
+function stopGps() { if (phone.watch !== null) navigator.geolocation.clearWatch(phone.watch); phone.watch = null; phone.gps = false; }
+function onMotion(e) {
+  const a = e.acceleration; if (!a || a.x === null) return;
+  phone.motionHz = e.interval ? 1000 / e.interval : phone.motionHz; phone.buf.push({ t: performance.now(), m: Math.hypot(a.x, a.y, a.z) });
+  if (phone.buf.length > 600) phone.buf.splice(0, phone.buf.length - 600);
+}
+async function startMotion() {
+  try { if (typeof DeviceMotionEvent !== "undefined" && DeviceMotionEvent.requestPermission) { if (await DeviceMotionEvent.requestPermission() !== "granted") return toast("Motion permission denied."); } } catch (e) {}
+  addEventListener("devicemotion", onMotion); phone.motion = true;
+}
+function stopMotion() { removeEventListener("devicemotion", onMotion); phone.motion = false; phone.buf = []; }
+function motionTick(now) {
+  const b = phone.buf.filter(x => performance.now() - x.t <= 2000); if (b.length < 20) return;
+  const mean = b.reduce((s, x) => s + x.m, 0) / b.length, rms = Math.sqrt(b.reduce((s, x) => s + (x.m - mean) ** 2, 0) / b.length); record("vib", rms, now);
+  const n = b.length, dt = (b[n - 1].t - b[0].t) / 1000 / (n - 1); if (!(dt > 0)) return;
+  let best = 0, bestF = 0; for (let k = 1; k < n / 2; k++) { const f = k / (n * dt); if (f > 30) break; let re = 0, im = 0; for (let i = 0; i < n; i++) { const ph = 2 * Math.PI * k * i / n; re += (b[i].m - mean) * Math.cos(ph); im -= (b[i].m - mean) * Math.sin(ph); } const p = re * re + im * im; if (p > best) { best = p; bestF = f; } }
+  if (bestF) record("vibhz", bestF, now);
+}
+async function startMic() {
+  try { const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }); const ctx = new (window.AudioContext || window.webkitAudioContext)(); const src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser(); an.fftSize = 2048; src.connect(an); phone.audio = { ctx, an, stream, data: new Float32Array(an.frequencyBinCount) }; phone.mic = true; }
+  catch (e) { toast("Microphone: " + e.message); }
+}
+function stopMic() { if (phone.audio) { phone.audio.stream.getTracks().forEach(t => t.stop()); phone.audio.ctx.close(); } phone.audio = null; phone.mic = false; }
+function micTick(now) {
+  const a = phone.audio; if (!a) return; a.an.getFloatFrequencyData(a.data); let sum = 0, best = -Infinity, bi = 0; const nyq = a.ctx.sampleRate / 2;
+  for (let i = 1; i < a.data.length; i++) { const v = a.data[i]; if (!isFinite(v)) continue; sum += Math.pow(10, v / 10); if (v > best) { best = v; bi = i; } }
+  if (sum > 0) record("noise", Math.max(-90, 10 * Math.log10(sum)), now); if (bi) record("noisehz", bi / a.data.length * nyq, now);
+}
+function phoneTick(now) { if (phone.motion) motionTick(now); if (phone.mic) micTick(now); }
+function applyPhonePrefs() { if (phonePrefs.gps) startGps(); else stopGps(); if (phonePrefs.motion) startMotion(); else stopMotion(); if (phonePrefs.mic) startMic(); else stopMic(); phone.route = !!phonePrefs.route; }
+function openPhone() {
+  $("dlg").classList.remove("wide");
+  const row = (key, label, note) => el("label", { class: "check", style: "align-items:flex-start" }, el("input", { type: "checkbox", checked: !!phonePrefs[key], onchange: e => { phonePrefs[key] = e.target.checked; store.set("phone", phonePrefs); applyPhonePrefs(); } }), el("span", {}, label, el("div", { class: "sub", style: "white-space:normal", textContent: note })));
+  showDlg("Phone sensors", el("p", { textContent: "Uses this phone's own sensors alongside the vehicle data. Everything stays on the device. These settings are per phone, not per vehicle, and need the page served over HTTPS." }),
+    row("gps", "GPS: speed, altitude, grade", "Checks the speedometer and separates hills from faults. Keep the phone where it can see the sky."),
+    row("route", "Also record position", "Saves latitude and longitude in the drive log. Off by default. Exports then contain where you drove."),
+    row("motion", "Motion: vibration level and frequency", "Mount the phone firmly. A loose phone measures itself, not the vehicle."),
+    row("mic", "Microphone: cabin noise level and pitch", "Relative level only. Useful with marks: tap Mark when a noise appears."),
+    el("p", { textContent: "Not available: tire pressure, steering angle, or anything on networks the LX can't reach." }));
 }
 /* ---------- Electrical Lab ---------- */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -1998,6 +2085,8 @@ $("screensBtn").onclick = openScreens;
 $("moreBtn").onclick = () => { $("dlg").classList.remove("wide"); openMore(); };
 $("reviewBtn").onclick = () => openReview();
 $("markBtn").onclick = () => addMark();
+$("phoneBtn").onclick = openPhone;
+applyPhonePrefs();
 $("vehBtn").onclick = openVehicle;
 $("vehicle").onchange = async e => { loadVehicle(e.target.value); resetLive(); syncEditControls(); renderTabs(); showRecovery(); renderGrid(); await loadDrives(); };
 let lastCols = cols();
