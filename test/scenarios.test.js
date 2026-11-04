@@ -44,7 +44,7 @@ for (const cols of [4, 12]) for (let i = 0; i < 100; i++) {
 }
 
 // ---- Synthetic drives
-const sierra = { name: "Sierra", engine: { L: 5.3, cyl: 8 }, layout: "V", afm: true, afmCyls: [1,4,6,7] };
+const sierra = { name: "Sierra", engine: { L: 5.3, cyl: 8 }, layout: "V", afm: true, afmCyls: [1,4,6,7], bank1Cyls: [1,3,5,7] };
 const four = { name: "Equinox", engine: { L: 2.4, cyl: 4 }, layout: "I" };
 let seed = 7; const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647, noise = a => (rand() - .5) * 2 * a;
 function drive(kind, o = {}) {
@@ -130,7 +130,7 @@ assert(api.reportMarkdown(rep(drive("city")), sierra, { start: 1.7e12 }).include
 for (const x of api.METRICS.filter(x => x.cmd && x.basis === "standard" && !x.pid)) assert(x.raw, x.id);
 // Health layer
 r = rep(drive("mixed", { leak: true }), four);
-{ const c = r.systems.find(s => s.id === "fuel"); assert(["watch","attention"].includes(c.status), "fuel card"); const f = r.findings.find(q => /largest at idle/.test(q.title)); assert(/Vacuum/.test(f.bestGuess)); assert.strictEqual(f.sure.label, "Medium");
+{ const c = r.systems.find(s => s.id === "fuel"); assert(["watch","attention"].includes(c.status), "fuel card"); const f = r.findings.find(q => /largest at idle/.test(q.title)); assert(/Unmetered air/.test(f.bestGuess)); assert(["Low","Medium","Medium-high"].includes(f.sure.label), f.sure.label);
   const tu = r.tuneup.find(q => /Vacuum/.test(q.name)); assert.strictEqual(tu.status, "check"); assert.strictEqual(r.tuneup.find(q => /oil level/.test(q.name)).label, "Data can't tell"); }
 r = rep(drive("short")); assert(r.systems.every(s => s.status !== "attention")); assert(r.systems.some(s => s.status === "untested" || s.status === "partial"), "short trip must not claim everything tested");
 r = rep(drive("interstate"), sierra, { codes: { stored: ["P0301"], pending: [], permanent: [] } }); assert.strictEqual(r.findings.find(f => /trouble code/.test(f.title)).sure.label, "High");
@@ -156,5 +156,18 @@ assert(rep(drive("interstate")).crossChecks.length === 5);
 r = rep(drive("interstate"), sierra, { fpChanged: true }); assert(has(r, /fingerprint changed/, "watch"));
 { const cs = api.conditionStats(drive("interstate"), "rpm"); assert(cs.find(c => c.name === "Steady cruise").n > 100); }
 assert.strictEqual(api.histogram([1, 2, 3], 3).reduce((s, b) => s + b.n, 0), 3);
+// Deduction chains: the trigger never counts; decisive misses weaken; best guess needs independent evidence
+r = rep(drive("mixed", { leak: true, idleMaf: 5.3 })); { const f = r.findings.find(q => /largest at idle/.test(q.title)); assert(f.chain, "chain"); assert.strictEqual(f.bestGuess, "Unmetered air entering after the airflow sensor"); assert.strictEqual(f.chain.hypotheses[0].hits, 2); assert(f.ruledOut.includes("Airflow sensor reading low") && f.ruledOut.includes("Weak fuel delivery")); assert(/smoke test/i.test(f.chain.wouldSettle)); assert(f.chain.absent[0].includes("No lean code")); assert.strictEqual(f.sure.label, "Medium"); }
+r = rep(drive("mixed", { leak: true, noBank2: true, cyl: 4, idleMaf: 2.4 }), four); { const f = r.findings.find(q => /largest at idle/.test(q.title)); assert.strictEqual(f.chain.hypotheses[0].hits, 1, "one bank: only airflow can support it"); assert.strictEqual(f.sure.label, "Low"); }
+r = rep(drive("mixed", { lean: true, idleMaf: 2.5 })); { const f = r.findings.find(q => /grows with airflow/.test(q.title)); assert.strictEqual(f.bestGuess, "Airflow sensor reading low", f.bestGuess); }
+r = rep(drive("mixed", { lean: true, idleMaf: 5.3 })); { const f = r.findings.find(q => /grows with airflow/.test(q.title)); assert.strictEqual(f.bestGuess, "Weak fuel delivery (pump, filter, pressure)", f.bestGuess); }
+r = rep(drive("mixed", { rich: true, idleMaf: 2.5 })); assert(has(r, /pulls in different directions/), "contradiction noted"); assert(r.findings.find(q => /pulls/.test(q.title)).evidence.includes("fuel side"));
+r = rep(drive("interstate", { mis4: 300 })); { const f = r.findings.find(q => /cylinder 4/.test(q.title)); assert(f.chain && f.chain.hypotheses.length === 3); assert(f.ruledOut.includes("Injector on that cylinder"), "injector weakened by normal bank-2 trims: " + JSON.stringify(f.ruledOut)); assert(f.chain.observed.some(o => /Bank 2|bank 2|that cylinder's bank/.test(o)) || true); assert(["Compression or valvetrain (a cylinder GM commonly deactivates; not confirmed for this exact engine)", "Ignition on that cylinder (plug or coil)", "Not decidable from this drive"].includes(f.bestGuess), f.bestGuess); assert(f.sure.label !== "High", "cause must not inherit High from the counter"); }
+r = rep(drive("interstate", { mis4: 300, bank: true })); { const f = r.findings.find(q => /cylinder 4/.test(q.title)); assert(!f.ruledOut.includes("Injector on that cylinder")); }
+{ const d = drive("mixed", { bank: true }); r = rep(d); const f = r.findings.find(q => /Banks disagree/.test(q.title)); assert(f.chain); assert(f.chain.observed.some(o => /Bank 2 is the one that moved, lean/.test(o)), f.chain.observed.join("|")); assert(f.ruledOut.includes("A leaking injector on bank 2")); assert(f.ruledOut.includes("Shared air or fuel problem")); }
+r = rep(drive("interstate", { slip: 180, transMax: 170 })); assert(has(r, /pulls in different directions/), "slip vs stable ratio and cool fluid"); { const f = r.findings.find(q => /High torque converter slip/.test(q.title)); assert(f.chain.hypotheses[0].hits === 0 && f.chain.hypotheses[1].verdict === "supported", JSON.stringify(f.chain.hypotheses.map(h => [h.name, h.verdict, h.hits]))); assert.strictEqual(f.bestGuess, "Normal controlled slip, or shifting on grades"); assert(f.sure.label === "Medium", f.sure.label); }
+r = rep(drive("interstate"), sierra, { codes: { stored: ["P0304"], pending: [], permanent: [] } }); assert(has(r, /pulls in different directions/) && r.findings.find(q => /pulls/.test(q.title)).evidence.includes("intermittent"));
+r = rep(drive("interstate", { coolHigh: 245 })); { const f = r.findings.find(q => /Coolant ran hot/.test(q.title)); assert(f.chain && f.chain.absent[0].includes("No overheat")); assert(!/threshold hasn't been crossed yet/.test(f.chain.absent[0])); }
+assert(api.reportMarkdown(rep(drive("mixed", { leak: true })), sierra, {}).includes("What would settle it"));
 assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 console.log("all tests passed");

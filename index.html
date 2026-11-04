@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261104-1851Z">
-<meta name="build-timestamp-utc" content="2026-11-04T18:51:55Z">
+<meta name="build-id" content="OBD-20261104-1908Z">
+<meta name="build-timestamp-utc" content="2026-11-04T19:08:58Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -114,7 +114,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261104-1851Z", BUILD_UTC = "2026-11-04T18:51:55Z";
+const BUILD_ID = "OBD-20261104-1908Z", BUILD_UTC = "2026-11-04T19:08:58Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -564,6 +564,8 @@ function analyzeDrive(input) {
     stats.ectPeak = peak; if (plateau !== null) stats.ectPlateau = plateau;
     if (coldStart) { const t0 = rows[0].t, to = f => { const r = rows.find(x => x.ect >= f); return r ? (r.t - t0) / 60000 : null; }; const t160 = to(160), t190 = to(190); stats.warm160 = t160;
       if (t160 !== null) add("Cooling", "info", "Warm-up: " + rnd(t160, 1) + " minutes to 160°F", "Started at " + rnd(firstEct) + "°F" + (t190 !== null ? ", reached 190°F at " + rnd(t190, 1) + " minutes." : "."), "Warm-up time depends heavily on outside temperature and how hard the engine is working.", [], [], "Measured from this drive"); }
+    const hotRow = rows.find(r => r.ect >= peak - 1); if (hotRow) stats.hotUnderLoad = !!hotRow._highload || (hotRow.mph >= 45);
+    stats.highLoadShare = trip.runningSeconds ? trip.highLoadSeconds / trip.runningSeconds : 0; const ambA = nums(rows, "amb"); if (ambA.length) stats.amb = pctl(ambA, .5);
     if (peak > 235) add("Cooling", "attention", "Coolant ran hot", "99th percentile " + rnd(peak) + "°F.", "That's hot enough to compare against the dash gauge and any warning.", ["Heavy load or heat", "Low coolant, thermostat, fan, or water pump"], ["Check coolant level with the engine cold.", "Note whether it happened at idle or at speed."]);
     else if (peak > 225) add("Cooling", "watch", "Coolant ran warm", "99th percentile " + rnd(peak) + "°F.", "This may be normal under heavy load, but it deserves comparison with your other drives.", ["Towing, grades, or hot weather"], ["Watch whether this repeats without heavy load."]);
     else if (peak >= 170) add("Cooling", "good", "Coolant stayed in a sensible range", "Peak " + rnd(peak) + "°F" + (plateau !== null ? ", steady-cruise " + rnd(plateau) + "°F." : "."), "No sign of overheating on this drive.");
@@ -584,6 +586,7 @@ function analyzeDrive(input) {
     const idle = T[1].idle.total, cruise = T[1].cruise.total, load1 = T[1].load.total, idle2 = T[2].idle.total, cruise2 = T[2].cruise.total, load2 = T[2].load.total;
     const load = twoBanks && load1 !== null && load2 !== null ? (load1 + load2) / 2 : load1, capAfm = l => vehicle.afm && l === "attention" ? "watch" : l;
     const meanIdle = twoBanks && idle !== null && idle2 !== null ? (idle + idle2) / 2 : idle, meanCruise = twoBanks && cruise !== null && cruise2 !== null ? (cruise + cruise2) / 2 : cruise;
+    if (meanIdle !== null) stats.meanIdle = meanIdle; if (meanCruise !== null) stats.meanCruise = meanCruise;
     const afmNote = vehicle.afm ? " This engine can deactivate cylinders, which can shift trims in light-load cruise." : "";
     let patterned = false;
     const meanHold = T[1].hold.total, refHigh = meanCruise !== null ? meanCruise : meanHold;
@@ -623,6 +626,7 @@ function analyzeDrive(input) {
     const growth = k => { const v = nums(rows, k); let g = 0; for (let i = 1; i < v.length; i++) if (v[i] > v[i - 1]) g += v[i] - v[i - 1]; return g; };
     const held = misKeys.filter(k => (nums(rows, k)[0] ?? 0) > 0), revs = rows.reduce((s, r) => s + (r.rpm > 0 ? r.rpm / 60 * r._dt : 0), 0);
     const mx = misKeys.map(k => [Number(k.slice(3)), growth(k)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+    if (mx.length) { const k = "mis" + mx[0][0], cond = { idle: 0, cruise: 0, load: 0 }; for (let i = 1; i < rows.length; i++) { const d = (rows[i][k] ?? 0) - (rows[i - 1][k] ?? 0); if (d > 0) { if (rows[i]._idle) cond.idle += d; else if (rows[i]._highload) cond.load += d; else if (rows[i]._cruise) cond.cruise += d; } } stats.misByCond = cond; }
     stats.misTotal = mx.reduce((s, x) => s + x[1], 0);
     if (!mx.length && held.length) add("Combustion", "info", "No new misfire counts this drive", "Counters for cylinder " + held.map(k => k.slice(3)).join(", ") + " held a value from before but didn't rise.", "That earlier count may come from a previous drive. Watch whether it rises later.", [], [], LIT.j1979);
     else if (!mx.length) add("Combustion", "good", "No misfire counts recorded", misKeys.length + " cylinders reported.", "The computer's recent misfire counters stayed at zero. They update slowly, so a brief event could be missed.", [], [], LIT.j1979);
@@ -630,7 +634,7 @@ function analyzeDrive(input) {
       const tot = mx.reduce((s, x) => s + x[1], 0), single = mx.length === 1 || mx[0][1] >= tot * .7, one = mx[0][0], afmCyl = vehicle.afmCyls && vehicle.afmCyls.includes(one);
       const side = vehicle.layout === "V" && single ? (one % 2 ? 1 : 2) : null;
       const sideTrim = side && T[side].cruise.total !== null ? " Bank " + side + " holds that cylinder, with a cruise trim of " + signed(T[side].cruise.total) + "%." : "";
-      add("Combustion", revs && tot / revs * 1000 >= 5 && tot >= 20 ? "attention" : "watch", single ? "Misfires concentrated on cylinder " + one : "Misfires across " + mx.length + " cylinders", mx.map(x => "cyl " + x[0] + ": +" + rnd(x[1])).join(", ") + " new counts over about " + rnd(revs / 1000) + "k engine revolutions." + sideTrim, single ? "One cylinder standing out points toward something specific to it, not shared fuel or air." : "Spread-out misfires point more toward a shared cause like fuel, air, or ignition supply.", single ? ["Spark plug, coil, or injector on that cylinder", "Compression or valvetrain" + (afmCyl ? ", including its AFM lifter, because this is a cylinder-deactivation cylinder" : "")] : ["Fuel pressure or quality", "Vacuum leak", "Ignition supply voltage"], ["Note whether counts occur at idle, cruise, or under load.", single ? "Swap the coil to another cylinder and see if the count moves." : "Compare with the fuel trim findings."], LIT.j1979);
+      add("Combustion", revs && tot / revs * 1000 >= 5 && tot >= 20 ? "attention" : "watch", single ? "Misfires concentrated on cylinder " + one : "Misfires across " + mx.length + " cylinders", mx.map(x => "cyl " + x[0] + ": +" + rnd(x[1])).join(", ") + " new counts over about " + rnd(revs / 1000) + "k engine revolutions." + sideTrim, single ? "One cylinder standing out points toward something specific to it, not shared fuel or air." : "Spread-out misfires point more toward a shared cause like fuel, air, or ignition supply.", single ? ["Spark plug, coil, or injector on that cylinder", "Compression or valvetrain" + (afmCyl ? ", including its AFM lifter: this cylinder number is one GM commonly deactivates, though I haven't confirmed the exact set for this engine" : "")] : ["Fuel pressure or quality", "Vacuum leak", "Ignition supply voltage"], ["Note whether counts occur at idle, cruise, or under load.", single ? "Swap the coil to another cylinder and see if the count moves." : "Compare with the fuel trim findings."], LIT.j1979);
     }
   } else need("Combustion", "Misfire counters weren't recorded.");
   if (usable("knock")) { const hi = pctl(nums(rows, "knock", r => r._running), .98); stats.knock = hi; if (hi >= 6) add("Combustion", "watch", "Repeated knock retard", "98th percentile " + rnd(hi, 1) + "°." + unverified("knock"), "The computer may be pulling timing to protect the engine.", ["Lower-octane fuel", "Heat or heavy load", "Carbon buildup"], ["Check fuel grade and compare under similar conditions."]); }
@@ -726,6 +730,9 @@ function analyzeDrive(input) {
   if (disagree.length) add("Sensor checks", "watch", "Related sensors didn't move together", disagree.map(x => x.name + " (correlation " + rnd(x.r, 2) + ")").join("; ") + ".", "Redundant or related signals should broadly agree. Disagreement can mean a sensor issue, or just slow one-second sampling.", ["Sensor or wiring fault", "Sampling timing"], ["Check whether this repeats, and compare codes."], "Physics check");
   if (meta.fpChanged) add("Computer identity", "watch", "Computer software fingerprint changed since last connect", "Calibration or verification number differs from the value stored on this device.", "This usually means a dealer update, reprogramming, or module replacement. If nothing like that happened, ask why.", ["Dealer software update", "Module replacement", "Aftermarket tune"], ["Check your service records."], LIT.j1979);
   const marks = markSnapshots(rows);
+  const notes = buildChains(F, stats, rows, vehicle, meta, val, trip);
+  notes.forEach(t => add("Weighing the evidence", "info", "Evidence that pulls in different directions", t, "Stated so the reasoning can be checked, not to settle it.", [], [], "Cross-signal reasoning"));
+  F.forEach(f => { if (!f.chain) return; const sup = f.chain.hypotheses.filter(h => h.verdict === "supported" || h.verdict === "partly supported"); f.bestGuess = sup.length ? sup.sort((a, b) => (b.hits / Math.max(1, b.testable)) - (a.hits / Math.max(1, a.testable)) || b.hits - a.hits)[0].name : (f.chain.hypotheses.some(h => h.verdict === "untested") ? "Not decidable from this drive" : f.causes[0] || null); f.alsoPossible = f.chain.hypotheses.filter(h => h.name !== f.bestGuess && h.verdict !== "weakened").map(h => h.name); f.ruledOut = f.chain.hypotheses.filter(h => h.verdict === "weakened").map(h => h.name); });
   // Verdict
   const att = F.filter(f => f.level === "attention"), wat = F.filter(f => f.level === "watch");
   const level = att.length ? "attention" : wat.length ? "watch" : tested.length >= 3 ? "good" : "limited";
@@ -734,7 +741,8 @@ function analyzeDrive(input) {
   const detail = (top.length ? "Top items: " + top.join("; ") + ". " : "") + "This drive (" + trip.kind.toLowerCase() + ") tested " + tested.length + " area" + (tested.length === 1 ? "" : "s") + " and left " + na.length + " untested. A clean result only covers what this drive could exercise.";
   const order = { attention: 0, watch: 1, good: 2, info: 3 };
   F.sort((a, b) => order[a.level] - order[b.level]);
-  F.forEach(f => { f.sure = howSure(f); f.bestGuess = f.causes[0] || null; f.alsoPossible = f.causes.slice(1); });
+  F.forEach(f => { f.sure = howSure(f); if (!f.chain) { f.bestGuess = f.causes[0] || null; f.alsoPossible = f.causes.slice(1); }
+    if (f.chain) { const best = f.chain.hypotheses.find(h => h.name === f.bestGuess); const lines = best ? best.hits : 0; { f.sure = lines >= 3 ? { label: "Medium-high", why: lines + " independent observations fit the best explanation, and " + f.ruledOut.length + " alternative" + (f.ruledOut.length === 1 ? " was" : "s were") + " weakened." } : lines === 2 ? { label: "Medium", why: "Two observations fit; others weren't testable on this drive." } : { label: "Low", why: "Only one observation supports it, so alternatives remain open." }; } } });
   return { marks, crossChecks: xc, systems: systemCard(F, tested), tuneup: tuneUpView(F, trip), trip, findings: F, notAssessed: na, tested, channels: channels.size, sampleRate: rate, validation: val, stats, verdict: { level, headline, detail } };
 }
 function reportMarkdown(rep, vehicle, meta) {
@@ -743,7 +751,8 @@ function reportMarkdown(rep, vehicle, meta) {
   L.push("- Date: " + (meta.start ? new Date(meta.start).toISOString() : "unknown"), "- Type: " + t.kind, "- Distance: " + rnd(t.miles, 1) + " mi in " + rnd(t.seconds / 60, 1) + " min, " + t.stops + " stops, " + rnd(t.idleSeconds / 60, 1) + " min idling", "- Signals recorded: " + rep.channels, "");
   if (rep.systems) { L.push("## Total health", ""); rep.systems.forEach(s => L.push("- **" + s.name + ":** " + s.label + ". " + s.summary)); L.push(""); }
   if (rep.tuneup) { L.push("## Tune-up view", ""); rep.tuneup.forEach(t => L.push("- **" + t.name + ":** " + t.label + ". " + t.detail)); L.push(""); }
-  ["attention", "watch", "good", "info"].forEach(l => { const a = rep.findings.filter(f => f.level === l); if (!a.length) return; L.push("## " + { attention: "Needs attention", watch: "Watch", good: "Looks good", info: "Context" }[l], ""); a.forEach(f => { L.push("### " + f.system + ": " + f.title, f.evidence, "", f.meaning); if (f.bestGuess) L.push("", "Best guess: " + f.bestGuess + (f.alsoPossible.length ? ". Also possible: " + f.alsoPossible.join("; ") : "") + ". How sure: " + f.sure.label + "."); if (f.next.length) L.push("", "Next: " + f.next.join(" ")); L.push("", "_Basis: " + f.basis + "_", ""); }); });
+  ["attention", "watch", "good", "info"].forEach(l => { const a = rep.findings.filter(f => f.level === l); if (!a.length) return; L.push("## " + { attention: "Needs attention", watch: "Watch", good: "Looks good", info: "Context" }[l], ""); a.forEach(f => { L.push("### " + f.system + ": " + f.title, f.evidence, "", f.meaning); if (f.chain) { L.push("", "Observed:"); f.chain.observed.forEach(o => L.push("- " + o)); f.chain.hypotheses.forEach(h => { L.push("", h.name + " — " + h.verdict + ":"); h.predictions.forEach(p => L.push("- " + (p.seen === null ? "untested" : p.seen ? "seen" : "not seen") + ": " + p.claim + (p.detail ? " (" + p.detail + ")" : ""))); }); if (f.chain.absent.length) L.push("", "Expected but absent: " + f.chain.absent.join(" ")); L.push("", "What would settle it: " + f.chain.wouldSettle); }
+      if (f.bestGuess) L.push("", "Best guess: " + f.bestGuess + (f.alsoPossible.length ? ". Also possible: " + f.alsoPossible.join("; ") : "") + ". How sure: " + f.sure.label + "."); if (f.next.length) L.push("", "Next: " + f.next.join(" ")); L.push("", "_Basis: " + f.basis + "_", ""); }); });
   if (rep.marks && rep.marks.length) { L.push("## Your marks", ""); rep.marks.forEach(m => L.push("- " + new Date(m.t).toISOString() + ": " + m.label + " (" + rnd(m.mph) + " mph, " + rnd(m.rpm) + " rpm, " + rnd(m.volt, 1) + " V)")); L.push(""); }
   if (rep.notAssessed.length) { L.push("## Not tested on this drive", ""); rep.notAssessed.forEach(n => L.push("- " + n.system + ": " + n.why)); L.push(""); }
   L.push("Automated review based on recorded data. It suggests where to look and doesn't replace a hands-on diagnosis.");
@@ -896,6 +905,122 @@ function histogram(a, bins = 18) {
   a.forEach(v => out[Math.min(bins - 1, Math.floor((v - lo) / w))].n++); return out;
 }
 function ecusFrom(raw) { const s = new Set(); cleanLines(raw).forEach(l => { const m = l.match(/^(7E[8-F])/); if (m) s.add(m[1]); }); return [...s].sort(); }
+/* ---------- Deduction layer: observations, competing explanations, predictions, absent evidence ----------
+   Rules: the observation that triggered a finding never counts as support for any explanation; a prediction
+   shared by every competing explanation is shown but not scored; a decisive miss weakens an explanation. */
+function hyp(name, predictions) {
+  const scored = predictions.filter(p => p.seen !== null && !p.trigger && !p.shared), hits = scored.filter(p => p.seen).length;
+  const verdict = predictions.some(p => p.decisive && p.seen === false) ? "weakened" : !scored.length ? "untested" : hits === scored.length ? "supported" : hits === 0 ? "weakened" : "partly supported";
+  return { name, predictions, verdict, hits, testable: scored.length };
+}
+const P = (claim, seen, detail, o = {}) => ({ claim, seen, detail, decisive: !!o.decisive, trigger: !!o.trigger, shared: !!o.shared });
+const say = (v, d = 1, u = "") => v === null || v === undefined ? "n/a" : (Number(v) > 0 && /%/.test(u) ? "+" : "") + Number(v).toFixed(d) + u;
+function buildChains(F, S, rows, vehicle, meta, val, trip) {
+  const by = rx => F.find(f => rx.test(f.title));
+  const twoBanks = S.trim2idle !== undefined || S.trim2cruise !== undefined;
+  const misSingle = by(/concentrated on cylinder/), noMis = by(/No misfire counts|No new misfire/);
+  const leanIdle = by(/largest at idle/), leanLoad = by(/grows with airflow/), rich = by(/Rich correction/), split = by(/Banks disagree/), balanced = by(/look balanced/);
+  const idleAir = S.idleMafPerL, lowAir = idleAir !== undefined && idleAir < .55, highAir = idleAir !== undefined && idleAir > 1.6, airKnown = idleAir !== undefined;
+  const codes = meta.codes ? [...(meta.codes.stored || []), ...(meta.codes.pending || []), ...(meta.codes.permanent || [])] : null;
+  const hasCode = rx => codes !== null && codes.some(c => rx.test(c));
+  const noCode = (rx, what) => codes === null ? [] : hasCode(rx) ? [] : ["No " + what + " code is stored. Either the computer's threshold wasn't crossed or its monitor hasn't completed."];
+  const idleSplit = twoBanks && S.trim1idle !== undefined && S.trim2idle !== undefined ? S.trim1idle - S.trim2idle : null;
+  const banksAgree = idleSplit === null ? null : Math.abs(idleSplit) < 8;
+  const trimFacts = () => [1, 2].filter(b => b === 1 || twoBanks).flatMap(b => ["idle", "cruise", "load"].filter(k => S["trim" + b + k] !== undefined).map(k => "Bank " + b + " " + k + " total trim " + say(S["trim" + b + k], 1, "%")));
+  const airFact = airKnown ? "Idle airflow " + say(idleAir, 2) + " g/s per liter (rule of thumb about 1)" : "Idle airflow not measured";
+  const banksFact = idleSplit === null ? "Single bank, so bank comparison isn't available" : "Idle trims differ between banks by " + say(Math.abs(idleSplit), 1, "%");
+  if (leanIdle) leanIdle.chain = {
+    observed: [...trimFacts(), airFact, banksFact],
+    hypotheses: [
+      hyp("Unmetered air entering after the airflow sensor", [P("Correction is largest at idle and shrinks as airflow rises", true, "This is the observation being explained, so it isn't counted as support.", { trigger: true }), P("Both banks shift together, since the air enters shared space", banksAgree, idleSplit === null ? "Not testable on one bank" : banksFact), P("Idle airflow reads normal or low, because leaked air isn't metered", airKnown ? !highAir : null, airFact)]),
+      hyp("Airflow sensor reading low", [P("Correction would grow with airflow rather than shrink", false, "The opposite was seen.", { decisive: true }), P("Idle airflow per liter would read low", airKnown ? lowAir : null, airFact)]),
+      hyp("Weak fuel delivery", [P("Correction would grow with load", false, "The opposite was seen.", { decisive: true })])
+    ],
+    absent: noCode(/^P017[14]/, "lean"), wouldSettle: "A smoke test of the intake, or watching whether the idle correction drops with the purge line blocked."
+  };
+  if (leanLoad) leanLoad.chain = {
+    observed: [...trimFacts(), airFact, S.ve !== undefined ? "Full-throttle breathing estimate " + say(S.ve, 0, "%") + " (computed from the airflow sensor)" : "No full-throttle sample"],
+    hypotheses: [
+      hyp("Airflow sensor reading low", [P("Correction grows with airflow", true, "This is the observation being explained.", { trigger: true }), P("Idle airflow per liter reads low", airKnown ? lowAir : null, airFact), P("Breathing estimate reads low, since it comes from the same sensor", S.ve !== undefined ? S.ve < 70 : null, S.ve !== undefined ? say(S.ve, 0, "%") : "Not measured")]),
+      hyp("Weak fuel delivery (pump, filter, pressure)", [P("Correction grows with load", true, "This is the observation being explained.", { trigger: true }), P("Idle airflow reads normal", airKnown ? !lowAir && !highAir : null, airFact), P("Breathing estimate reads normal", S.ve !== undefined ? S.ve >= 70 : null, S.ve !== undefined ? say(S.ve, 0, "%") : "Not measured")]),
+      hyp("Unmetered air leak", [P("Correction would be largest at idle", false, "The opposite was seen.", { decisive: true })])
+    ],
+    absent: noCode(/^P017[14]/, "lean"), wouldSettle: "A fuel pressure and volume test under load separates the fuel-side explanation from the sensor-side one."
+  };
+  if (rich) rich.chain = {
+    observed: [...trimFacts(), airFact],
+    hypotheses: [
+      hyp("Airflow sensor reading high", [P("Rich correction in every region", true, "This is the observation being explained.", { trigger: true }), P("Idle airflow per liter reads high", airKnown ? highAir : null, airFact)]),
+      hyp("Extra fuel: leaking injector, high fuel pressure, or fuel vapor", [P("Idle airflow reads normal", airKnown ? !highAir : null, airFact), P("Correction is strongest at idle, where a fixed extra amount matters most", S.meanIdle !== undefined && S.meanCruise !== undefined ? S.meanIdle < S.meanCruise : null, S.meanIdle !== undefined && S.meanCruise !== undefined ? "Idle " + say(S.meanIdle, 1, "%") + " vs cruise " + say(S.meanCruise, 1, "%") : "Idle or cruise region missing")])
+    ],
+    absent: noCode(/^P017[25]/, "rich"), wouldSettle: "Compare the airflow reading against the breathing estimate at full throttle, and check fuel pressure."
+  };
+  if (split && idleSplit !== null) {
+    const shifted = Math.abs(S.trim1idle) >= Math.abs(S.trim2idle) ? 1 : 2, shiftedIdle = S["trim" + shifted + "idle"], cruiseSplit = S.trim1cruise !== undefined && S.trim2cruise !== undefined ? S.trim1cruise - S.trim2cruise : null;
+    split.chain = {
+      observed: [...trimFacts(), "Bank " + shifted + " is the one that moved, " + (shiftedIdle > 0 ? "lean" : "rich"), misSingle ? "Misfires concentrated on one cylinder" : noMis ? "No misfire counts" : "Misfire data not available"],
+      hypotheses: [
+        hyp("A dead or weak injector on bank " + shifted, [P("That bank reads lean, since its oxygen sensor sees unburned air", shiftedIdle > 0, say(shiftedIdle, 1, "%")), P("A misfire count appears on that bank", misSingle ? true : noMis ? false : null, misSingle ? misSingle.title : noMis ? "No misfires seen" : "Not available")]),
+        hyp("A leaking injector on bank " + shifted, [P("That bank reads rich", shiftedIdle < 0, say(shiftedIdle, 1, "%"))]),
+        hyp("Oxygen sensor or its wiring on bank " + shifted, [P("No misfire count on that bank, since combustion is normal", misSingle ? false : noMis ? true : null, "")]),
+        hyp("Exhaust leak ahead of the bank " + shifted + " sensor", [P("That bank reads lean", shiftedIdle > 0, say(shiftedIdle, 1, "%")), P("The split is strongest at idle, where exhaust pulses draw in air", cruiseSplit === null ? null : Math.abs(idleSplit) > Math.abs(cruiseSplit), cruiseSplit === null ? "Cruise split not available" : "Idle split " + say(Math.abs(idleSplit), 1, "%") + " vs cruise split " + say(Math.abs(cruiseSplit), 1, "%"))]),
+        hyp("Shared air or fuel problem", [P("Both banks would shift together", false, "They don't.", { decisive: true })])
+      ],
+      absent: [], wouldSettle: "Swap the front oxygen sensors between banks: if the shift follows the sensor, the sensor is the cause."
+    };
+  }
+  if (misSingle) {
+    const cyl = Number((misSingle.title.match(/cylinder (\d+)/) || [])[1]);
+    const bank = !vehicle.bank1Cyls ? (vehicle.layout === "V" ? null : 1) : vehicle.bank1Cyls.includes(cyl) ? 1 : 2;
+    const bankTrim = bank === null ? undefined : (S["trim" + bank + "cruise"] ?? S["trim" + bank + "idle"]);
+    const afm = vehicle.afmCyls && vehicle.afmCyls.includes(cyl), c = S.misByCond || {}, t = trip || {};
+    const rate = (n, sec) => n !== undefined && sec >= 30 ? n / (sec / 60) : null, rIdle = rate(c.idle, t.idleSeconds), rLoad = rate(c.load, t.highLoadSeconds), rCruise = rate(c.cruise, t.cruiseSeconds);
+    misSingle.chain = {
+      observed: [misSingle.evidence, bankTrim !== undefined ? "Trim on that cylinder's bank " + say(bankTrim, 1, "%") : "Bank for that cylinder isn't known for this engine, so its trim isn't used", [["idle", rIdle], ["cruise", rCruise], ["high load", rLoad]].filter(x => x[1] !== null).map(x => x[0] + " " + say(x[1], 1) + "/min").join(", ") ? "New counts per minute: " + [["idle", rIdle], ["cruise", rCruise], ["high load", rLoad]].filter(x => x[1] !== null).map(x => x[0] + " " + say(x[1], 1) + "/min").join(", ") : "Rates by condition need at least 30 s in each condition", codes === null ? "Codes not read" : "Misfire codes " + (hasCode(/^P030/) ? "present: " + codes.filter(c2 => /^P030/.test(c2)).join(", ") : "absent")],
+      hypotheses: [
+        hyp("Ignition on that cylinder (plug or coil)", [P("Counts per minute are higher under load, where spark demand is highest", rLoad !== null && rIdle !== null ? rLoad > rIdle : null, rLoad !== null && rIdle !== null ? "load " + say(rLoad, 1) + "/min vs idle " + say(rIdle, 1) + "/min" : "Needs both idle and load time"), P("Bank trim can read lean with any misfire, so it doesn't discriminate here", null, "Not used as evidence")]),
+        hyp("Injector on that cylinder", [P("That bank reads lean (dead injector) or rich (leaking injector) beyond 10%", bankTrim !== undefined ? Math.abs(bankTrim) >= 10 : null, bankTrim !== undefined ? say(bankTrim, 1, "%") : "Bank trim unavailable")]),
+        hyp("Compression or valvetrain" + (afm ? " (a cylinder GM commonly deactivates; not confirmed for this exact engine)" : ""), [P("Counts present at idle, not only under load", rIdle !== null ? rIdle > 0 : null, rIdle !== null ? say(rIdle, 1) + "/min at idle" : "Needs idle time"), P("Rate doesn't rise with load the way a weak spark does", rLoad !== null && rIdle !== null ? rLoad <= rIdle * 1.5 : null, "")])
+      ],
+      absent: noCode(/^P030/, "misfire"), wouldSettle: "Swap the coil with a neighboring cylinder and see whether the count moves. If it stays, a compression test on that cylinder."
+    };
+  }
+  const slipHi = by(/High torque converter slip/), scatter = by(/wasn't locked closely/), flare = by(/rpm flare/), transHot = by(/Transmission fluid (ran very hot|spent time)/);
+  if (slipHi || scatter || flare) { const f = slipHi || scatter || flare; f.chain = {
+    observed: [slipHi ? slipHi.evidence : "Reported slip signal: " + (val.slip === "suspect" ? "rejected as implausible" : "not usable"), scatter ? scatter.evidence : S.ratioClean !== undefined ? "Rpm-to-speed stability " + say(S.ratioClean * 100, 0, "%") : "Rpm-to-speed check not available", flare ? flare.evidence : S.flares !== undefined ? S.flares + " flare events" : "", transHot ? transHot.evidence : S.transPeak !== undefined ? "Transmission peak " + say(S.transPeak, 0, "°F") : "Transmission temperature not available"].filter(Boolean),
+    hypotheses: [
+      hyp("Clutch or converter slipping", [P("Reported slip high at steady cruise", slipHi ? true : val.slip === "suspect" ? null : false, "", { trigger: f === slipHi }), P("Rpm drifts against road speed in the standard data", scatter ? true : S.ratioClean !== undefined ? false : null, "", { trigger: f === scatter }), P("Rpm flares without a matching speed or throttle change", flare ? true : S.flares !== undefined ? false : null, "", { trigger: f === flare }), P("Fluid runs hotter than usual, since slip makes heat", transHot ? true : S.transPeak !== undefined ? false : null, "")]),
+      hyp("Normal controlled slip, or shifting on grades", [P("No flares, only smooth variation", !flare, ""), P("Fluid temperature stays moderate", transHot ? false : S.transPeak !== undefined ? true : null, "")])
+    ],
+    absent: noCode(/^P07|^P08|^P09|^P27/, "transmission"), wouldSettle: "A repeat on a flat road at a fixed speed, then a shop scan tool reading of commanded versus actual converter state."
+  }; }
+  const lowV = by(/Charging voltage (stayed|dipped) low/), drops = by(/sharp voltage drops/);
+  if (lowV || drops) { const f = lowV || drops; const marks = markSnapshots(rows), ve = voltageEvents(rows), near = ve.filter(e => marks.some(m => Math.abs(m.t - e.t) <= 15000)).length;
+    f.chain = { observed: [f.evidence, "Voltage events: " + ve.length + (marks.length ? ", " + near + " within 15 s of one of your marks" : ", no marks recorded")],
+      hypotheses: [hyp("A large load switching on, such as a blower or fan", [P("Drops coincide with your marks", marks.length ? near > 0 : null, marks.length ? near + " coincide" : "No marks to compare"), P("Voltage recovers afterwards", ve.some(e => e.kind === "rise"), "")]), hyp("Weak alternator, belt, or connection", [P("Voltage stays low for long stretches, not only at events", !!lowV, "")])],
+      absent: noCode(/^P056|^P062|^B/, "charging-system"), wouldSettle: "The Electrical Lab with the engine off, then a charging-system test at a shop." };
+  }
+  const hot = by(/Coolant ran (hot|warm)/), cold = by(/Coolant stayed low/);
+  if (hot) hot.chain = { observed: [hot.evidence, S.highLoadShare !== undefined ? "High-load share " + say(S.highLoadShare * 100, 0, "%") : "", S.transPeak !== undefined ? "Transmission peak " + say(S.transPeak, 0, "°F") : ""].filter(Boolean),
+    hypotheses: [hyp("Heavy load or hot conditions", [P("The peak happened during sustained load or speed", S.hotUnderLoad !== undefined ? S.hotUnderLoad : null, ""), P("Transmission heat rose too", S.transPeak !== undefined ? S.transPeak > 200 : null, "")]), hyp("Cooling capacity: coolant level, fan, thermostat, water pump", [P("Peak at idle or low speed, where airflow is least", S.hotUnderLoad !== undefined ? !S.hotUnderLoad : null, "")])],
+    absent: noCode(/^P0217|^P0128|^P048|^P068/, "overheat, thermostat, or fan"), wouldSettle: "Check coolant level cold, then watch whether the fans run when hot at idle." };
+  if (cold) cold.chain = { observed: [cold.evidence, S.warm160 !== undefined ? "Warm-up to 160°F took " + say(S.warm160, 1) + " min" : "Warm-up time not measured", S.amb !== undefined ? "Ambient " + say(S.amb, 0, "°F") : "Ambient not reported"],
+    hypotheses: [hyp("Thermostat opening early or stuck open", [P("Never settles near normal at cruise", true, "This is the observation being explained.", { trigger: true }), P("Warm-up is slow", S.warm160 !== undefined ? S.warm160 > 10 : null, "")]), hyp("Very cold outside air", [P("Ambient below freezing", S.amb !== undefined ? S.amb < 32 : null, S.amb !== undefined ? say(S.amb, 0, "°F") : "Ambient not reported")])],
+    absent: noCode(/^P0128/, "thermostat"), wouldSettle: "Compare with the dash gauge on a mild day, and feel whether the upper radiator hose warms before the engine reaches temperature." };
+  // Conflicts between findings, and evidence that was expected but absent.
+  const notes = [];
+  if (leanIdle && misSingle) notes.push("A lean-at-idle pattern and a single-cylinder misfire fit one cause: an air leak near that cylinder. They also fit two unrelated causes. The leak is the cheaper check, so start there.");
+  if (rich && lowAir) notes.push("Rich correction together with low idle airflow is contradictory for an over-reading airflow sensor, which would show high idle airflow. The fuel side becomes more likely.");
+  if (leanLoad && highAir) notes.push("Lean correction growing with airflow while idle airflow reads high argues against an under-reading sensor. Fuel delivery becomes more likely.");
+  if (split && balanced) notes.push("One region shows the banks disagreeing while another shows them balanced. The split may be condition-dependent; check which region carries it.");
+  if (misSingle && misSingle.chain && banksAgree === true) { const inj = misSingle.chain.hypotheses.find(h => /Injector/.test(h.name)); if (inj && inj.verdict === "supported") notes.push("The single-cylinder injector explanation needs that bank to read differently, but both banks read within 8% of each other. The bank-wide shift is more likely shared than from one injector."); }
+  if (slipHi && S.ratioClean !== undefined && S.ratioClean >= .9) notes.push("The unverified slip request reports slipping while the standard rpm-to-speed check shows a stable ratio. The check uses two vehicle-reported values; the slip value is one unconfirmed request.");
+  if (slipHi && S.transPeak !== undefined && S.transPeak < 190) notes.push("Reported slip was high but the fluid stayed cool. Real slip makes heat, so this weakens the slip reading.");
+  if (hasCode(/^P030/) && noMis) notes.push("A misfire code is stored, but no new counts appeared on this drive. The fault is intermittent, historical, or occurs in conditions this drive didn't include.");
+  if (meta.monitor && meta.monitor.mil && codes !== null && !codes.length) notes.push("The check-engine light is reported on, but no codes were returned. The code read may have failed, or the code lives in a module this request doesn't reach.");
+  const oilLow = by(/Low oil pressure reading/); if (oilLow && codes !== null && !hasCode(/^P052/)) notes.push("A low oil pressure reading with no oil-pressure code makes the unverified request itself the first suspect, though the computer's own oil-pressure test may not have run.");
+  return notes;
+}
 
 function matchVehicle(vin, vehicles) {
   if (!vin || vin.length !== 17) return null;
@@ -915,7 +1040,7 @@ function el(tag, props = {}, ...kids) {
   return e;
 }
 const DEFAULT_VEHICLES = {
-  sierra: { id: "sierra", name: "2016 GMC Sierra 1500", engine: { label: "5.3L V8", L: 5.3, cyl: 8 }, layout: "V", afm: true, afmCyls: [1, 4, 6, 7], trans: "6L80 (RPO MYC)", gears: 6, notes: "", match: { wmi: ["1GT"], year: "G" } },
+  sierra: { id: "sierra", name: "2016 GMC Sierra 1500", engine: { label: "5.3L V8", L: 5.3, cyl: 8 }, layout: "V", afm: true, afmCyls: [1, 4, 6, 7], bank1Cyls: [1, 3, 5, 7], trans: "6L80 (RPO MYC)", gears: 6, notes: "", match: { wmi: ["1GT"], year: "G" } },
   equinox: { id: "equinox", name: "2014 Chevrolet Equinox", engine: null, layout: null, afm: false, trans: "6-speed automatic", gears: 6, notes: "", match: { wmi: ["2GN", "2CN"], year: "E" } }
 };
 const ENGINE_CHOICES = { equinox: [{ label: "2.4L 4-cylinder", L: 2.4, cyl: 4, layout: "I" }, { label: "3.6L V6", L: 3.6, cyl: 6, layout: "V" }] };
@@ -1679,7 +1804,8 @@ function renderReport(host, rep, veh, meta, rs) {
   (rep.tuneup || []).forEach(x => host.append(el("div", { class: "row", style: "display:block" }, el("b", { class: "pill " + (x.status === "clear" ? "good" : x.status === "check" ? "bad" : ""), textContent: SICON[x.status] + " " + x.name + ": " + x.label }), el("div", { class: "sub", style: "white-space:normal", textContent: x.detail }))));
   const names = { attention: "Needs attention", watch: "Watch", good: "Looks good", info: "Context" };
   ["attention","watch","good","info"].forEach(l => { const a = rep.findings.filter(f => f.level === l); if (!a.length) return; host.append(el("h3", { textContent: names[l] + " (" + a.length + ")" }));
-    a.forEach(f => { const d = el("details", { class: "f", open: l === "attention" || l === "watch" }, el("summary", {}, el("span", { class: "lv " + l, textContent: ico[l] }), f.system + ": " + f.title), el("p", { textContent: f.evidence }), el("p", { textContent: f.meaning }), f.bestGuess ? el("p", {}, el("b", { textContent: "Best guess: " }), f.bestGuess + ".") : null, f.alsoPossible && f.alsoPossible.length ? el("p", { textContent: "Also possible: " + f.alsoPossible.join("; ") + "." }) : null, f.sure ? el("p", { textContent: "How sure: " + f.sure.label + ". " + f.sure.why }) : null, f.next.length ? el("p", { textContent: "Next: " + f.next.join(" ") }) : null, el("small", { textContent: "Basis: " + f.basis })); host.append(d); }); });
+    a.forEach(f => { const d = el("details", { class: "f", open: l === "attention" || l === "watch" }, el("summary", {}, el("span", { class: "lv " + l, textContent: ico[l] }), f.system + ": " + f.title), el("p", { textContent: f.evidence }), el("p", { textContent: f.meaning }), f.chain ? el("details", { class: "f", open: l === "attention" }, el("summary", { textContent: "Reasoning chain" }), el("p", { textContent: "Observed:" }), el("ul", {}, f.chain.observed.map(o => el("li", { textContent: o }))), ...f.chain.hypotheses.map(h => el("div", {}, el("p", {}, el("b", { textContent: h.name + ": " }), h.verdict + (h.testable ? " (" + h.hits + " of " + h.testable + " predictions seen)" : "")), el("ul", {}, h.predictions.map(p => el("li", { textContent: (p.seen === null ? "Untested: " : p.seen ? "Seen: " : "Not seen: ") + p.claim + (p.detail ? " — " + p.detail : "") }))))), f.chain.absent.length ? el("p", { textContent: "Expected but absent: " + f.chain.absent.join(" ") }) : null, el("p", { textContent: "What would settle it: " + f.chain.wouldSettle })) : null,
+    f.bestGuess ? el("p", {}, el("b", { textContent: "Best guess: " }), f.bestGuess + ".") : null, f.ruledOut && f.ruledOut.length ? el("p", { textContent: "Weakened by the data: " + f.ruledOut.join("; ") + "." }) : null, f.alsoPossible && f.alsoPossible.length ? el("p", { textContent: "Also possible: " + f.alsoPossible.join("; ") + "." }) : null, f.sure ? el("p", { textContent: "How sure: " + f.sure.label + ". " + f.sure.why }) : null, f.next.length ? el("p", { textContent: "Next: " + f.next.join(" ") }) : null, el("small", { textContent: "Basis: " + f.basis })); host.append(d); }); });
   if (rep.marks && rep.marks.length) { host.append(el("h3", { textContent: "Your marks" })); rep.marks.forEach(m => host.append(el("div", { class: "row" }, el("span", { textContent: new Date(m.t).toLocaleTimeString() + " · " + m.label }), el("span", { textContent: [m.mph != null ? Math.round(m.mph) + " mph" : "", m.rpm != null ? Math.round(m.rpm) + " rpm" : "", m.volt != null ? m.volt.toFixed(1) + " V" : ""].filter(Boolean).join(", ") })))); }
   if (rep.notAssessed.length) { host.append(el("h3", { textContent: "Not tested on this drive" })); rep.notAssessed.forEach(n => host.append(el("div", { class: "row" }, el("span", { textContent: n.system }), el("span", { textContent: n.why })))); }
   host.append(el("h3", { textContent: "Learn the terms" })); GLOSSARY.forEach(g => host.append(el("details", { class: "f" }, el("summary", { textContent: g[0] }), el("p", { textContent: g[1] }))));
