@@ -2,7 +2,7 @@
 const fs = require("fs"), assert = require("assert");
 const html = fs.readFileSync("index.html", "utf8");
 const src = html.split("/*PURE-START*/")[1].split("/*PURE-END*/")[0];
-const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,annotate,validateSignals};")();
+const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,annotate,validateSignals,healthSteps,GLOSSARY};")();
 const m = id => api.METRICS.find(x => x.id === id);
 
 // ---- Safety allowlist
@@ -128,5 +128,16 @@ const cityPast = past.map(p => ({ ...p, review: { stats: { ...p.review.stats, ki
 r = rep(drive("interstate", { transMax: 200 }), sierra, {}, cityPast); assert(!has(r, /changed from your normal/)); assert(r.notAssessed.some(n => n.system === "Baseline comparison"));
 assert(api.reportMarkdown(rep(drive("city")), sierra, { start: 1.7e12 }).includes("Drive review: Sierra"));
 for (const x of api.METRICS.filter(x => x.cmd && x.basis === "standard" && !x.pid)) assert(x.raw, x.id);
+// Health layer
+r = rep(drive("mixed", { leak: true }), four);
+{ const c = r.systems.find(s => s.id === "fuel"); assert(["watch","attention"].includes(c.status), "fuel card"); const f = r.findings.find(q => /largest at idle/.test(q.title)); assert(/Vacuum/.test(f.bestGuess)); assert.strictEqual(f.sure.label, "Medium");
+  const tu = r.tuneup.find(q => /Vacuum/.test(q.name)); assert.strictEqual(tu.status, "check"); assert.strictEqual(r.tuneup.find(q => /oil level/.test(q.name)).label, "Data can't tell"); }
+r = rep(drive("short")); assert(r.systems.every(s => s.status !== "attention")); assert(r.systems.some(s => s.status === "untested" || s.status === "partial"), "short trip must not claim everything tested");
+r = rep(drive("interstate"), sierra, { codes: { stored: ["P0301"], pending: [], permanent: [] } }); assert.strictEqual(r.findings.find(f => /trouble code/.test(f.title)).sure.label, "High");
+assert(api.reportMarkdown(r, sierra, {}).includes("Total health"));
+{ const parked = []; const t0 = 1.7e12; for (let i = 0; i < 30; i++) parked.push({ t: t0 + i * 1000, rpm: 0, volt: 12.5, mph: 0, ect: 200 }); for (let i = 30; i < 100; i++) parked.push({ t: t0 + i * 1000, rpm: 700, mph: 0, ect: 200, tps: 12 }); for (let i = 100; i < 130; i++) parked.push({ t: t0 + i * 1000, rpm: 2500, mph: 0, ect: 200, tps: 20 });
+  const st = api.healthSteps(parked), on = id => st.find(s => s.id === id).done; assert(on("koeo") && on("warm") && on("idle") && on("hold")); assert(!on("c45") && !on("c60") && !on("accel")); assert(api.healthSteps([]).every(s => !s.done));
+  // Parked 2,500 rpm can stand in for cruise in the air-leak comparison
+  const leak = parked.map(p => ({ ...p, fuelstat: 2, load: 25, stft1: p.rpm === 700 ? 8 : 0, ltft1: p.rpm === 700 ? 10 : 1 })); r = api.analyzeDrive({ rows: leak, vehicle: four, meta: {} }); assert(r.findings.some(f => /largest at idle/.test(f.title)), "hold region " + r.findings.map(f => f.title)); }
 assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 console.log("all tests passed");

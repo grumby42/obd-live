@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261104-1653Z">
-<meta name="build-timestamp-utc" content="2026-11-04T16:53:43Z">
+<meta name="build-id" content="OBD-20261104-1705Z">
+<meta name="build-timestamp-utc" content="2026-11-04T17:05:55Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -97,7 +97,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261104-1653Z", BUILD_UTC = "2026-11-04T16:53:43Z";
+const BUILD_ID = "OBD-20261104-1705Z", BUILD_UTC = "2026-11-04T17:05:55Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -508,7 +508,7 @@ function analyzeDrive(input) {
   // Data quality first: thin data can't support confident findings.
   const channels = new Set(); rows.forEach(r => Object.keys(r).forEach(k => { if (k[0] !== "_" && k !== "t" && r[k] !== null && r[k] !== undefined) channels.add(k); }));
   const rate = rows.length > 1 ? rows.length / Math.max(1, trip.seconds) : 0, gaps = rows.filter((r, i) => i && (r.t - rows[i - 1].t) > 5000).length;
-  if (!rows.length) { return { trip, findings: [], notAssessed: [{ system: "Everything", why: "No drive data was recorded." }], tested: [], channels: 0, validation: {}, stats, verdict: { level: "nodata", headline: "No data to review.", detail: "" } }; }
+  if (!rows.length) { return { systems: systemCard([], []), tuneup: tuneUpView([], trip), trip, findings: [], notAssessed: [{ system: "Everything", why: "No drive data was recorded." }], tested: [], channels: 0, validation: {}, stats, verdict: { level: "nodata", headline: "No data to review.", detail: "" } }; }
   if (gaps) add("Data quality", "info", gaps + " gap" + (gaps > 1 ? "s" : "") + " in the recording", gaps + " breaks longer than 5 seconds across " + rnd(trip.seconds / 60, 1) + " minutes.", "Readings around those gaps are excluded from time-based calculations.", ["Screen sleep, Bluetooth dropout, or browser backgrounding"], ["Keep the page in the foreground on a charging phone."], "Recording check");
   Object.entries(val).forEach(([k, s]) => { if (s === "suspect") add("Data quality", "info", "Ignored a questionable GM reading: " + k, "It failed a physical sanity check, such as staying flat while driving or disagreeing with engine rpm per mph.", "That request probably means something else on this vehicle, so it wasn't used in this review.", [], ["Use the scan in Data & sources to find the right request."], "Internal plausibility test"); });
 
@@ -550,7 +550,7 @@ function analyzeDrive(input) {
 
   // Fuel trims: never judge from one point (Warren); compare operating regions and banks.
   const twoBanks = nums(rows, "stft2").length >= MIN_REGION && nums(rows, "ltft2").length >= MIN_REGION;
-  const regions = { idle: r => r._idle, cruise: r => r._cruise && r.load < 75, load: r => r._running && r.load >= 50 && r.load < 85 && !r._idle && !r._cruise };
+  const regions = { idle: r => r._idle, cruise: r => r._cruise && r.load < 75, load: r => r._running && r.load >= 50 && r.load < 85 && !r._idle && !r._cruise, hold: r => r.mph < 1 && r.rpm >= 2200 && r.rpm <= 2800 };
   const T = {}; [1, 2].forEach(b => { T[b] = {}; for (const k in regions) T[b][k] = trimRegion(rows, b, regions[k]); });
   const bankList = twoBanks ? [1, 2] : [1], regionOK = k => T[1][k].total !== null;
   if (!warmSec) need("Fuel trims", "The engine never reached operating temperature with fuel trims available.");
@@ -564,14 +564,15 @@ function analyzeDrive(input) {
     const meanIdle = twoBanks && idle !== null && idle2 !== null ? (idle + idle2) / 2 : idle, meanCruise = twoBanks && cruise !== null && cruise2 !== null ? (cruise + cruise2) / 2 : cruise;
     const afmNote = vehicle.afm ? " This engine can deactivate cylinders, which can shift trims in light-load cruise." : "";
     let patterned = false;
-    if (meanIdle !== null && meanCruise !== null && meanIdle >= 10 && meanIdle - meanCruise >= 7) { patterned = true; add("Fuel trims", meanIdle >= 18 ? "attention" : "watch", "Lean correction is largest at idle and fades at speed", parts + ".", "That's the classic signature of unmetered air, because a fixed leak matters most when airflow is low." + afmNote, ["Vacuum or intake leak, including PCV and intake gaskets", "Exhaust leak ahead of the front O2 sensor", "Purge valve leaking at idle"], ["Inspect intake boots and vacuum lines.", "Compare trims at a held 2,500 rpm.", "A smoke test can confirm a leak."], LIT.warren); }
+    const meanHold = T[1].hold.total, refHigh = meanCruise !== null ? meanCruise : meanHold;
+    if (meanIdle !== null && refHigh !== null && meanIdle >= 10 && meanIdle - refHigh >= 7) { patterned = true; add("Fuel trims", meanIdle >= 18 ? "attention" : "watch", "Lean correction is largest at idle and fades with engine speed", parts + ".", "That's the classic signature of unmetered air, because a fixed leak matters most when airflow is low." + afmNote, ["Vacuum or intake leak, including PCV and intake gaskets", "Exhaust leak ahead of the front O2 sensor", "Purge valve leaking at idle"], ["Inspect intake boots and vacuum lines.", "Compare trims at a held 2,500 rpm.", "A smoke test can confirm a leak."], LIT.warren); }
     else if (meanCruise !== null && load !== null && meanCruise >= 8 && load >= 10 && load >= meanCruise + 3 && (meanIdle === null || meanIdle < meanCruise)) { patterned = true; add("Fuel trims", capAfm(load >= 18 ? "attention" : "watch"), "Lean correction grows with airflow or load", parts + ".", "The computer is adding more fuel as demand rises, which is not the leak pattern." + afmNote, ["Low fuel delivery", "MAF reading low", "Fuel quality or ethanol content"], ["Test fuel pressure and volume under load.", "Check the air filter and the MAF for contamination."]); }
     else if (Object.keys(regions).filter(k => T[1][k].total !== null).length >= 2 && bankList.every(b => Object.keys(regions).filter(k => T[b][k].total !== null).every(k => T[b][k].total <= -10))) { patterned = true; add("Fuel trims", worst >= 18 ? "attention" : "watch", "Rich correction across conditions", parts + ".", "The computer is removing fuel in every region with enough data." + afmNote, ["MAF over-reporting airflow", "Leaking injector or high fuel pressure", "Fuel in the oil or purge vapor"], ["Check whether trims improve with the purge inactive, and inspect the MAF."], LIT.moore); }
     if (twoBanks) { const ds = Object.keys(regions).filter(k => T[1][k].total !== null && T[2][k].total !== null).map(k => [k, T[1][k].total - T[2][k].total]).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])); stats.bankSplit = ds[0] ? ds[0][1] : null;
       if (ds.length && Math.abs(ds[0][1]) >= 10) { patterned = true; add("Fuel trims", capAfm(Math.abs(ds[0][1]) >= 18 ? "attention" : "watch"), "Banks disagree by " + rnd(Math.abs(ds[0][1])) + " points at " + ds[0][0], parts + ".", "A problem in shared air or fuel usually affects both banks, so a one-sided shift narrows the search to that bank." + afmNote, ["Injector or O2 sensor on one bank", "Exhaust or intake leak on one side"], ["Compare O2 sensor behavior between banks."], LIT.warren); } }
     if (!patterned && worst >= 10) add("Fuel trims", worst >= 20 ? "attention" : "watch", "Fuel trim beyond ±10% without a clear pattern", parts + ".", "A correction of this size is outside the usual ±10% window, but the regions tested don't isolate a cause." + afmNote, [], ["Capture idle, a held 2,500 rpm, and steady cruise when warm."], LIT.warren);
     else if (!patterned) add("Fuel trims", "good", "Fuel trims look balanced", parts + ".", "Total correction stayed within ±10% in every region with enough data.", [], [], LIT.warren);
-    for (const k in regions) if (T[1][k].total === null) need("Fuel trims", "Not enough warm " + k + " data to judge that region.");
+    for (const k of ["idle", "cruise", "load"]) if (T[1][k].total === null) need("Fuel trims", "Not enough warm " + k + " data to judge that region.");
   } else need("Fuel trims", "Warm closed-loop time was too brief in every region.");
 
   // Airflow: idle g/s per liter and volumetric efficiency need a known engine.
@@ -703,17 +704,96 @@ function analyzeDrive(input) {
   const detail = (top.length ? "Top items: " + top.join("; ") + ". " : "") + "This drive (" + trip.kind.toLowerCase() + ") tested " + tested.length + " area" + (tested.length === 1 ? "" : "s") + " and left " + na.length + " untested. A clean result only covers what this drive could exercise.";
   const order = { attention: 0, watch: 1, good: 2, info: 3 };
   F.sort((a, b) => order[a.level] - order[b.level]);
-  return { trip, findings: F, notAssessed: na, tested, channels: channels.size, sampleRate: rate, validation: val, stats, verdict: { level, headline, detail } };
+  F.forEach(f => { f.sure = howSure(f); f.bestGuess = f.causes[0] || null; f.alsoPossible = f.causes.slice(1); });
+  return { systems: systemCard(F, tested), tuneup: tuneUpView(F, trip), trip, findings: F, notAssessed: na, tested, channels: channels.size, sampleRate: rate, validation: val, stats, verdict: { level, headline, detail } };
 }
 function reportMarkdown(rep, vehicle, meta) {
   const t = rep.trip, L = [];
   L.push("# Drive review: " + (vehicle.name || "Vehicle"), "", "**" + rep.verdict.headline + ".** " + rep.verdict.detail, "");
   L.push("- Date: " + (meta.start ? new Date(meta.start).toISOString() : "unknown"), "- Type: " + t.kind, "- Distance: " + rnd(t.miles, 1) + " mi in " + rnd(t.seconds / 60, 1) + " min, " + t.stops + " stops, " + rnd(t.idleSeconds / 60, 1) + " min idling", "- Signals recorded: " + rep.channels, "");
-  ["attention", "watch", "good", "info"].forEach(l => { const a = rep.findings.filter(f => f.level === l); if (!a.length) return; L.push("## " + { attention: "Needs attention", watch: "Watch", good: "Looks good", info: "Context" }[l], ""); a.forEach(f => { L.push("### " + f.system + ": " + f.title, f.evidence, "", f.meaning); if (f.causes.length) L.push("", "Possible explanations: " + f.causes.join("; ") + "."); if (f.next.length) L.push("", "Next: " + f.next.join(" ")); L.push("", "_Basis: " + f.basis + "_", ""); }); });
+  if (rep.systems) { L.push("## Total health", ""); rep.systems.forEach(s => L.push("- **" + s.name + ":** " + s.label + ". " + s.summary)); L.push(""); }
+  if (rep.tuneup) { L.push("## Tune-up view", ""); rep.tuneup.forEach(t => L.push("- **" + t.name + ":** " + t.label + ". " + t.detail)); L.push(""); }
+  ["attention", "watch", "good", "info"].forEach(l => { const a = rep.findings.filter(f => f.level === l); if (!a.length) return; L.push("## " + { attention: "Needs attention", watch: "Watch", good: "Looks good", info: "Context" }[l], ""); a.forEach(f => { L.push("### " + f.system + ": " + f.title, f.evidence, "", f.meaning); if (f.bestGuess) L.push("", "Best guess: " + f.bestGuess + (f.alsoPossible.length ? ". Also possible: " + f.alsoPossible.join("; ") : "") + ". How sure: " + f.sure.label + "."); if (f.next.length) L.push("", "Next: " + f.next.join(" ")); L.push("", "_Basis: " + f.basis + "_", ""); }); });
   if (rep.notAssessed.length) { L.push("## Not tested on this drive", ""); rep.notAssessed.forEach(n => L.push("- " + n.system + ": " + n.why)); L.push(""); }
   L.push("Automated review based on recorded data. It suggests where to look and doesn't replace a hands-on diagnosis.");
   return L.join("\n");
 }
+/* ---------- Plain-English health layer ---------- */
+const SYSTEMS = [
+ { id: "faults", name: "Computer-reported faults", from: ["Codes", "Computer self-tests"], plain: "What the vehicle's own computers say they've detected.",
+   loop: "Each computer runs self-tests against stored limits, then records codes. It's the vehicle judging itself.", trust: "A code proves a test failed, not which part failed. Cleared codes also erase history, so finished monitors matter." },
+ { id: "fuel", name: "Fuel and air", from: ["Fuel trims", "Airflow", "Fuel control", "Sensor checks"], plain: "Whether the engine gets the right mix of air and fuel.",
+   loop: "Air sensor measures airflow → computer sets injector time → oxygen sensor reports the result → computer corrects. That correction is fuel trim.", trust: "If one sensor reports wrongly, the feedback loop compensates and the trims reveal it. Correction is how a physical fault becomes visible in data." },
+ { id: "ignition", name: "Ignition and combustion", from: ["Combustion"], plain: "Whether every cylinder is firing properly.",
+   loop: "Crank sensor timing → computer fires each coil → crank speed reveals any weak power stroke, which is counted as a misfire.", trust: "Misfires are inferred from crankshaft motion, not seen directly. Rough roads and accessory loads are known confounders that the computer has to rule out." },
+ { id: "cooling", name: "Engine cooling", from: ["Cooling"], plain: "Whether the engine warms up and holds a safe temperature.",
+   loop: "Coolant sensor → computer controls fans and adjusts fueling → thermostat regulates mechanically.", trust: "The thermostat has no computer in it, so a failing one only shows up indirectly through the coolant reading." },
+ { id: "charging", name: "Battery and charging", from: ["Electrical"], plain: "Whether the alternator and battery are keeping electrical power healthy.",
+   loop: "Battery and load readings → computer commands the alternator → voltage feeds every module.", trust: "Every sensor and computer depends on this supply, so low voltage can create misleading symptoms elsewhere." },
+ { id: "oil", name: "Engine oil", from: ["Lubrication"], plain: "What the available readings say about oil heat or pressure.",
+   loop: "Oil-life is usually calculated from how the engine was used, not measured from the oil.", trust: "A calculated number can look fine while the real oil level is low. The dipstick is the ground truth." },
+ { id: "trans", name: "Transmission", from: ["Transmission"], plain: "Whether gears and the torque converter behave smoothly without excess heat.",
+   loop: "Speed and load → transmission computer commands hydraulic pressure → speed sensors confirm the shift.", trust: "Comparing engine speed against road speed is an independent physics check, even when a GM data request is unverified." },
+ { id: "emissions", name: "Emissions system", from: ["Emissions"], plain: "Whether the exhaust cleanup hardware looks healthy.",
+   loop: "Upstream and downstream oxygen sensors compare exhaust before and after the catalyst.", trust: "Catalyst temperature is often modeled rather than measured, so a displayed value may not be a sensor reading." }
+];
+const STATUS_RANK = { attention: 3, watch: 2, good: 1, info: 0 };
+function systemCard(findings, tested) {
+  return SYSTEMS.map(s => {
+    const f = findings.filter(x => s.from.includes(x.system)), lv = f.reduce((m, x) => STATUS_RANK[x.level] > STATUS_RANK[m] ? x.level : m, "info");
+    const status = !f.length ? "untested" : lv === "info" ? "partial" : lv;
+    const label = { attention: "Needs attention", watch: "Watch", good: "Looks good", partial: "Limited data", untested: "Not tested" }[status];
+    const worst = f.filter(x => x.level === lv)[0];
+    return { id: s.id, name: s.name, status, label, plain: s.plain, loop: s.loop, trust: s.trust, summary: worst ? worst.title : "This drive didn't provide enough data." };
+  });
+}
+function howSure(f) {
+  if (f.basis === LIT.j1979) return { label: "High", why: "Reported directly by the vehicle's computer." };
+  if (/unverified/i.test(f.evidence)) return { label: "Low", why: "Uses a GM data request not yet proven on this vehicle." };
+  if (f.basis === LIT.warren || f.basis === LIT.moore) return { label: "Medium", why: "Matches a published diagnostic pattern, but one drive can't confirm the cause." };
+  if (f.basis === "Your own history") return { label: "Medium", why: "A change from your own similar drives, though conditions can differ." };
+  if (f.basis === "Physics check") return { label: "Medium", why: "Two readings disagree physically, but timing can affect the check." };
+  return { label: "Low", why: "Uses a general starting guide rather than a limit for this vehicle." };
+}
+function tuneUpView(findings, trip) {
+  const pick = (systems, rx) => findings.filter(f => systems.includes(f.system) && (!rx || rx.test(f.title)));
+  const bad = a => a.filter(f => f.level === "attention" || f.level === "watch"), clean = a => a.some(f => f.level === "good");
+  const item = (name, rel, inspect) => { const b = bad(rel); return { name, status: b.length ? "check" : clean(rel) ? "clear" : "unknown", label: b.length ? "Data points here" : clean(rel) ? "No sign in this data" : "Not tested", detail: b.length ? b[0].title : inspect, inspect }; };
+  return [
+    item("Spark plugs and coils", pick(["Combustion"]), "Data can't show plug wear until it causes misfires. Compare plug age with the owner's manual interval."),
+    item("Air filter and airflow sensor", pick(["Airflow"]).concat(pick(["Fuel trims"], /grows with airflow|Rich correction/)), "Look at the filter directly. A dirty filter may show little in light driving."),
+    item("Vacuum and intake leaks", pick(["Fuel trims"], /largest at idle|look balanced|without a clear pattern/), "Listen for hissing and inspect hoses and intake boots."),
+    item("Fuel delivery and injectors", pick(["Fuel trims"], /grows with airflow|Banks disagree|look balanced/), "Fuel pressure usually isn't available as a standard reading on this engine type, so a shop test may be needed."),
+    item("Battery and charging", pick(["Electrical"]), "Have the battery load-tested, especially if it's several years old."),
+    item("Coolant and thermostat", pick(["Cooling"], /Coolant/), "Check coolant level and condition with the engine cold."),
+    item("Transmission fluid and behavior", pick(["Transmission"]), "Data can't show fluid age or condition. Check its service history and the manual."),
+    { name: "Engine oil level and condition", status: "unknown", label: "Data can't tell", detail: "Check the dipstick on level ground, and track how much oil it uses between changes.", inspect: "" },
+    { name: "Belts, hoses, mounts, and leaks", status: "unknown", label: "Data can't tell", detail: "These need a physical look.", inspect: "" }
+  ];
+}
+const HEALTH_STEPS = [
+ { id: "koeo", title: "Key on, engine off", how: "Parked. Turn the ignition on and connect, then wait 20 seconds before starting.", done: r => secondsTrue(r, x => typeof x.rpm === "number" && x.rpm <= 50) >= 8 || r.filter(x => typeof x.rpm === "number" && x.rpm <= 50).length >= 8 },
+ { id: "warm", title: "Warm up", how: "Drive normally until the engine reaches 170°F.", done: r => r.some(x => x._warm) },
+ { id: "idle", title: "Warm idle for 1 minute", how: "Stopped safely in Park with accessories off if you can.", done: r => secondsTrue(r, x => x._warm && x._idle) >= 60 },
+ { id: "hold", title: "Hold 2,500 rpm for 30 seconds", how: "Parked with the parking brake on, outdoors. Leave this step if you aren't comfortable doing it.", done: r => secondsTrue(r, x => x._warm && x.mph < 1 && x.rpm >= 2200 && x.rpm <= 2800) >= 20 },
+ { id: "c45", title: "Steady 40–50 mph for 1 minute", how: "On a suitable road when traffic allows. No need to touch the phone.", done: r => secondsTrue(r, x => x._cruise && x.mph >= 40 && x.mph <= 52) >= 60 },
+ { id: "c60", title: "Steady 55+ mph for 2 minutes", how: "On a highway, at the legal speed.", done: r => secondsTrue(r, x => x._cruise && x.mph >= 55) >= 120 },
+ { id: "accel", title: "One firm acceleration", how: "Only where safe and legal, such as a clear on-ramp.", done: r => secondsTrue(r, x => x.tps >= 60 && x.mph > 10) >= 3 }
+];
+function healthSteps(rowsIn) { const r = annotate(rowsIn); return HEALTH_STEPS.map(s => ({ id: s.id, title: s.title, how: s.how, done: r.length ? !!s.done(r) : false })); }
+const GLOSSARY = [
+ ["Fuel trim", "The percentage the computer adds to or removes from its base fuel amount. Positive means it's adding fuel because the mix looks lean. Short-term reacts in seconds; long-term is the learned correction."],
+ ["Closed loop", "The computer is using oxygen sensor feedback to correct fuel. Open loop means it isn't, as when cold, at full throttle, or coasting."],
+ ["MAF", "Mass air flow sensor. It measures air entering the engine in grams per second."],
+ ["MAP", "Manifold pressure. It's lower at idle because the closed throttle creates vacuum, and near outside pressure at full throttle."],
+ ["Misfire", "A cylinder failing to deliver a normal power stroke. The computer infers this from small changes in crankshaft speed."],
+ ["Torque converter slip", "The speed difference between the engine and the transmission input. Some is normal; lots of it at steady cruise creates heat."],
+ ["Monitor", "A self-test the computer runs under certain conditions. 'Not finished' is common after codes are cleared or a battery change."],
+ ["Pending, stored, permanent code", "Pending has been seen but isn't confirmed. Stored is confirmed. Permanent can't be erased by a scan tool and clears after the computer retests the system."],
+ ["Bank", "One side of a V-shaped engine. An inline 4-cylinder has one bank."],
+ ["Lambda", "Air-fuel mix compared with the chemically ideal ratio. 1.00 is ideal, below is rich, above is lean."],
+ ["Cyber-physical", "A loop where software reads sensors and moves real hardware. Faults can begin on either side and appear on the other, so cross-checking data against physics matters."]
+];
 
 function matchVehicle(vin, vehicles) {
   if (!vin || vin.length !== 17) return null;
@@ -734,7 +814,7 @@ function el(tag, props = {}, ...kids) {
 }
 const DEFAULT_VEHICLES = {
   sierra: { id: "sierra", name: "2016 GMC Sierra 1500", engine: { label: "5.3L V8", L: 5.3, cyl: 8 }, layout: "V", afm: true, afmCyls: [1, 4, 6, 7], trans: "6L80 (RPO MYC)", gears: 6, notes: "", match: { wmi: ["1GT"], year: "G" } },
-  equinox: { id: "equinox", name: "2014 Chevrolet Equinox", engine: null, layout: null, afm: false, trans: "", notes: "", match: { wmi: ["2GN", "2CN"], year: "E" } }
+  equinox: { id: "equinox", name: "2014 Chevrolet Equinox", engine: null, layout: null, afm: false, trans: "6-speed automatic", gears: 6, notes: "", match: { wmi: ["2GN", "2CN"], year: "E" } }
 };
 const ENGINE_CHOICES = { equinox: [{ label: "2.4L 4-cylinder", L: 2.4, cyl: 4, layout: "I" }, { label: "3.6L V6", L: 3.6, cyl: 6, layout: "V" }] };
 const store = {
@@ -746,6 +826,7 @@ function toast(t) { const n = $("toast"); n.textContent = t; n.hidden = false; c
 /* ---------- Presets: the recommended combinations ---------- */
 const W = (type, metrics, p, d, o = {}) => ({ type, metrics, p, d, ...o });
 const PRESETS = {
+ "Health check": [ W("healthcheck",[],[4,9],[6,8]), W("healthcard",[],[4,8],[6,8]), W("needle",["rpm"],[4,4],[4,4]), W("number",["ect"],[2,3],[4,4]), W("number",["volt"],[2,3],[4,4]) ],
  Glance: [ W("needle",["rpm"],[4,4],[4,5]), W("needle",["mph"],[4,4],[4,5]), W("gearbox",[],[4,3],[4,5]),
    W("number",["trans"],[2,3],[3,3]), W("number",["ect"],[2,3],[3,3]), W("number",["volt"],[2,3],[3,3]), W("number",["slip"],[2,3],[3,3]), W("status",[],[4,3],[12,2]) ],
  Transmission: [ W("gearbox",[],[4,3],[3,4]), W("needle",["trans"],[4,4],[3,4]), W("line",["slip"],[4,4],[6,4],{win:5}), W("scatter",["mph","rpm"],[4,5],[6,5]),
@@ -795,7 +876,7 @@ function loadVehicle(id) {
   Object.keys(PRESETS).forEach(k => { if (!Array.isArray(dash[k])) dash[k] = buildDash(k); });
   rules = store.get(vkey("rules"), {}); customs = store.get(vkey("customs"), []); rawDids = store.get(vkey("rawdids"), []);
   customs.forEach(registerCustom); rawDids.forEach(registerRawDid);
-  tab = store.get(vkey("tab"), "Glance"); if (!dash[tab]) tab = "Glance";
+  tab = store.get(vkey("tab"), "Health check"); if (!dash[tab]) tab = "Health check";
 }
 function resetLive() {
   series = {}; stats = {}; latest = {}; rows = []; flushed = 0; chunkSeq = 0; monitor = null; truck = {}; codes = null; mode06 = null; supported = null; prevMph = null; stableBuf = [];
@@ -1215,6 +1296,21 @@ R.truck = (w, box) => {
   return () => { btn.disabled = !session; const rows2 = [["VIN", truck.vin], ["Calibration ID", truck.cal], ["Odometer", latest.odo != null ? latest.odo.toFixed(0) + " mi" : null], ["Standard PIDs reported", supported ? String(supported.size) : null]].filter(r => r[1]); const s = JSON.stringify(rows2); if (s === sig) return; sig = s; list.textContent = "";
     rows2.forEach(r => list.append(el("div", { class: "row" }, el("span", { textContent: r[0] }), el("span", { textContent: r[1] })))); };
 };
+function sessionReport() { return analyzeDrive({ rows, meta: sessionMeta(), vehicle: vehicles[vid], history: drives }); }
+R.healthcheck = (w, box) => {
+  const list = el("div", { class: "scroll" }), btn = el("button", { class: "primary", textContent: "See total health", onclick: openReview });
+  box.append(header(w, "Guided health check", ""), el("div", { class: "body" }, el("div", { class: "sub", style: "white-space:normal", textContent: "Steps tick themselves off from the data. Do them in any order, and only when safe. Don't touch the phone while moving." }), list, btn));
+  let n = 0, sig = "";
+  return () => { if (n++ % 8) return; const st = healthSteps(rows), s = JSON.stringify(st.map(x => x.done)); if (s === sig) return; sig = s; list.textContent = "";
+    st.forEach(x => list.append(el("div", { class: "row", style: "display:block" }, el("b", { class: "pill " + (x.done ? "good" : ""), textContent: (x.done ? "✓ " : "○ ") + x.title }), el("div", { class: "sub", style: "white-space:normal", textContent: x.how })))); };
+};
+R.healthcard = (w, box) => {
+  const list = el("div", { class: "scroll" }); box.append(header(w, "Total health so far", ""), el("div", { class: "body" }, list));
+  let n = 0;
+  return () => { if (n++ % 16 && n > 1) return; list.textContent = ""; if (!rows.length) { list.append(el("div", { class: "pill", textContent: "Connect to begin." })); return; }
+    sessionReport().systems.forEach(c => list.append(el("div", { class: "row" }, el("span", { textContent: c.name }), el("span", { class: "pill " + (c.status === "good" ? "good" : c.status === "attention" ? "bad" : ""), textContent: SICON[c.status] + " " + c.label })))); };
+};
+const SICON = { attention: "✕", watch: "▲", good: "✓", partial: "~", untested: "○", check: "▲", clear: "✓", unknown: "○" };
 R.mode06 = (w, box) => {
   const list = el("div", { class: "scroll" }), btn = el("button", { textContent: "Read self-test results" });
   btn.onclick = () => readMode06().catch(e => toast(e.message));
@@ -1252,7 +1348,7 @@ R.history = (w, box) => {
 let painters = [];
 function renderTabs() {
   const t = $("tabs"); t.textContent = "";
-  Object.keys(dash).forEach(k => t.append(el("button", { role: "tab", textContent: k, "aria-selected": String(k === tab), onclick: () => { tab = k; store.set(vkey("tab"), k); renderTabs(); renderGrid(); } })));
+  Object.keys(PRESETS).forEach(k => t.append(el("button", { role: "tab", textContent: k, "aria-selected": String(k === tab), onclick: () => { tab = k; store.set(vkey("tab"), k); renderTabs(); renderGrid(); } })));
 }
 const posOf = w => w.pos[cols()] || (w.pos[cols()] = { ...flow([[Math.min(cols(), 4), 3]], cols())[0], y: 99 });
 function applyPos(w, node) { const p = posOf(w); node.style.gridColumn = (p.x + 1) + " / span " + p.w; node.style.gridRow = (p.y + 1) + " / span " + p.h; }
@@ -1332,7 +1428,7 @@ function commit() { dashNoNodes(); save(); renderGrid(); }
 function dashNoNodes() { Object.values(dash).flat().forEach(w => { if (w._node) delete w._node; }); }
 function openAdd() {
   $("dlg").classList.remove("wide");
-  const t = el("select", {}, [["number","Number with sparkline"],["needle","Active needle"],["line","Line graph"],["scatter","RPM vs speed scatter"],["share","Pie/bars: share of time"],["history","Per-drive history"],["gearbox","Gear and slip"],["misfire","Misfire by cylinder"],["status","Check-engine status"],["readiness","Emissions monitors"],["codes","Trouble codes"],["truck","Truck identity"],["mode06","Computer self-tests"],["allsensors","Every reading"]].map(([k, v]) => el("option", { value: k, textContent: v })));
+  const t = el("select", {}, [["number","Number with sparkline"],["needle","Active needle"],["line","Line graph"],["scatter","RPM vs speed scatter"],["share","Pie/bars: share of time"],["history","Per-drive history"],["gearbox","Gear and slip"],["misfire","Misfire by cylinder"],["status","Check-engine status"],["readiness","Emissions monitors"],["codes","Trouble codes"],["truck","Truck identity"],["mode06","Computer self-tests"],["healthcheck","Guided health check"],["healthcard","Total health"],["allsensors","Every reading"]].map(([k, v]) => el("option", { value: k, textContent: v })));
   const m = el("select", {}, metricOptions("trans"));
   showDlg("Add widget", el("label", { textContent: "Widget" }), t, el("label", { textContent: "Reading (when the widget uses one)" }), m, el("div", { class: "bar" }, el("button", { class: "primary", textContent: "Add", onclick: () => {
     const type = t.value, w = { id: "u" + Date.now().toString(36), type, metrics: ["number","needle","line","history"].includes(type) ? [m.value] : type === "scatter" ? ["mph","rpm"] : [], win: 5, stat: "max", share: "drive", view: "donut", pos: {} };
@@ -1407,10 +1503,15 @@ function renderReport(host, rep, veh, meta, rs) {
   host.append(el("div", { class: "verdict " + rep.verdict.level }, el("b", { textContent: ico[rep.verdict.level] + " " + rep.verdict.headline }), el("span", { textContent: rep.verdict.detail })));
   const stat = (a, b) => el("div", {}, el("b", { textContent: a }), b);
   host.append(el("div", { class: "stats" }, stat(t.kind, "Drive type"), stat(t.miles.toFixed(1) + " mi", "Distance"), stat((t.seconds / 60).toFixed(0) + " min", "Time"), stat(String(t.stops), "Stops"), stat((t.idleSeconds / 60).toFixed(1) + " min", "Idling"), stat((t.highwaySeconds / 60).toFixed(1) + " min", "At 55+ mph"), stat(String(rep.channels), "Signals logged"), stat((rep.sampleRate || 0).toFixed(1) + "/s", "Log rate")));
+  host.append(el("h3", { textContent: "Total health, based on what this drive could test" }));
+  (rep.systems || []).forEach(c => host.append(el("details", { class: "f" }, el("summary", {}, el("span", { class: "lv " + (c.status === "good" ? "good" : c.status === "attention" ? "attention" : c.status === "watch" ? "watch" : "info"), textContent: SICON[c.status] }), c.name + ": " + c.label), el("p", { textContent: c.summary }), el("p", { textContent: c.plain }), el("p", { textContent: "How the loop works: " + c.loop }), el("p", { textContent: "Cyber-physical lens: " + c.trust }))));
+  host.append(el("h3", { textContent: "Tune-up view" }));
+  (rep.tuneup || []).forEach(x => host.append(el("div", { class: "row", style: "display:block" }, el("b", { class: "pill " + (x.status === "clear" ? "good" : x.status === "check" ? "bad" : ""), textContent: SICON[x.status] + " " + x.name + ": " + x.label }), el("div", { class: "sub", style: "white-space:normal", textContent: x.detail }))));
   const names = { attention: "Needs attention", watch: "Watch", good: "Looks good", info: "Context" };
   ["attention","watch","good","info"].forEach(l => { const a = rep.findings.filter(f => f.level === l); if (!a.length) return; host.append(el("h3", { textContent: names[l] + " (" + a.length + ")" }));
-    a.forEach(f => { const d = el("details", { class: "f", open: l === "attention" || l === "watch" }, el("summary", {}, el("span", { class: "lv " + l, textContent: ico[l] }), f.system + ": " + f.title), el("p", { textContent: f.evidence }), el("p", { textContent: f.meaning }), f.causes.length ? el("p", { textContent: "Possible explanations: " + f.causes.join("; ") + "." }) : null, f.next.length ? el("p", { textContent: "Next: " + f.next.join(" ") }) : null, el("small", { textContent: "Basis: " + f.basis })); host.append(d); }); });
+    a.forEach(f => { const d = el("details", { class: "f", open: l === "attention" || l === "watch" }, el("summary", {}, el("span", { class: "lv " + l, textContent: ico[l] }), f.system + ": " + f.title), el("p", { textContent: f.evidence }), el("p", { textContent: f.meaning }), f.bestGuess ? el("p", {}, el("b", { textContent: "Best guess: " }), f.bestGuess + ".") : null, f.alsoPossible && f.alsoPossible.length ? el("p", { textContent: "Also possible: " + f.alsoPossible.join("; ") + "." }) : null, f.sure ? el("p", { textContent: "How sure: " + f.sure.label + ". " + f.sure.why }) : null, f.next.length ? el("p", { textContent: "Next: " + f.next.join(" ") }) : null, el("small", { textContent: "Basis: " + f.basis })); host.append(d); }); });
   if (rep.notAssessed.length) { host.append(el("h3", { textContent: "Not tested on this drive" })); rep.notAssessed.forEach(n => host.append(el("div", { class: "row" }, el("span", { textContent: n.system }), el("span", { textContent: n.why })))); }
+  host.append(el("h3", { textContent: "Learn the terms" })); GLOSSARY.forEach(g => host.append(el("details", { class: "f" }, el("summary", { textContent: g[0] }), el("p", { textContent: g[1] }))));
   const tag = new Date(meta.start || Date.now()).toISOString().replace(/[:.]/g, "-");
   host.append(el("div", { class: "bar", style: "margin-top:12px" },
     el("button", { textContent: "Download report", onclick: () => download(vid + "-review-" + tag + ".md", reportMarkdown(rep, veh, meta), "text/markdown") }),
