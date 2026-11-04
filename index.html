@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261104-1628Z">
-<meta name="build-timestamp-utc" content="2026-11-04T16:28:11Z">
-<title>Sierra OBD Live</title>
+<meta name="build-id" content="OBD-20261104-1645Z">
+<meta name="build-timestamp-utc" content="2026-11-04T16:45:24Z">
+<title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
 *{box-sizing:border-box}
@@ -58,6 +58,10 @@ canvas{display:block;flex:1;min-height:0;width:100%}
 .edit .move-handle{display:block;top:4px;left:4px;width:38px;height:38px;z-index:3;touch-action:none;cursor:grab}
 .edit .gear-handle{display:block;right:0;bottom:0;width:38px;height:38px;border-radius:8px 0 8px 0;touch-action:none;cursor:nwse-resize;z-index:3}
 dialog{background:var(--surface);color:var(--text);border:1px solid var(--axis);border-radius:12px;width:min(640px,calc(100vw - 24px));max-height:calc(100vh - 40px);padding:14px}
+dialog.wide{width:min(960px,calc(100vw - 16px))}
+.verdict{border-radius:10px;padding:12px 14px;margin:8px 0;border:1px solid var(--line);background:var(--raised)}.verdict.attention{border-color:var(--bad);background:#2a1716}.verdict.good{border-color:var(--good)}.verdict.watch{border-color:#fab219}.verdict b{font-size:1.02rem;display:block;margin-bottom:3px}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;margin:8px 0}.stats div{background:var(--raised);border-radius:8px;padding:7px 9px;font-size:.72rem;color:var(--muted)}.stats b{display:block;font-size:1.05rem;color:var(--text);font-variant-numeric:tabular-nums}
+details.f{border:1px solid var(--line);border-radius:8px;margin:5px 0;padding:8px 10px;background:var(--surface)}details.f summary{cursor:pointer;font-size:.88rem;font-weight:600}details.f p{margin:6px 0 0}details.f small{color:var(--faint);display:block;margin-top:6px}.lv{font-weight:700;margin-right:6px}.lv.attention{color:#ff8a80}.lv.watch{color:#fab219}.lv.good{color:#4cc94c}.lv.info{color:var(--muted)}
 dialog::backdrop{background:rgba(0,0,0,.6)}
 dialog h2{font-size:1rem;margin:0 0 8px}dialog h3{font-size:.86rem;margin:14px 0 4px;color:var(--muted)}
 dialog p{margin:0 0 8px;font-size:.86rem}dialog a{color:#7fb5f2}
@@ -71,15 +75,18 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 </head>
 <body>
 <main id="app">
-<header><h1>Sierra OBD Live</h1><div id="status" role="status">Not connected</div></header>
+<header><h1>OBD Live</h1><div id="status" role="status">Not connected</div></header>
 <p id="unsupported" hidden>This browser can't open a Bluetooth serial connection. Use Chrome 148 or later on Android, or Chrome or Edge on Windows. The simulator still works.</p>
 <div class="bar">
+ <select id="vehicle" aria-label="Vehicle"></select>
+ <button id="vehBtn">Vehicle settings</button>
  <button id="connect" class="primary">Connect LX</button>
  <button id="sim">Simulator</button>
  <button id="stop" disabled>Disconnect</button>
  <button id="editBtn">Edit layout</button>
  <button id="addBtn" hidden>+ Add widget</button>
  <button id="resetBtn" hidden>Reset tab</button>
+ <button id="reviewBtn" class="primary">Drive review</button>
  <button id="moreBtn">Data &amp; sources</button>
 </div>
 <nav class="tabs" id="tabs" role="tablist" aria-label="Dashboards"></nav>
@@ -90,7 +97,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261104-1628Z", BUILD_UTC = "2026-11-04T16:28:11Z";
+const BUILD_ID = "OBD-20261104-1645Z", BUILD_UTC = "2026-11-04T16:45:24Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -135,8 +142,8 @@ function dataBytes(raw, prefix) {
   return null;
 }
 // Support bitmasks: every ECU that answers contributes; bit 7 of the first byte = base+1.
-function parseSupport(raw, base) {
-  const out = new Set(), pre = "41" + base.toString(16).toUpperCase().padStart(2, "0");
+function parseSupport(raw, base, service = "41") {
+  const out = new Set(), pre = service + base.toString(16).toUpperCase().padStart(2, "0");
   for (const m of toMessages(raw)) {
     if (!m.startsWith(pre)) continue;
     hexBytes(m.slice(4, 12)).forEach((b, i) => { for (let k = 0; k < 8; k++) if (b & (0x80 >> k)) out.add(base + i * 8 + k + 1); });
@@ -205,8 +212,44 @@ const METRICS = [
  std("ect","Coolant","Temperatures","05","°F","med",0,40,280,tempF,{rule:{hi:230,when:"running",note:GUIDE}}),
  std("iat","Intake air","Temperatures","0F","°F","med",0,-20,200,tempF),
  std("amb","Ambient air","Temperatures","46","°F","slow",0,-40,130,tempF),
- std("cat1","Catalyst bank 1","Temperatures","3C","°F","med",0,0,1800,b=>c2f(u16(b[0],b[1])/10-40)),
- std("cat2","Catalyst bank 2","Temperatures","3E","°F","med",0,0,1800,b=>c2f(u16(b[0],b[1])/10-40)),
+ std("cat1","Catalyst B1S1","Temperatures","3C","°F","med",0,0,1800,b=>c2f(u16(b[0],b[1])/10-40)),
+ std("cat2","Catalyst B2S1","Temperatures","3D","°F","med",0,0,1800,b=>c2f(u16(b[0],b[1])/10-40)),
+ std("cat1s2","Catalyst B1S2","Temperatures","3E","°F","slow",0,0,1800,b=>c2f(u16(b[0],b[1])/10-40)),
+ std("cat2s2","Catalyst B2S2","Temperatures","3F","°F","slow",0,0,1800,b=>c2f(u16(b[0],b[1])/10-40)),
+ std("oilts","Engine oil temp (standard)","Temperatures","5C","°F","med",0,-40,420,tempF),
+ std("fuelstat","Fuel system status code","Fuel","03","","med",0,0,16,b=>b[0]),
+ std("fuelp","Fuel pressure","Fuel","0A","psi","med",0,0,110,b=>b[0]*3/6.895),
+ std("railr","Fuel rail pressure (relative)","Fuel","22","kPa","med",0,0,5200,b=>u16(b[0],b[1])*0.079),
+ std("railg","Fuel rail pressure (gauge)","Fuel","23","kPa","med",0,0,660000,b=>u16(b[0],b[1])*10),
+ std("raila","Fuel rail pressure (absolute)","Fuel","59","kPa","med",0,0,660000,b=>u16(b[0],b[1])*10),
+ std("inj","Injection timing","Fuel","5D","°","slow",1,-210,302,b=>u16(b[0],b[1])/128-210),
+ std("ethanol","Ethanol content","Fuel","52","%","slow",0,0,100,pct),
+ std("purge","Commanded purge","Fuel","2E","%","med",0,0,100,pct),
+ std("evapp","Evap vapor pressure","Fuel","32","Pa","slow",0,-8192,8192,b=>s16(b[0],b[1])/4),
+ std("evapa","Evap absolute pressure","Fuel","53","kPa","slow",0,0,330,b=>u16(b[0],b[1])/200),
+ std("evapw","Evap pressure (wide)","Fuel","54","Pa","slow",0,-32768,32767,b=>s16(b[0],b[1])),
+ std("egrc","Commanded EGR","Engine","2C","%","med",0,0,100,pct),
+ std("egre","EGR error","Engine","2D","%","med",0,-100,100,b=>(b[0]-128)*100/128),
+ std("absload","Absolute load","Engine","43","%","fast",0,0,400,b=>u16(b[0],b[1])*100/255),
+ std("reltps","Relative throttle","Driving","45","%","med",0,0,100,pct),
+ std("tpsb","Throttle position B","Driving","47","%","med",0,0,100,pct),
+ std("tpsc","Throttle position C","Driving","48","%","med",0,0,100,pct),
+ std("pedale","Accelerator pedal E","Driving","4A","%","med",0,0,100,pct),
+ std("pedalf","Accelerator pedal F","Driving","4B","%","med",0,0,100,pct),
+ std("cmdtps","Commanded throttle","Driving","4C","%","med",0,0,100,pct),
+ std("relpedal","Relative pedal","Driving","5A","%","med",0,0,100,pct),
+ std("demtq","Driver demand torque","Engine","61","%","med",0,-125,130,b=>b[0]-125),
+ std("miltime","Time with check-engine on","Diagnostics","4D","min","slow",0,0,65535,b=>u16(b[0],b[1])),
+ std("clrtime","Time since codes cleared","Diagnostics","4E","min","slow",0,0,65535,b=>u16(b[0],b[1])),
+ ...["B1S1","B1S2","B1S3","B1S4","B2S1","B2S2","B2S3","B2S4"].flatMap((lab, i) => [
+   std("o2v"+(i+1),"O2 "+lab+" voltage","Oxygen sensors",(0x14+i).toString(16).toUpperCase(),"V","med",3,0,1.3,b=>b[0]/200,{kids:[{id:"o2t"+(i+1),label:"O2 "+lab+" trim",unit:"%",digits:1,min:-100,max:100,f:b=>b[1]===255?null:(b[1]-128)*100/128}]}),
+   std("wbl"+(i+1),"Wideband "+lab+" lambda","Oxygen sensors",(0x24+i).toString(16).toUpperCase(),"λ","med",3,0,2,b=>u16(b[0],b[1])*2/65536,{kids:[{id:"wbv"+(i+1),label:"Wideband "+lab+" voltage",unit:"V",digits:2,min:0,max:8,f:b=>u16(b[2],b[3])*8/65536}]}),
+   std("wcl"+(i+1),"Wideband "+lab+" lambda (current type)","Oxygen sensors",(0x34+i).toString(16).toUpperCase(),"λ","med",3,0,2,b=>u16(b[0],b[1])*2/65536,{kids:[{id:"wcc"+(i+1),label:"Wideband "+lab+" current",unit:"mA",digits:2,min:-128,max:128,f:b=>u16(b[2],b[3])/256-128}]})
+ ]),
+ std("so2st1","Secondary O2 short trim B1","Oxygen sensors","55","%","med",1,-100,100,trim),
+ std("so2lt1","Secondary O2 long trim B1","Oxygen sensors","56","%","med",1,-100,100,trim),
+ std("so2st2","Secondary O2 short trim B2","Oxygen sensors","57","%","med",1,-100,100,trim),
+ std("so2lt2","Secondary O2 long trim B2","Oxygen sensors","58","%","med",1,-100,100,trim),
  std("volt","Module voltage","Electrical","42","V","med",1,10,16,b=>u16(b[0],b[1])/1000,{rule:{lo:12.5,hi:15,when:"running",note:GUIDE+" GM charging systems can intentionally run lower to save fuel."}}),
  std("stft1","Short trim B1","Fuel","06","%","fast",1,-30,30,trim,{rule:{lo:-15,hi:15,when:"warm",note:GUIDE}}),
  std("ltft1","Long trim B1","Fuel","07","%","med",1,-30,30,trim,{rule:{lo:-10,hi:10,when:"warm",note:GUIDE}}),
@@ -240,6 +283,7 @@ const METRICS = [
  { id:"mpg",label:"Estimated MPG",group:"Fuel",unit:"mpg",digits:1,min:0,max:60,basis:"derived",need:["mph","maf"],calc:v=>v.mph>2&&v.maf>0?Math.min(99,11.44*v.mph/v.maf):null },
  { id:"hp",label:"Estimated power",group:"Engine",unit:"hp",digits:0,min:0,max:450,basis:"derived",need:["torq","reftq","rpm"],calc:v=>v.reftq>0&&v.rpm>0?Math.max(0,v.torq/100*v.reftq*v.rpm/5252):null }
 ];
+METRICS.slice().forEach(m => (m.kids || []).forEach(k => METRICS.push({ ...k, group: m.group, parent: m.id, basis: m.basis, tier: m.tier })));
 function decodeMetric(m, raw) {
   if (isNoData(raw)) return null;
   let v;
@@ -312,13 +356,361 @@ function simulatorReply(cmd, t) {
   }
   const map = { "010C":"410C"+hex(rpm*4,4),"010D":"410D"+hex(mph/0.621371),"0104":"4104"+hex(90+w*60),"0111":"4111"+hex(40+w*25),"0149":"4149"+hex(40+w*25),
    "010B":"410B"+hex(45+w*25),"0110":"4110"+hex((20+w*12)*100,4),"010E":"410E"+hex(128+40),"0162":"4162"+hex(155+w*40),"0105":"4105"+hex(130),"010F":"410F"+hex(60),
-   "0146":"4146"+hex(50),"013C":"413C"+hex(11000,4),"013E":"413E"+hex(10800,4),"0142":"4142"+hex(13900,4),"0106":"4106"+hex(128+w*4),"0107":"4107"+hex(131),
-   "0108":"4108"+hex(127-w*4),"0109":"4109"+hex(130),"0144":"4144"+hex(32768,4),"015E":"415E"+hex(70+w*40,4),"012F":"412F"+hex(150),"0133":"4133"+hex(99),
+   "0146":"4146"+hex(50),"013C":"413C"+hex(11000,4),"013D":"413D"+hex(10800,4),"0103":"410302"+"00","010A":"410A"+hex(20),"012E":"412E"+hex(10),"0133":"413399","0115":"4115"+hex(150)+"FF","0114":"4114"+hex(90+w*60)+hex(128),"0118":"4118"+hex(90-w*60)+hex(128),"0119":"4119"+hex(150)+"FF","0145":"4145"+hex(40+w*25),"014C":"414C"+hex(40+w*25),"0143":"4143"+hex(80+w*40,4),"0161":"4161"+hex(155+w*40),"0113":"411333",
+   "0600":"460000000001","0620":"462080000001","0640":"464000000001","0660":"466000000001","0680":"468000000001","06A0":"46A07FC00000","0621":"46218024006400000258","0151":"415101","0142":"4142"+hex(13900,4),"0106":"4106"+hex(128+w*4),"0107":"4107"+hex(131),
+   "0108":"4108"+hex(127-w*4),"0109":"4109"+hex(130),"0144":"4144"+hex(32768,4),"015E":"415E"+hex(70+w*40,4),"012F":"412F"+hex(150),
    "011F":"411F"+hex(t/1000%3600,4),"0131":"4131"+hex(800,4),"0130":"413012","0121":"41210000","0163":"4163"+hex(520,4),"0101":"4101"+"82"+"07"+"E5"+"20",
    "221940":"621940"+hex(125+w*12),"22199A":"62199A"+hex(g),"221991":"621991"+hex(slip*8,4),"221993":"621993"+hex(22),"221994":"621994"+hex(26),"221995":"621995"+hex(28),
    "221154":"621154"+hex(135),"221470":"621470"+hex(70+w*20),"22119F":"62119F"+hex(170),"2211A6":"6211A600","03":"4302030001710000","07":"4700","0A":"4A00","0902":"490201"+[..."SIMULATOR00000000"].map(c=>hex(c.charCodeAt(0))).join("") };
   for (let c = 1; c <= 8; c++) { const mid = (0xA1 + c).toString(16).toUpperCase(); map["06"+mid] = "46"+mid+"0B24000000000064"+mid+"0C24"+hex(c===4?2:0,4)+"00000064"; }
   return map[cmd] || "NO DATA";
+}
+/* ---------- Whole-drive review: pure logic, tested against synthetic drives ---------- */
+const nums = (rows, k, pred) => { const o = []; for (const r of rows) { const v = r[k]; if (typeof v === "number" && Number.isFinite(v) && (!pred || pred(r))) o.push(v); } return o; };
+const pctl = (a, p) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), i = (s.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i); return s[lo] + (s[hi] - s[lo]) * (i - lo); };
+const avg = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : null;
+const rnd = (v, d = 0) => v === null || v === undefined ? "n/a" : Number(v).toFixed(d);
+const signed = (v, d = 1) => v === null || v === undefined ? "n/a" : (v > 0 ? "+" : "") + Number(v).toFixed(d);
+const secondsTrue = (rows, pred) => { let n = 0; for (let i = 1; i < rows.length; i++) { const dt = (rows[i].t - rows[i - 1].t) / 1000; if (dt > 0 && dt <= 5 && pred(rows[i])) n += dt; } return n; };
+const MIN_REGION = 20;
+const LIT = {
+  warren: "Warren, Driveability Corner, 2014",
+  moore: "Moore, Drivability From The Front Seat, 2015",
+  techlink: "GM TechLink, 2022",
+  j1979: "SAE J1979 data definitions",
+  guide: "Starting guide, not a manufacturer limit"
+};
+function annotate(rowsIn) {
+  const rows = rowsIn.map(r => ({ ...r })).filter(r => typeof r.t === "number").sort((a, b) => a.t - b.t);
+  rows.forEach(r => { if (r.oilt === undefined && typeof r.oilts === "number") r.oilt = r.oilts; });
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i], w = [];
+    for (let j = Math.max(0, i - 5); j <= Math.min(rows.length - 1, i + 5); j++) if (Math.abs(rows[j].t - r.t) <= 6000) w.push(rows[j]);
+    const sp = k => { const a = nums(w, k); return a.length >= 4 ? Math.max(...a) - Math.min(...a) : null; };
+    const prev = i ? rows[i - 1] : null, dt = prev ? (r.t - prev.t) / 1000 : 0;
+    r._dt = dt > 0 && dt <= 5 ? dt : 0;
+    r._acc = r._dt && typeof r.mph === "number" && typeof prev.mph === "number" ? (r.mph - prev.mph) / r._dt : 0;
+    r._running = r.rpm > 400;
+    r._warm = r._running && r.ect >= 170;
+    r._idle = r._running && r.mph < 1 && r.rpm < 1300;
+    const mphSp = sp("mph"), tpsSp = sp("tps");
+    r._steady = mphSp !== null && mphSp <= 3 && (tpsSp === null || tpsSp <= 5);
+    r._cruise = r._running && r.mph >= 40 && r._steady;
+    r._highload = r._running && (r.load >= 75 || r.tps >= 70);
+    const decelCut = r.fuelstat === 4 || (r._acc < -0.3 && r.tps < 18 && r.mph > 5);
+    r._closed = r.fuelstat !== undefined ? r.fuelstat === 2 : (r._warm && !decelCut && !(r.load >= 85));
+    r._ratio = r.mph > 12 && r.rpm > 400 ? r.rpm / r.mph : null;
+  }
+  return rows;
+}
+// A community GM request only counts as trustworthy if the truck's own physics agree with it.
+function validateSignals(rows, meta) {
+  const out = {}, drive = rows.filter(r => r._running), mins = secondsTrue(rows, r => r._running) / 60;
+  const has = k => nums(rows, k).length >= 5;
+  if (has("gear")) {
+    const g = {}; rows.forEach(r => { if (Number.isInteger(r.gear) && r._ratio) (g[r.gear] = g[r.gear] || []).push(r._ratio); });
+    const med = Object.keys(g).filter(k => g[k].length >= 5).map(Number).sort((a, b) => a - b).map(k => pctl(g[k], .5));
+    out.gear = med.length < 2 ? "unknown" : med.every((v, i) => !i || v < med[i - 1]) ? "ok" : "suspect";
+  }
+  const flat = k => { const a = nums(drive, k); return mins >= 5 && a.length >= 30 && Math.max(...a) - Math.min(...a) < 1e-6; };
+  if (has("slip")) { const a = nums(drive, "slip"); out.slip = flat("slip") ? "suspect" : a.length && mins >= 3 ? (pctl(a.map(Math.abs), .5) < 900 ? "ok" : "suspect") : "unknown"; }
+  for (const k of ["trans", "oilt"]) if (has(k)) {
+    const a = nums(rows, k), first = a[0], amb = nums(rows, "amb")[0] ?? nums(rows, "iat")[0], cold = nums(rows, "ect")[0] < 100;
+    if (flat(k)) out[k] = "suspect";
+    else if (cold && amb !== undefined && Math.abs(first - amb) > 50) out[k] = "suspect";
+    else out[k] = mins >= 8 && Math.max(...a) - Math.min(...a) >= 5 ? "ok" : "unknown";
+  }
+  if (has("oilp")) { const a = nums(drive, "oilp"); out.oilp = flat("oilp") ? "suspect" : a.length >= 20 && Math.max(...a) - Math.min(...a) >= 3 ? "ok" : "unknown"; }
+  if (has("knock")) out.knock = flat("knock") && nums(drive, "knock")[0] !== 0 ? "suspect" : "unknown";
+  return out;
+}
+function classify(rows) {
+  const moving = secondsTrue(rows, r => r.mph >= 1), total = rows.length ? (rows[rows.length - 1].t - rows[0].t) / 1000 : 0, running = secondsTrue(rows, r => r._running);
+  let miles = 0, stops = 0, prevMoving = false;
+  for (const r of rows) { if (typeof r.mph !== "number") continue; miles += r.mph * r._dt / 3600; const mv = r.mph >= 5; if (prevMoving && r.mph < 1) { stops++; prevMoving = false; } else if (mv) prevMoving = true; }
+  const hwy = secondsTrue(rows, r => r.mph >= 55), city = secondsTrue(rows, r => r.mph > 0 && r.mph < 40), idle = secondsTrue(rows, r => r._running && r.mph < 1);
+  const hshare = running ? hwy / running : 0, stopsPerMile = miles > .1 ? stops / miles : 0, avgMoving = moving ? miles / (moving / 3600) : 0;
+  let kind;
+  if (miles < .2) kind = "Stationary or idle only";
+  else if (running < 300 || miles < 1.5) kind = "Short trip";
+  else if (hshare >= .55) kind = "Interstate / highway";
+  else if (hshare >= .15) kind = "Mixed";
+  else if (stopsPerMile >= .5 || avgMoving < 28) kind = "City";
+  else kind = "Suburban";
+  return { kind, seconds: total, runningSeconds: running, miles, stops, stopsPerMile, avgMoving, idleSeconds: idle, highwaySeconds: hwy, citySeconds: city, cruiseSeconds: secondsTrue(rows, r => r._cruise), highLoadSeconds: secondsTrue(rows, r => r._highload), maxMph: pctl(nums(rows, "mph"), 1) };
+}
+function trimRegion(rows, bank, pred) {
+  const s = "stft" + bank, l = "ltft" + bank, tot = [], lts = [];
+  for (const r of rows) if (r._warm && r._closed && pred(r) && typeof r[s] === "number" && typeof r[l] === "number") { tot.push(r[s] + r[l]); lts.push(r[l]); }
+  return { n: tot.length, total: tot.length >= MIN_REGION ? pctl(tot, .5) : null, ltft: lts.length >= MIN_REGION ? pctl(lts, .5) : null };
+}
+// Locked gearing means rpm/mph barely moves second to second, whatever the gear or grade.
+function ratioClusters(rows) {
+  let n = 0, tight = 0;
+  rows.forEach((r, i) => {
+    if (!r._cruise || !r._ratio) return;
+    const near = []; for (let j = Math.max(0, i - 5); j <= Math.min(rows.length - 1, i + 5); j++) if (rows[j]._ratio && Math.abs(rows[j].t - r.t) <= 6000) near.push(rows[j]._ratio);
+    if (near.length < 6) return;
+    n++; if (Math.abs(r._ratio / pctl(near, .5) - 1) <= .03) tight++;
+  });
+  return { n, clean: n ? tight / n : null };
+}
+function flares(rows) {
+  const ev = [];
+  for (let i = 3; i < rows.length; i++) {
+    const a = rows[i - 3], b = rows[i];
+    if ((b.t - a.t) > 5000 || !(a.rpm > 0) || !(a.mph >= 25) || !(b.mph >= 25)) continue;
+    if (b.rpm - a.rpm >= 250 && Math.abs(b.mph - a.mph) <= 1.5 && typeof a.tps === "number" && typeof b.tps === "number" && b.tps - a.tps <= 3) {
+      // A downshift holds its higher ratio; a flare falls back within a few seconds at the same speed.
+      const after = rows.slice(i + 1, i + 7).find(r => r.rpm <= a.rpm * 1.05 && Math.abs(r.mph - b.mph) <= 3);
+      if (after && (!ev.length || b.t - ev[ev.length - 1].t > 15000)) ev.push({ t: b.t, mph: b.mph, rise: b.rpm - a.rpm });
+    }
+  }
+  return ev;
+}
+const MID_NAMES = { 0x01:"O2 sensor B1S1",0x02:"O2 sensor B1S2",0x03:"O2 sensor B1S3",0x05:"O2 sensor B2S1",0x06:"O2 sensor B2S2",0x07:"O2 sensor B2S3",0x21:"Catalyst bank 1",0x22:"Catalyst bank 2",0x31:"EGR",0x35:"VVT bank 1",0x36:"VVT bank 2",0x39:"EVAP cap off",0x3A:"EVAP small leak",0x3B:"EVAP very small leak",0x3C:"EVAP tiny leak",0x3D:"EVAP purge flow",0x41:"O2 heater B1S1",0x42:"O2 heater B1S2",0x45:"O2 heater B2S1",0x46:"O2 heater B2S2",0x71:"Secondary air 1",0x81:"Fuel system bank 1",0x82:"Fuel system bank 2",0xA1:"Misfire, general" };
+function midName(mid) { if (mid >= 0xA2 && mid <= 0xAD) return "Misfire cylinder " + (mid - 0xA1); return MID_NAMES[mid] || "Monitor 0x" + mid.toString(16).toUpperCase().padStart(2, "0"); }
+function parseMode06Full(raw, mid) {
+  const midHex = mid.toString(16).toUpperCase().padStart(2, "0"), out = [];
+  for (const m of toMessages(raw)) {
+    if (!m.startsWith("46")) continue;
+    const b = hexBytes(m.slice(2)); let i = 0;
+    while (i + 9 <= b.length) {
+      if (b[i] !== mid) { i++; continue; }
+      const sgn = b[i + 2] >= 0x80, rd = (a, c) => sgn ? s16(a, c) : u16(a, c);
+      const val = rd(b[i + 3], b[i + 4]), min = rd(b[i + 5], b[i + 6]), max = rd(b[i + 7], b[i + 8]);
+      const notRun = val === 0 && min === 0 && max === 0;
+      out.push({ mid, midHex, name: midName(mid), tid: b[i + 1], uas: b[i + 2], val, min, max, pass: notRun ? null : val >= min && val <= max });
+      i += 9;
+    }
+  }
+  return out;
+}
+const dtcFamily = c => {
+  if (c[0] !== "P" || c[1] !== "0") return "Manufacturer or other";
+  const d = c[2];
+  return d === "3" ? "Ignition or misfire" : "012".includes(d) ? "Fuel and air metering" : d === "4" ? "Emissions controls" : d === "5" ? "Idle, speed, and auxiliary" : d === "6" ? "Computer and outputs" : "789".includes(d) ? "Transmission" : "Other";
+};
+function analyzeDrive(input) {
+  const { rows: rawRows = [], meta = {}, vehicle = {}, history = [] } = input;
+  const rows = annotate(rawRows), F = [], na = [], tested = [];
+  const trip = classify(rows), val = validateSignals(rows, meta), engine = vehicle.engine || {}, L = engine.L || null, cyl = engine.cyl || null;
+  const add = (system, level, title, evidence, meaning, causes = [], next = [], basis = LIT.guide) => F.push({ system, level, title, evidence, meaning, causes, next, basis });
+  const need = (system, why) => na.push({ system, why });
+  const usable = k => val[k] !== "suspect" && nums(rows, k).length >= 5;
+  const unverified = k => val[k] === "ok" ? "" : " This signal is an unverified GM request, so treat it as a lead.";
+  const firstEct = nums(rows, "ect")[0], coldStart = firstEct !== undefined && firstEct < 100;
+  const warmSec = secondsTrue(rows, r => r._warm);
+  const stats = { kind: trip.kind, miles: trip.miles };
+
+  // Data quality first: thin data can't support confident findings.
+  const channels = new Set(); rows.forEach(r => Object.keys(r).forEach(k => { if (k[0] !== "_" && k !== "t" && r[k] !== null && r[k] !== undefined) channels.add(k); }));
+  const rate = rows.length > 1 ? rows.length / Math.max(1, trip.seconds) : 0, gaps = rows.filter((r, i) => i && (r.t - rows[i - 1].t) > 5000).length;
+  if (!rows.length) { return { trip, findings: [], notAssessed: [{ system: "Everything", why: "No drive data was recorded." }], tested: [], channels: 0, validation: {}, stats, verdict: { level: "nodata", headline: "No data to review.", detail: "" } }; }
+  if (gaps) add("Data quality", "info", gaps + " gap" + (gaps > 1 ? "s" : "") + " in the recording", gaps + " breaks longer than 5 seconds across " + rnd(trip.seconds / 60, 1) + " minutes.", "Readings around those gaps are excluded from time-based calculations.", ["Screen sleep, Bluetooth dropout, or browser backgrounding"], ["Keep the page in the foreground on a charging phone."], "Recording check");
+  Object.entries(val).forEach(([k, s]) => { if (s === "suspect") add("Data quality", "info", "Ignored a questionable GM reading: " + k, "It failed a physical sanity check, such as staying flat while driving or disagreeing with engine rpm per mph.", "That request probably means something else on this vehicle, so it wasn't used in this review.", [], ["Use the scan in Data & sources to find the right request."], "Internal plausibility test"); });
+
+  // Codes and status are the highest-authority inputs.
+  const codes = meta.codes;
+  if (codes) {
+    const all = [...(codes.stored || []).map(c => [c, "stored"]), ...(codes.pending || []).map(c => [c, "pending"]), ...(codes.permanent || []).map(c => [c, "permanent"])];
+    tested.push("Trouble codes");
+    if (all.length) add("Codes", (codes.stored || []).length ? "attention" : "watch", all.length + " trouble code" + (all.length > 1 ? "s" : "") + " reported", all.map(([c, t]) => c + " (" + t + ", " + dtcFamily(c) + ")").join("; "), "A code means the computer's own test failed or is close to failing. It names the failed test, not always the failed part.", [], ["Look up each code in the service manual for this vehicle before replacing parts."], LIT.j1979);
+    else add("Codes", "good", "No stored, pending, or permanent codes", "All three requests returned none.", "The computer isn't reporting a failed emissions-related test.", [], [], LIT.j1979);
+  } else need("Codes", "Codes weren't read during this drive.");
+  if (meta.monitor && meta.monitor.mil) add("Codes", "attention", "Check-engine light is commanded on", meta.monitor.dtcCount + " confirmed codes in the status report.", "The computer has confirmed a fault.", [], [], LIT.j1979);
+  const fsBad = nums(rows, "fuelstat", r => r.fuelstat === 8 || r.fuelstat === 16).length;
+  if (fsBad >= 3) add("Fuel control", "attention", "Fuel system reported a fault state", fsBad + " samples showed open loop due to a system failure or a feedback fault.", "The computer stopped trusting its normal fuel feedback during this period.", ["O2 sensor or related circuit fault"], ["Read codes and freeze frame."], LIT.j1979);
+
+  // Mode 06: the vehicle's own test limits.
+  const m06 = (meta.mode06 || []).filter(x => x.pass !== null);
+  if (m06.length) {
+    tested.push("Computer self-tests (" + m06.length + ")");
+    const failed = m06.filter(x => x.pass === false && !(x.mid >= 0xA1 && x.mid <= 0xAD));
+    if (failed.length) add("Computer self-tests", "attention", failed.length + " self-test result" + (failed.length > 1 ? "s" : "") + " outside the computer's limits", failed.slice(0, 8).map(x => x.name + " test " + x.tid.toString(16).toUpperCase() + ": " + x.val + " vs " + x.min + "–" + x.max).join("; "), "These are limits the vehicle's computer applies to itself, so they carry more weight than general guides.", [], ["Check the service manual for this monitor. A failed result can appear before a code sets."], LIT.j1979);
+    else add("Computer self-tests", "good", "All reported self-tests are within the computer's limits", m06.length + " results checked.", "Includes whatever monitors have run since codes were last cleared.", [], [], LIT.j1979);
+  } else need("Computer self-tests", "No test results were recorded.");
+
+  // Cooling
+  const ect = nums(rows, "ect");
+  if (ect.length >= 10) {
+    tested.push("Engine cooling");
+    const peak = pctl(ect, .99), plateauWin = rows.filter(r => r._cruise && r.ect >= 120), plateau = plateauWin.length >= 60 ? pctl(nums(plateauWin, "ect"), .5) : null;
+    stats.ectPeak = peak; if (plateau !== null) stats.ectPlateau = plateau;
+    if (coldStart) { const t0 = rows[0].t, to = f => { const r = rows.find(x => x.ect >= f); return r ? (r.t - t0) / 60000 : null; }; const t160 = to(160), t190 = to(190); stats.warm160 = t160;
+      if (t160 !== null) add("Cooling", "info", "Warm-up: " + rnd(t160, 1) + " minutes to 160°F", "Started at " + rnd(firstEct) + "°F" + (t190 !== null ? ", reached 190°F at " + rnd(t190, 1) + " minutes." : "."), "Warm-up time depends heavily on outside temperature and how hard the engine is working.", [], [], "Measured from this drive"); }
+    if (peak > 235) add("Cooling", "attention", "Coolant ran hot", "99th percentile " + rnd(peak) + "°F.", "That's hot enough to compare against the dash gauge and any warning.", ["Heavy load or heat", "Low coolant, thermostat, fan, or water pump"], ["Check coolant level with the engine cold.", "Note whether it happened at idle or at speed."]);
+    else if (peak > 225) add("Cooling", "watch", "Coolant ran warm", "99th percentile " + rnd(peak) + "°F.", "This may be normal under heavy load, but it deserves comparison with your other drives.", ["Towing, grades, or hot weather"], ["Watch whether this repeats without heavy load."]);
+    else if (peak >= 170) add("Cooling", "good", "Coolant stayed in a sensible range", "Peak " + rnd(peak) + "°F" + (plateau !== null ? ", steady-cruise " + rnd(plateau) + "°F." : "."), "No sign of overheating on this drive.");
+    if (plateau !== null && plateau < 175 && trip.cruiseSeconds >= 300) add("Cooling", "watch", "Coolant stayed low during sustained cruise", "Median " + rnd(plateau) + "°F across " + rnd(trip.cruiseSeconds / 60, 1) + " cruising minutes.", "An engine that won't reach normal temperature at cruise can point to a thermostat opening early.", ["Thermostat stuck partly open", "Very cold outside air"], ["Compare with the dash gauge and repeat on a warmer day."]);
+  } else need("Cooling", "Coolant temperature wasn't recorded.");
+
+  // Fuel trims: never judge from one point (Warren); compare operating regions and banks.
+  const twoBanks = nums(rows, "stft2").length >= MIN_REGION && nums(rows, "ltft2").length >= MIN_REGION;
+  const regions = { idle: r => r._idle, cruise: r => r._cruise && r.load < 75, load: r => r._running && r.load >= 50 && r.load < 85 && !r._idle };
+  const T = {}; [1, 2].forEach(b => { T[b] = {}; for (const k in regions) T[b][k] = trimRegion(rows, b, regions[k]); });
+  const bankList = twoBanks ? [1, 2] : [1], regionOK = k => T[1][k].total !== null;
+  if (!warmSec) need("Fuel trims", "The engine never reached operating temperature with fuel trims available.");
+  else if (regionOK("idle") || regionOK("cruise") || regionOK("load")) {
+    tested.push("Fuel trims");
+    const parts = bankList.map(b => "Bank " + b + ": " + Object.keys(regions).filter(k => T[b][k].total !== null).map(k => k + " " + signed(T[b][k].total) + "%").join(", ")).join(". ");
+    bankList.forEach(b => { for (const k in regions) if (T[b][k].total !== null) stats["trim" + b + k] = T[b][k].total; });
+    const worst = Math.max(...bankList.flatMap(b => Object.keys(regions).map(k => T[b][k].total).filter(v => v !== null).map(Math.abs)));
+    const idle = T[1].idle.total, cruise = T[1].cruise.total, load = T[1].load.total, idle2 = T[2].idle.total, cruise2 = T[2].cruise.total;
+    const meanIdle = twoBanks && idle !== null && idle2 !== null ? (idle + idle2) / 2 : idle, meanCruise = twoBanks && cruise !== null && cruise2 !== null ? (cruise + cruise2) / 2 : cruise;
+    const afmNote = vehicle.afm ? " This engine can deactivate cylinders, which can shift trims in light-load cruise." : "";
+    let patterned = false;
+    if (meanIdle !== null && meanCruise !== null && meanIdle >= 10 && meanIdle - meanCruise >= 7) { patterned = true; add("Fuel trims", meanIdle >= 18 ? "attention" : "watch", "Lean correction is largest at idle and fades at speed", parts + ".", "That's the classic signature of unmetered air, because a fixed leak matters most when airflow is low." + afmNote, ["Vacuum or intake leak, including PCV and intake gaskets", "Exhaust leak ahead of the front O2 sensor", "Purge valve leaking at idle"], ["Inspect intake boots and vacuum lines.", "Compare trims at a held 2,500 rpm.", "A smoke test can confirm a leak."], LIT.warren); }
+    else if (meanCruise !== null && load !== null && meanCruise >= 8 && load >= 10 && (meanIdle === null || meanIdle < meanCruise)) { patterned = true; add("Fuel trims", load >= 18 ? "attention" : "watch", "Lean correction grows with airflow or load", parts + ".", "The computer is adding more fuel as demand rises, which is not the leak pattern." + afmNote, ["Low fuel delivery", "MAF reading low", "Fuel quality or ethanol content"], ["Test fuel pressure and volume under load.", "Check the air filter and the MAF for contamination."]); }
+    else if (bankList.every(b => Object.keys(regions).filter(k => T[b][k].total !== null).every(k => T[b][k].total <= -10)) ) { patterned = true; add("Fuel trims", worst >= 18 ? "attention" : "watch", "Rich correction across conditions", parts + ".", "The computer is removing fuel everywhere it could measure." + afmNote, ["MAF over-reporting airflow", "Leaking injector or high fuel pressure", "Fuel in the oil or purge vapor"], ["Check whether trims improve with the purge inactive, and inspect the MAF."], LIT.moore); }
+    if (twoBanks) { const ds = Object.keys(regions).filter(k => T[1][k].total !== null && T[2][k].total !== null).map(k => [k, T[1][k].total - T[2][k].total]).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])); stats.bankSplit = ds[0] ? ds[0][1] : null;
+      if (ds.length && Math.abs(ds[0][1]) >= 10) { patterned = true; add("Fuel trims", Math.abs(ds[0][1]) >= 18 ? "attention" : "watch", "Banks disagree by " + rnd(Math.abs(ds[0][1])) + " points at " + ds[0][0], parts + ".", "A problem in shared air or fuel usually affects both banks, so a one-sided shift narrows the search to that bank." + afmNote, ["Injector or O2 sensor on one bank", "Exhaust or intake leak on one side"], ["Compare O2 sensor behavior between banks."], LIT.warren); } }
+    if (!patterned && worst >= 10) add("Fuel trims", worst >= 20 ? "attention" : "watch", "Fuel trim beyond ±10% without a clear pattern", parts + ".", "A correction of this size is outside the usual ±10% window, but the regions tested don't isolate a cause." + afmNote, [], ["Capture idle, a held 2,500 rpm, and steady cruise when warm."], LIT.warren);
+    else if (!patterned) add("Fuel trims", "good", "Fuel trims look balanced", parts + ".", "Total correction stayed within ±10% in every region with enough data.", [], [], LIT.warren);
+    for (const k in regions) if (T[1][k].total === null) need("Fuel trims", "Not enough warm " + k + " data to judge that region.");
+  } else need("Fuel trims", "Warm closed-loop time was too brief in every region.");
+
+  // Airflow: idle g/s per liter and volumetric efficiency need a known engine.
+  const idleMaf = nums(rows, "maf", r => r._idle && r._warm), idleRpm = nums(rows, "rpm", r => r._idle && r._warm);
+  if (idleMaf.length >= MIN_REGION && L) {
+    tested.push("Idle airflow");
+    const m = pctl(idleMaf, .5), rp = pctl(idleRpm, .5), per = m / L / (rp / 500); stats.idleMafPerL = per;
+    if (per < .55 || per > 1.6) add("Airflow", "watch", "Idle airflow looks unusual for this engine", rnd(m, 1) + " g/s at " + rnd(rp) + " rpm, " + rnd(per, 2) + " g/s per liter at a 500 rpm basis. Rule of thumb is about 1.", "This is a rough check that shifts with electrical load, air conditioning, and transmission load.", ["MAF contamination or scaling", "Unusual accessory load"], ["Repeat with accessories off."], LIT.moore);
+    else add("Airflow", "good", "Idle airflow is in a believable range", rnd(m, 1) + " g/s at " + rnd(rp) + " rpm.", "This agrees with the roughly 1 g/s per liter rule of thumb, allowing for load.", [], [], LIT.moore);
+  } else if (!L) need("Airflow", "Set this vehicle's engine in Vehicle settings to enable airflow checks.");
+  const veRows = rows.filter(r => r.tps >= 75 && r.rpm >= 2000 && r.maf > 0 && r.map > 0 && typeof r.iat === "number" && r._warm);
+  if (L && veRows.length >= 4) {
+    const ves = veRows.map(r => { const rho = r.map * 1000 / (287.05 * ((r.iat - 32) * 5 / 9 + 273.15)), vol = r.maf / 1000 / rho, swept = L / 1000 * r.rpm / 120; return vol / swept * 100; }), ve = pctl(ves, .5), loads = nums(veRows, "load"), pkLoad = pctl(loads, .95);
+    stats.ve = ve; tested.push("Full-throttle breathing");
+    if (ve < 70) add("Airflow", "watch", "Estimated breathing efficiency is low at high throttle", "About " + rnd(ve) + "% from " + veRows.length + " samples, peak load " + rnd(pkLoad) + "%. A healthy engine at full throttle is often in the 80s.", "Low numbers can mean a restriction or a MAF reading low. This estimate depends on brief, low-rate samples.", ["MAF reading low", "Intake or exhaust restriction", "Cam timing"], ["Repeat a full-throttle pull at a safe location and compare with fuel trims."], LIT.moore);
+    else if (ve >= 75 && ve <= 115) add("Airflow", "good", "Estimated breathing efficiency looks healthy", "About " + rnd(ve) + "% from " + veRows.length + " high-throttle samples.", "That doesn't suggest a major intake restriction, MAF under-reading, or exhaust restriction.", [], [], LIT.moore);
+  } else if (L) need("Full-throttle breathing", "Needs a warm, high-throttle pull above 2,000 rpm.");
+  const keyOn = rows.filter(r => !(r.rpm > 50) && typeof r.map === "number" && typeof r.baro === "number");
+  if (keyOn.length >= 3) { const d = Math.abs(pctl(nums(keyOn, "map"), .5) - pctl(nums(keyOn, "baro"), .5)); tested.push("MAP vs barometric sensor check"); if (d > 8) add("Sensor checks", "watch", "MAP and barometric readings disagree with the engine off", "Difference of " + rnd(d) + " kPa.", "With the engine stopped they should nearly match.", ["MAP sensor bias", "Reading taken just after shutdown"], ["Check again after sitting key-on, engine off for 30 seconds."], "Physics check"); }
+  if (coldStart && typeof nums(rows, "iat")[0] === "number") { const iat0 = nums(rows, "iat")[0]; if (Math.abs(iat0 - firstEct) > 25) add("Sensor checks", "info", "Coolant and intake sensors differed at start", rnd(firstEct) + "°F coolant vs " + rnd(iat0) + "°F intake.", "After a long cold soak they usually agree. A short restart or heat soak explains most differences.", [], ["Compare after an overnight sit."], "Physics check"); }
+
+  // Combustion
+  const misKeys = Object.keys(rows.reduce((o, r) => { Object.keys(r).forEach(k => { if (/^mis\d+$/.test(k)) o[k] = 1; }); return o; }, {})).filter(k => !cyl || Number(k.slice(3)) <= cyl);
+  if (misKeys.length) {
+    tested.push("Misfire counts");
+    const mx = misKeys.map(k => [Number(k.slice(3)), pctl(nums(rows, k), 1) ?? 0]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+    stats.misTotal = mx.reduce((s, x) => s + x[1], 0);
+    if (!mx.length) add("Combustion", "good", "No misfire counts recorded", misKeys.length + " cylinders reported.", "The computer's recent misfire counters stayed at zero throughout.", [], [], LIT.j1979);
+    else {
+      const tot = mx.reduce((s, x) => s + x[1], 0), single = mx.length === 1 || mx[0][1] >= tot * .7, one = mx[0][0], afmCyl = vehicle.afmCyls && vehicle.afmCyls.includes(one);
+      const side = vehicle.layout === "V" && single ? (one % 2 ? 1 : 2) : null;
+      const sideTrim = side && T[side].cruise.total !== null ? " Bank " + side + " holds that cylinder, with a cruise trim of " + signed(T[side].cruise.total) + "%." : "";
+      add("Combustion", tot >= 20 ? "attention" : "watch", single ? "Misfires concentrated on cylinder " + one : "Misfires across " + mx.length + " cylinders", mx.map(x => "cyl " + x[0] + ": " + rnd(x[1])).join(", ") + "." + sideTrim, single ? "One cylinder standing out points toward something specific to it, not shared fuel or air." : "Spread-out misfires point more toward a shared cause like fuel, air, or ignition supply.", single ? ["Spark plug, coil, or injector on that cylinder", "Compression or valvetrain" + (afmCyl ? ", including its AFM lifter, because this is a cylinder-deactivation cylinder" : "")] : ["Fuel pressure or quality", "Vacuum leak", "Ignition supply voltage"], ["Note whether counts occur at idle, cruise, or under load.", single ? "Swap the coil to another cylinder and see if the count moves." : "Compare with the fuel trim findings."], LIT.j1979);
+    }
+  } else need("Combustion", "Misfire counters weren't recorded.");
+  if (usable("knock")) { const hi = pctl(nums(rows, "knock", r => r._running), .98); stats.knock = hi; if (hi >= 6) add("Combustion", "watch", "Repeated knock retard", "98th percentile " + rnd(hi, 1) + "°." + unverified("knock"), "The computer may be pulling timing to protect the engine.", ["Lower-octane fuel", "Heat or heavy load", "Carbon buildup"], ["Check fuel grade and compare under similar conditions."]); }
+
+  // Electrical
+  const vr = rows.filter(r => r._running && typeof r.volt === "number"), voff = nums(rows, "volt", r => !(r.rpm > 50));
+  if (vr.length >= 20) {
+    tested.push("Charging voltage");
+    const lo = pctl(nums(vr, "volt"), .05), hi = pctl(nums(vr, "volt"), .95), med = pctl(nums(vr, "volt"), .5); stats.voltMed = med;
+    const lowFor = secondsTrue(rows, r => r._running && r.volt < 12.4), highFor = secondsTrue(rows, r => r._running && r.volt > 15.2);
+    if (lowFor >= 60 && med < 12.6) add("Electrical", "attention", "Charging voltage stayed low", "Median " + rnd(med, 1) + " V, under 12.4 V for " + rnd(lowFor) + " seconds.", "A running engine should normally hold above resting battery voltage, though GM systems can drop to save fuel.", ["Alternator, belt, or cable fault", "Failing battery"], ["Test the battery and alternator."]);
+    else if (highFor >= 30) add("Electrical", "attention", "Charging voltage ran high", "Above 15.2 V for " + rnd(highFor) + " seconds.", "Sustained high voltage can damage batteries and electronics.", ["Voltage regulation fault"], ["Test the charging system."]);
+    else add("Electrical", "good", "Charging voltage looks normal", "Typical range " + rnd(lo, 1) + "–" + rnd(hi, 1) + " V while running.", "GM systems can intentionally vary voltage, so some movement is expected.");
+    if (voff.length >= 3 && pctl(voff, .5) < 12) add("Electrical", "watch", "Battery was low before start", rnd(pctl(voff, .5), 1) + " V with the engine off.", "A rested battery is usually near 12.6 V. Readings right after a start or shutdown can mislead.", ["Weak battery", "Parasitic drain"], ["Measure after sitting overnight."]);
+  } else need("Electrical", "Running voltage wasn't recorded long enough.");
+
+  // Oil
+  if (usable("oilt")) { const pk = pctl(nums(rows, "oilt"), .99); stats.oilPeak = pk; if (pk >= 285) add("Lubrication", "watch", "Oil temperature ran high", "Peak " + rnd(pk) + "°F." + unverified("oilt"), "Compare with the load on this drive.", ["Heavy load", "Coolant running hot"], []); else if (val.oilt === "ok") add("Lubrication", "good", "Oil temperature looks reasonable", "Peak " + rnd(pk) + "°F.", "No sign of excessive oil heat on this drive."); }
+  if (usable("oilp")) { const hotIdle = nums(rows, "oilp", r => r._idle && r._warm), hotCruise = nums(rows, "oilp", r => r._cruise && r._warm); if (hotIdle.length >= 10) { const hi = pctl(hotIdle, .1); stats.oilIdle = hi; tested.push("Oil pressure"); if (hi < 12) add("Lubrication", "attention", "Low oil pressure reading at hot idle", rnd(hi) + " psi." + unverified("oilp"), "If this request is right, check it quickly. First confirm with a mechanical gauge or the dash reading.", ["Unverified scaling", "Low oil level or worn engine"], ["Check the oil level before further driving.", "Compare with the dash gauge."]); else if (val.oilp === "ok") add("Lubrication", "good", "Oil pressure reading looks reasonable", rnd(hi) + " psi at hot idle" + (hotCruise.length ? ", " + rnd(pctl(hotCruise, .5)) + " psi at cruise." : "."), "It stays up at idle and responds with rpm."); } }
+
+  // Transmission
+  const usesTrans = usable("trans");
+  if (usesTrans) {
+    tested.push("Transmission temperature");
+    const a = nums(rows, "trans"), pk = pctl(a, .99), hot = secondsTrue(rows, r => r.trans > 220), hotter = secondsTrue(rows, r => r.trans > 240); stats.transPeak = pk; stats.transAboveGuideSeconds = hot;
+    const cruiseT = nums(rows, "trans", r => r._cruise); if (cruiseT.length >= 60) stats.transCruise = pctl(cruiseT, .5);
+    if (hotter >= 60 || pk >= 250) add("Transmission", "attention", "Transmission fluid ran very hot", "Peak " + rnd(pk) + "°F, above 240°F for " + rnd(hotter) + " seconds." + unverified("trans"), "Sustained heat ages fluid and clutches quickly.", ["Towing or grades", "Converter slip", "Cooler flow or thermal bypass fault"], ["Check the fluid condition and cooler flow. Keep the data for your transmission shop."]);
+    else if (hot >= 60) add("Transmission", "watch", "Transmission fluid spent time above the guide", "Peak " + rnd(pk) + "°F, above 220°F for " + rnd(hot) + " seconds." + unverified("trans"), "This may be load-related, but it's worth comparing with similar drives.", ["Load, heat, or stop-and-go traffic", "Converter slip"], ["Note the conditions at the hottest point."]);
+    else if (trip.runningSeconds >= 600 && val.trans === "ok") add("Transmission", "good", "Transmission temperature stayed moderate", "Peak " + rnd(pk) + "°F" + (stats.transCruise ? ", " + rnd(stats.transCruise) + "°F at steady cruise." : "."), "No heat concern on this drive. GM uses 190°F as a diagnostic warm-up reference.", [], [], LIT.techlink);
+    if (trip.runningSeconds >= 900 && pk < 120) add("Transmission", "info", "Transmission never warmed much", "Peak " + rnd(pk) + "°F after " + rnd(trip.runningSeconds / 60) + " minutes.", "Either the fluid warms slowly or this reading needs checking.", [], ["Compare with a scan tool you trust."]);
+  } else need("Transmission temperature", "No trustworthy transmission temperature reading.");
+  const clusters = ratioClusters(rows); stats.ratioClean = clusters.clean;
+  if (clusters.n >= 60) {
+    tested.push("Gear ratio stability");
+    if (clusters.clean < .75) add("Transmission", "watch", "Engine speed wasn't locked closely to road speed at steady cruise", rnd(clusters.clean * 100) + "% of " + clusters.n + " cruise samples sat on a stable ratio.", "This standard-data check doesn't rely on GM requests. Scatter can mean torque converter slip, but hills and frequent shifts also cause it.", ["Normal controlled converter slip or grade changes", "Slipping clutch or converter"], ["Repeat on a flat road at a constant speed and open the rpm-vs-speed scatter."]);
+    else add("Transmission", "good", "Engine speed tracked road speed cleanly at cruise", rnd(clusters.clean * 100) + "% of " + clusters.n + " cruise samples sat on a stable ratio.", "That doesn't suggest slipping at the steady speeds in this drive. It can't test full-throttle slip or an intermittent fault.");
+  } else need("Gear ratio stability", "Needs at least a minute of steady driving above 40 mph.");
+  const fl = flares(rows); stats.flares = fl.length;
+  if (fl.length >= 2 || (fl.length === 1 && trip.miles < 5)) add("Transmission", fl.length >= 4 ? "attention" : "watch", fl.length + " possible rpm flare" + (fl.length > 1 ? "s" : ""), fl.slice(0, 5).map(x => "+" + rnd(x.rise) + " rpm at " + rnd(x.mph) + " mph").join(", ") + ".", "Engine speed rose and fell back without a matching speed or throttle change, which is what slipping can look like. One-second data can also catch a quick downshift.", ["Clutch or converter slip", "Downshift on a grade", "Clearing wheel spin"], ["Note where these occurred and whether you felt them.", "Share the CSV with your transmission shop."]);
+  if (usable("slip") && val.slip !== "suspect") {
+    const s = nums(rows, "slip", r => r._cruise).map(Math.abs);
+    if (s.length >= 30) { tested.push("Torque converter slip"); const med = pctl(s, .5), hi = pctl(s, .95); stats.slipCruise = med; stats.slipCruiseP95 = hi;
+      const sustained = secondsTrue(rows, r => r._cruise && Math.abs(r.slip) > 100), confirmed = clusters.clean !== null && clusters.clean < .8;
+      if (med > 100 || (sustained >= 30 && confirmed)) add("Transmission", confirmed ? "attention" : "watch", "High torque converter slip at steady cruise", "Median " + rnd(med) + " rpm, 95th percentile " + rnd(hi) + " rpm." + unverified("slip") + (confirmed ? " The standard rpm-to-speed check agrees." : " The standard rpm-to-speed check doesn't confirm it."), "Some controlled slip is normal, especially below full lockup, but sustained high slip at steady cruise adds heat.", ["Converter not locking", "Fluid or control fault", "Normal operating strategy at that speed"], ["Check temperature during the same stretch.", "Compare with your shop's scan tool."]);
+      else if (med > 50) add("Transmission", "watch", "Moderate torque converter slip at cruise", "Median " + rnd(med) + " rpm." + unverified("slip"), "This can be normal controlled slip, so the trend across drives matters most.", [], ["Compare with later drives at the same speed."]);
+      else add("Transmission", "good", "Torque converter slip was low at cruise", "Median " + rnd(med) + " rpm, 95th percentile " + rnd(hi) + " rpm." + unverified("slip"), "The converter appears close to locked during steady driving."); }
+  }
+  if (usable("gear") && val.gear === "ok") { let ch = 0, prev = null, hwyMiles = 0; rows.forEach(r => { if (r.mph >= 50 && r._steady) { hwyMiles += r.mph * r._dt / 3600; if (prev !== null && r.gear !== prev) ch++; prev = r.gear; } }); stats.hunting = hwyMiles ? ch / hwyMiles : null; if (hwyMiles >= 5 && ch / hwyMiles > 1) add("Transmission", "watch", "Frequent shifts at steady highway speed", rnd(ch) + " gear changes over " + rnd(hwyMiles, 1) + " steady miles.", "Busy shifting adds heat and may be noticeable as hunting.", ["Hills or wind", "Tow-mode or calibration behavior"], ["Compare on a flat stretch."]); }
+  if (trip.highLoadSeconds < 5) need("Transmission under load", "This drive had almost no hard acceleration, so slip under load wasn't tested.");
+
+  // Catalyst, O2
+  const catPk = Math.max(pctl(nums(rows, "cat1"), .99) ?? -1, pctl(nums(rows, "cat2"), .99) ?? -1);
+  if (catPk > 0 && catPk >= 1650) add("Emissions", "watch", "Calculated catalyst temperature ran high", rnd(catPk) + "°F peak. This value is usually modeled, not measured.", "Misfires and rich running can overheat a catalyst.", ["Heavy load", "Misfire or rich running"], ["Check this against the misfire and fuel findings."]);
+  const rearCruise = nums(rows, "o2v2", r => r._cruise && r._warm);
+  if (rearCruise.length >= 60) { tested.push("Rear O2 sensor at cruise"); const m = pctl(rearCruise, .5); stats.rearO2 = m; if (m < .15 || m > .95) add("Emissions", "watch", "Rear O2 sensor sat at an extreme at cruise", "Median " + rnd(m, 2) + " V.", "After warm-up, a rear sensor usually settles in a steadier mid-to-high range. An extreme reading can indicate a sensor issue or a mixture bias.", ["O2 sensor or wiring", "Exhaust leak", "Mixture bias"], ["Compare with fuel trims and the catalyst self-test."]); }
+  if (coldStart) { const firstClosed = rows.find(r => r.fuelstat === 2); if (firstClosed) { const m = (firstClosed.t - rows[0].t) / 60000; stats.closedLoopMin = m; if (m > 6 && trip.runningSeconds > 420) add("Fuel control", "watch", "Slow to enter closed-loop fuel control", rnd(m, 1) + " minutes from start.", "Cold weather lengthens this, but a long delay can point to sensor heating or coolant temperature.", ["Very cold weather", "O2 sensor heater or thermostat"], ["Compare with warmer days."], LIT.guide); } }
+
+  // Efficiency
+  const mafRows = rows.filter(r => typeof r.maf === "number" && r.maf >= 0 && r._dt);
+  if (mafRows.length >= 60 && trip.miles >= 1) {
+    const gallons = mafRows.reduce((s, r) => s + r.maf * r._dt, 0) / (14.7 * 6.17 * 454), mpg = trip.miles / gallons, idleGal = mafRows.filter(r => r._idle).reduce((s, r) => s + r.maf * r._dt, 0) / (14.7 * 6.17 * 454);
+    stats.mpg = mpg; add("Efficiency", "info", "About " + rnd(mpg, 1) + " mpg estimated", rnd(gallons, 2) + " gallons over " + rnd(trip.miles, 1) + " miles, with " + rnd(gallons ? idleGal / gallons * 100 : 0) + "% of fuel used at idle.", "This is calculated from airflow assuming stoichiometric gasoline, so it runs slightly optimistic on E10 and ignores fuel-cut and enrichment detail. Use it for comparison, not as a true fuel figure.", [], [], "Calculated estimate");
+  }
+  const harsh = rows.filter(r => r._acc >= 6).length; if (harsh >= 3) add("Driving context", "info", harsh + " hard acceleration samples", "Above about 6 mph per second.", "Keep this in mind when reading heat, load, and slip results.", [], [], "Measured from this drive");
+
+  // Baseline: only compare like with like, on this vehicle.
+  const peers = history.filter(d => d.review && d.review.stats && d.review.stats.kind === trip.kind && d.id !== meta.id);
+  if (peers.length >= 3) {
+    tested.push("Comparison with " + peers.length + " similar drives");
+    const compare = [["transPeak", "Peak transmission temperature", "°F", 15, 0], ["transCruise", "Cruise transmission temperature", "°F", 12, 0], ["ectPlateau", "Cruise coolant temperature", "°F", 10, 0], ["trim1idle", "Bank 1 idle fuel trim", "%", 6, 1], ["trim1cruise", "Bank 1 cruise fuel trim", "%", 6, 1], ["trim2idle", "Bank 2 idle fuel trim", "%", 6, 1], ["trim2cruise", "Bank 2 cruise fuel trim", "%", 6, 1], ["slipCruise", "Cruise converter slip", " rpm", 30, 0], ["voltMed", "Running voltage", " V", .5, 1], ["idleMafPerL", "Idle airflow per liter", "", .25, 2], ["mpg", "Estimated MPG", " mpg", 15, 1], ["ratioClean", "Cruise ratio stability", "", .12, 2]];
+    let changed = 0;
+    compare.forEach(([k, label, unit, thr, d]) => { const past = peers.map(p => p.review.stats[k]).filter(v => typeof v === "number"), now = stats[k]; if (past.length < 3 || typeof now !== "number") return; const med = pctl(past, .5); if (Math.abs(now - med) >= thr) { changed++; add("Compared with your baseline", "watch", label + " changed from your normal", rnd(now, d) + unit + " now vs a median of " + rnd(med, d) + unit + " across " + past.length + " " + trip.kind.toLowerCase() + " drives.", "A change on the same kind of drive is often more meaningful than any fixed limit, but weather and load can explain it.", [], ["See whether the change repeats on the next similar drive."], "Your own history"); } });
+    if (!changed) add("Compared with your baseline", "good", "In line with your similar drives", "No tracked measure moved past its change threshold across " + peers.length + " " + trip.kind.toLowerCase() + " drives.", "Stability across drives is a useful sign, within what these measures can see.", [], [], "Your own history");
+  } else need("Baseline comparison", "Needs at least 3 saved " + trip.kind.toLowerCase() + " drives on this vehicle (" + peers.length + " so far).");
+
+  // Cross-system reasoning
+  const lev = (s, l) => F.some(f => f.system === s && f.level === l), anyBad = s => lev(s, "attention") || lev(s, "watch");
+  const links = [];
+  if (anyBad("Combustion") && anyBad("Fuel trims")) links.push("Misfires and fuel-trim corrections appear together. Check whether they share a bank or condition before treating them as separate problems.");
+  if (F.some(f => /Lean correction is largest at idle/.test(f.title)) && anyBad("Combustion")) links.push("An idle-biased lean pattern with misfires makes an air leak near a cylinder worth checking early.");
+  if (F.some(f => f.system === "Transmission" && /rpm flare|ratio|Engine speed wasn't|converter slip/i.test(f.title) && f.level !== "good") && F.some(f => f.system === "Transmission" && /temperature|fluid/i.test(f.title) && f.level !== "good" && f.level !== "info")) links.push("Slip-type signs and elevated transmission temperature point in the same direction, because slip creates heat.");
+  if (anyBad("Electrical") && anyBad("Combustion")) links.push("Low system voltage can weaken ignition, so resolve the charging finding before chasing misfires.");
+  if (anyBad("Cooling") && (F.some(f => f.system === "Transmission" && f.level !== "good" && f.level !== "info"))) links.push("Coolant and transmission heat rising together suggests load or cooling capacity. The transmission cooler also depends on engine cooling.");
+  links.forEach(t => add("Connecting the findings", "info", "How these findings may connect", t, "This is a hypothesis to test, not a diagnosis.", [], [], "Cross-signal reasoning"));
+
+  // Verdict
+  const att = F.filter(f => f.level === "attention"), wat = F.filter(f => f.level === "watch");
+  const level = att.length ? "attention" : wat.length ? "watch" : tested.length >= 3 ? "good" : "limited";
+  const top = (att.length ? att : wat).slice(0, 3).map(f => f.title.toLowerCase());
+  const headline = level === "attention" ? att.length + " finding" + (att.length > 1 ? "s" : "") + " deserve attention" : level === "watch" ? wat.length + " item" + (wat.length > 1 ? "s" : "") + " to watch, nothing urgent found" : level === "good" ? "Nothing stood out in what this drive could test" : "Too little data for a meaningful review";
+  const detail = (top.length ? "Top items: " + top.join("; ") + ". " : "") + "This " + trip.kind.toLowerCase() + " drive tested " + tested.length + " area" + (tested.length === 1 ? "" : "s") + " and left " + na.length + " untested. A clean result only covers what this drive could exercise.";
+  const order = { attention: 0, watch: 1, good: 2, info: 3 };
+  F.sort((a, b) => order[a.level] - order[b.level]);
+  return { trip, findings: F, notAssessed: na, tested, channels: channels.size, sampleRate: rate, validation: val, stats, verdict: { level, headline, detail } };
+}
+function reportMarkdown(rep, vehicle, meta) {
+  const t = rep.trip, L = [];
+  L.push("# Drive review: " + (vehicle.name || "Vehicle"), "", "**" + rep.verdict.headline + ".** " + rep.verdict.detail, "");
+  L.push("- Date: " + (meta.start ? new Date(meta.start).toISOString() : "unknown"), "- Type: " + t.kind, "- Distance: " + rnd(t.miles, 1) + " mi in " + rnd(t.seconds / 60, 1) + " min, " + t.stops + " stops, " + rnd(t.idleSeconds / 60, 1) + " min idling", "- Signals recorded: " + rep.channels, "");
+  ["attention", "watch", "good", "info"].forEach(l => { const a = rep.findings.filter(f => f.level === l); if (!a.length) return; L.push("## " + { attention: "Needs attention", watch: "Watch", good: "Looks good", info: "Context" }[l], ""); a.forEach(f => { L.push("### " + f.system + ": " + f.title, f.evidence, "", f.meaning); if (f.causes.length) L.push("", "Possible explanations: " + f.causes.join("; ") + "."); if (f.next.length) L.push("", "Next: " + f.next.join(" ")); L.push("", "_Basis: " + f.basis + "_", ""); }); });
+  if (rep.notAssessed.length) { L.push("## Not tested on this drive", ""); rep.notAssessed.forEach(n => L.push("- " + n.system + ": " + n.why)); L.push(""); }
+  L.push("Automated review based on recorded data. It suggests where to look and doesn't replace a hands-on diagnosis.");
+  return L.join("\n");
+}
+
+function matchVehicle(vin, vehicles) {
+  if (!vin || vin.length !== 17) return null;
+  for (const id in vehicles) if (vehicles[id].vin === vin) return id;
+  for (const id in vehicles) { const m = vehicles[id].match; if (m && m.wmi.includes(vin.slice(0, 3)) && m.year === vin[9]) return id; }
+  return null;
 }
 /*PURE-END*/
 
@@ -331,6 +723,11 @@ function el(tag, props = {}, ...kids) {
   kids.flat().forEach(c => c !== null && c !== undefined && e.append(c));
   return e;
 }
+const DEFAULT_VEHICLES = {
+  sierra: { id: "sierra", name: "2016 GMC Sierra 1500", engine: { label: "5.3L V8", L: 5.3, cyl: 8 }, layout: "V", afm: true, afmCyls: [1, 4, 6, 7], trans: "", notes: "", match: { wmi: ["1GT"], year: "G" } },
+  equinox: { id: "equinox", name: "2014 Chevrolet Equinox", engine: null, layout: null, afm: false, trans: "", notes: "", match: { wmi: ["2GN", "2CN"], year: "E" } }
+};
+const ENGINE_CHOICES = { equinox: [{ label: "2.4L 4-cylinder", L: 2.4, cyl: 4, layout: "I" }, { label: "3.6L V6", L: 3.6, cyl: 6, layout: "V" }] };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("obd." + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem("obd." + k, JSON.stringify(v, (key, val) => key === "_node" ? undefined : val)); } catch (e) {} }
@@ -349,21 +746,26 @@ const PRESETS = {
    W("line",["rpm"],[4,3],[6,4],{win:5}), W("number",["oilp"],[2,3],[3,3]), W("number",["oilt"],[2,3],[3,3]), W("number",["knock"],[2,3],[3,3]), W("number",["timing"],[2,3],[3,3]), W("number",["load"],[2,3],[3,3]), W("number",["hp"],[2,3],[3,3]), W("number",["oill"],[2,3],[3,3]), W("number",["map"],[2,3],[3,3]) ],
  Fuel: [ W("number",["mpg"],[2,3],[3,3]), W("needle",["fuel"],[2,3],[3,3]), W("number",["ltft1"],[2,3],[3,3]), W("number",["ltft2"],[2,3],[3,3]), W("line",["mpg"],[4,4],[6,4],{win:15}),
    W("line",["lambda"],[4,3],[6,4],{win:5}), W("number",["maf"],[2,3],[3,3]), W("number",["frate"],[2,3],[3,3]), W("share",[],[4,4],[6,4],{share:"drive",view:"donut"}), W("history",["mpg"],[4,4],[6,4],{stat:"avg"}) ],
- Diagnostics: [ W("status",[],[4,3],[6,3]), W("readiness",[],[4,6],[6,6]), W("codes",[],[4,6],[6,7]), W("truck",[],[4,4],[6,4]), W("misfire",[],[4,4],[6,3]) ]
+ Diagnostics: [ W("status",[],[4,3],[6,3]), W("readiness",[],[4,6],[6,6]), W("codes",[],[4,6],[6,7]), W("truck",[],[4,4],[6,4]), W("misfire",[],[4,4],[6,3]), W("mode06",[],[4,8],[12,7]) ],
+ "All sensors": [ W("allsensors",[],[4,12],[12,12]) ]
 };
 function buildDash(name) {
   const list = PRESETS[name], pw = flow(list.map(w => w.p), 4), wd = flow(list.map(w => w.d), 12);
   return list.map((w, i) => { const { p, d, ...rest } = w; return { id: name + i + Date.now().toString(36), ...JSON.parse(JSON.stringify(rest)), pos: { 4: { ...pw[i] }, 12: { ...wd[i] } } }; });
 }
-function validDash(d) { return d && typeof d === "object" && Object.keys(PRESETS).every(k => Array.isArray(d[k])); }
-let dash = store.get("dash", null);
-if (!validDash(dash)) { dash = {}; Object.keys(PRESETS).forEach(k => dash[k] = buildDash(k)); }
-let tab = store.get("tab", "Glance"); if (!dash[tab]) tab = "Glance";
-const customs = store.get("customs", []);
+let vehicles = store.get("vehicles", null);
+if (!vehicles || typeof vehicles !== "object") vehicles = {};
+for (const k in DEFAULT_VEHICLES) vehicles[k] = { ...DEFAULT_VEHICLES[k], ...(vehicles[k] || {}) };
+let vid = store.get("vid", "sierra"); if (!vehicles[vid]) vid = "sierra";
+const vkey = k => "v." + vid + "." + k;
+function saveVehicles() { store.set("vehicles", vehicles); }
+// Earlier builds stored one layout; it belonged to the Sierra.
+if (store.get("dash", null) && !store.get("v.sierra.dash", null)) { store.set("v.sierra.dash", store.get("dash")); store.set("v.sierra.rules", store.get("rules", {})); store.set("v.sierra.customs", store.get("customs", [])); try { ["dash","rules","customs"].forEach(k => localStorage.removeItem("obd." + k)); } catch (e) {} }
+let dash, tab, customs, rules, rawDids;
 function registerCustom(c) {
   const f = FORMULAS[c.formula]; if (!f || !/^[0-9A-F]{4}$/.test(c.did) || !/^[0-9A-F]{3}$/.test(c.header)) return;
   const m = { id: "c" + c.header + c.did, label: String(c.name).slice(0, 40), group: "Custom", cmd: "22" + c.did, pre: "62" + c.did, headers: [c.header], unit: f.unit, tier: "med", digits: f.digits, min: f.min, max: f.max, f: f.f, basis: "community" };
-  if (!byId[m.id]) METRICS.push(m); byId[m.id] = m; mstate[m.id] = mstate[m.id] || {};
+  addDynamic(m);
 }
 const FORMULAS = {
  raw:{label:"A",unit:"",digits:0,min:0,max:255,f:b=>b[0]}, u16:{label:"A×256+B",unit:"",digits:0,min:0,max:65535,f:b=>u16(b[0],b[1])},
@@ -374,16 +776,25 @@ const FORMULAS = {
 /* ---------- Live state ---------- */
 let session = null, wakeLock = null, editMode = false;
 const mstate = Object.fromEntries(METRICS.map(m => [m.id, {}]));
-customs.forEach(registerCustom);
-let series = {}, stats = {}, latest = {}, shares = {}, rows = [], supported = null, monitor = null, truck = {}, codes = null, drives = [], lastTick = 0, driveId = null, driveStart = 0, prevMph = null, stableBuf = [];
+let series = {}, stats = {}, latest = {}, shares = {}, rows = [], flushed = 0, chunkSeq = 0, supported = null, monitor = null, truck = {}, codes = null, mode06 = null, drives = [], lastTick = 0, driveId = null, driveStart = 0, prevMph = null, stableBuf = [];
+function dropDynamic() { for (let i = METRICS.length - 1; i >= 0; i--) if (METRICS[i].dynamic) { delete byId[METRICS[i].id]; delete mstate[METRICS[i].id]; METRICS.splice(i, 1); } }
+function addDynamic(m) { if (byId[m.id]) return; m.dynamic = true; METRICS.push(m); byId[m.id] = m; mstate[m.id] = { status: "unknown", misses: 0, last: 0, headerIdx: 0, badSince: 0 }; }
+function registerRawDid(d) { if (!/^[0-9A-F]{4}$/.test(d.did) || !/^[0-9A-F]{3}$/.test(d.header)) return; addDynamic({ id: "r" + d.header + d.did, label: "GM " + d.header + " " + d.did + " (raw)", group: "Raw", cmd: "22" + d.did, pre: "62" + d.did, headers: [d.header], rawHex: true, tier: "slow", digits: 0, unit: "", min: 0, max: 255, basis: "community" }); }
+function loadVehicle(id) {
+  vid = id; store.set("vid", vid); dropDynamic();
+  const saved = store.get(vkey("dash"), null); dash = saved && typeof saved === "object" ? saved : {};
+  Object.keys(PRESETS).forEach(k => { if (!Array.isArray(dash[k])) dash[k] = buildDash(k); });
+  rules = store.get(vkey("rules"), {}); customs = store.get(vkey("customs"), []); rawDids = store.get(vkey("rawdids"), []);
+  customs.forEach(registerCustom); rawDids.forEach(registerRawDid);
+  tab = store.get(vkey("tab"), "Glance"); if (!dash[tab]) tab = "Glance";
+}
 function resetLive() {
-  series = {}; stats = {}; latest = {}; rows = []; monitor = null; truck = {}; codes = null; supported = null; prevMph = null; stableBuf = [];
+  series = {}; stats = {}; latest = {}; rows = []; flushed = 0; chunkSeq = 0; monitor = null; truck = {}; codes = null; mode06 = null; supported = null; prevMph = null; stableBuf = [];
   shares = { gear: {}, temp: {}, drive: {} };
   METRICS.forEach(m => mstate[m.id] = { status: "unknown", misses: 0, last: 0, headerIdx: 0, badSince: 0 });
 }
 resetLive();
 const cols = () => innerWidth >= 760 ? 12 : 4;
-const rules = store.get("rules", {});
 function ruleOf(m) { const o = rules[m.id]; if (o && o.off) return null; return o ? { ...(m.rule || {}), ...o } : (m.rule || null); }
 function ctx() { const v = stableBuf; return { rpm: latest.rpm, mph: latest.mph, ect: latest.ect, stable: v.length >= 5 && spread(v.map(x => x.tps)) < 4 && spread(v.map(x => x.mph)) < 3 }; }
 const spread = a => Math.max(...a) - Math.min(...a);
@@ -410,7 +821,7 @@ function tick(now) { // once per second
   if (latest.mph !== undefined && latest.mph !== null) { addShare("drive", driveState(latest.mph, prevMph === null ? 0 : latest.mph - prevMph)); prevMph = latest.mph; }
   if (latest.gear !== undefined && latest.gear !== null) addShare("gear", String(latest.gear));
   if (latest.trans !== undefined && latest.trans !== null) addShare("temp", tempBand(latest.trans));
-  const r = { utc: new Date(now).toISOString() }; METRICS.forEach(m => r[m.id] = latest[m.id]); rows.push(r); if (rows.length > 28800) rows.shift();
+  const r = { t: now }; METRICS.forEach(m => { const v = latest[m.id]; if (v !== null && v !== undefined) r[m.id] = typeof v === "number" ? Number(v.toFixed(4)) : v; }); rows.push(r);
 }
 
 /* ---------- Adapter link ---------- */
@@ -453,11 +864,12 @@ function visibleIds() {
     if (w.type === "gearbox") ["gear","slip","gratio"].forEach(i => ids.add(i));
     if (w.type === "misfire") for (let c = 1; c <= 8; c++) ids.add("mis" + c);
     if (w.type === "status" || w.type === "readiness") ids.add("mon");
+    if (w.type === "allsensors") METRICS.forEach(m => { if (m.cmd && m.tier !== "slow") ids.add(m.id); });
     if (w.type === "share") ids.add(w.share === "gear" ? "gear" : w.share === "temp" ? "trans" : "mph"); });
-  [...ids].forEach(i => { const m = byId[i]; if (m && m.need) m.need.forEach(n => ids.add(n)); });
+  [...ids].forEach(i => { const m = byId[i]; if (m && m.need) m.need.forEach(n => ids.add(n)); if (m && m.parent) ids.add(m.parent); });
   return ids;
 }
-const INTERVAL = { fast: [120, 3000], med: [1000, 6000], slow: [5000, 30000] };
+const INTERVAL = { fast: [120, 1000], med: [1000, 3000], slow: [5000, 20000] };
 function nextMetric(now) {
   const vis = visibleIds(); let best = null, bestScore = 1;
   for (const m of METRICS) {
@@ -473,7 +885,14 @@ async function pollOnce(m) {
   const s = mstate[m.id], headers = m.headers || ["7DF"];
   s.last = Date.now();
   const raw = await askH(headers[s.headerIdx] || headers[0], m.cmd);
+  if (m.rawHex) {
+    const b = isNoData(raw) ? null : dataBytes(raw, m.pre);
+    if (b && b.length) { latest[m.id] = b.map(x => x.toString(16).padStart(2, "0")).join(""); s.status = "ok"; s.misses = 0; }
+    else { latest[m.id] = null; s.misses++; if (s.misses >= 3) { s.status = "failed"; s.misses = 0; } }
+    return;
+  }
   let v = decodeMetric(m, raw);
+  if (m.kids) m.kids.forEach(k => { const cs = mstate[k.id]; if (v === null) { record(k.id, null, Date.now()); return; } const b = dataBytes(raw, m.pre), kv = b && b.length ? k.f(b) : null; record(k.id, kv !== null && Number.isFinite(kv) ? kv : null, Date.now()); if (cs) cs.status = "ok"; });
   if (m.id === "mon" && v !== null) { const b = dataBytes(raw, "4101"); if (b && b.length >= 4) monitor = parseMonitor(b); }
   if (v !== null && !plausible(m, v)) v = null;
   if (v === null) {
@@ -496,45 +915,87 @@ async function start(link, label) {
   try {
     await link.open();
     resetLive(); const s = { link, header: null, savedAt: Date.now() }; session = s; driveId = "d" + Date.now(); driveStart = Date.now();
+    if (!link.sim && navigator.storage && navigator.storage.persist) { try { await navigator.storage.persist(); } catch (e) {} }
     setStatus("Initializing " + label + "…");
     await exclusive(async () => { for (const c of ["ATZ","ATE0","ATL0","ATS0","ATH0","ATAT1","ATSP6","ATSH7DF"]) await ask(c); s.header = "7DF"; });
     supported = new Set(); let base = 0;
     while (base <= 0xA0) { const raw = await askH("7DF", "01" + base.toString(16).toUpperCase().padStart(2, "0")); parseSupport(raw, base).forEach(p => supported.add(p)); if (!supported.has(base + 32)) break; base += 32; }
     if (!supported.size) throw new Error("No response from the truck. Turn the ignition on, then reconnect.");
-    METRICS.forEach(m => { if (m.pid && !supported.has(m.pid)) mstate[m.id].status = "unsupported"; });
+    await identifyVehicle();
+    const known = new Set(METRICS.filter(m => m.pid).map(m => m.pid));
+    supported.forEach(p => { if (p % 32 !== 0 && !known.has(p)) { const h = p.toString(16).toUpperCase().padStart(2, "0"); addDynamic({ id: "p" + h, label: "Standard PID " + h + " (raw)", group: "Raw", pid: p, cmd: "01" + h, pre: "41" + h, rawHex: true, tier: "slow", digits: 0, unit: "", min: 0, max: 255, basis: "standard" }); } });
+    METRICS.forEach(m => { if (m.pid && !supported.has(m.pid)) { mstate[m.id].status = "unsupported"; (m.kids || []).forEach(k => mstate[k.id].status = "unsupported"); } });
+    renderVehicleSelect(); renderTabs(); renderGrid();
+    readCodes().then(readMode06).catch(() => {});
     setStatus("Live: " + label, "ok");
-    $("stop").disabled = false; $("connect").disabled = $("sim").disabled = true;
+    $("stop").disabled = false; $("connect").disabled = $("sim").disabled = true; $("vehicle").disabled = true;
     try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
     runLoop(s).catch(e => { if (session === s) fail(e); });
   } catch (e) { fail(e); }
 }
+async function identifyVehicle() {
+  try {
+    const vin = asciiFrom(await askH("7DF", "0902"), "4902"); if (vin) truck.vin = vin;
+    const guess = matchVehicle(vin, vehicles);
+    if (guess && guess !== vid) { loadVehicle(guess); toast("Switched to " + vehicles[guess].name + " from its VIN."); }
+    else if (!guess && vin && vin.length === 17 && !session.link.sim) toast("VIN not matched to a profile. Check that " + vehicles[vid].name + " is correct.");
+    if (vin && vin.length === 17 && !session.link.sim) { vehicles[vid].vin = vin; saveVehicles(); }
+    if (!vehicles[vid].engine && ENGINE_CHOICES[vid]) {
+      const b = dataBytes(await askH("7DF", "0113"), "4113");
+      if (b && b.length) { const v6 = (b[0] & 0xF0) !== 0, pick = ENGINE_CHOICES[vid].find(e => (e.cyl === 6) === v6); vehicles[vid].engine = { ...pick, detected: true }; vehicles[vid].layout = pick.layout; saveVehicles(); toast("Engine looks like " + pick.label + " from its O2 sensor layout. Check this in Vehicle settings."); }
+    }
+  } catch (e) {}
+}
+async function readMode06() {
+  if (!session) return;
+  const mids = new Set(); let base = 0;
+  while (base <= 0xE0) { const hx = base.toString(16).toUpperCase().padStart(2, "0"), got = parseSupport(await askH("7DF", "06" + hx), base, "46"); got.forEach(x => mids.add(x)); if (!got.has(base + 32)) break; base += 32; }
+  const out = [];
+  for (const mid of [...mids].filter(x => x % 32 !== 0).sort((a, b) => a - b)) { if (!session) return; out.push(...parseMode06Full(await askH("7DF", "06" + mid.toString(16).toUpperCase().padStart(2, "0")), mid)); }
+  mode06 = out;
+}
 async function fail(e) { setStatus(e.message || String(e), "bad"); await stop(true); }
 async function stop(keep) {
   const s = session; session = null;
-  if (s && !s.link.sim) await saveDrive();
+  if (s && !s.link.sim) await saveDrive(true);
   if (s) await s.link.close();
   if (wakeLock) { try { await wakeLock.release(); } catch (e) {} wakeLock = null; }
-  $("stop").disabled = true; $("connect").disabled = !("serial" in navigator); $("sim").disabled = false;
+  $("stop").disabled = true; $("connect").disabled = !("serial" in navigator); $("sim").disabled = false; $("vehicle").disabled = false;
   if (!keep) setStatus("Not connected");
 }
 function setStatus(t, c = "") { $("status").textContent = t; $("status").className = c; }
 
 /* ---------- Drive history (on this device only) ---------- */
 function db() {
-  return new Promise((res, rej) => { if (!window.indexedDB) return rej(new Error("no IndexedDB")); const q = indexedDB.open("obd-live", 1);
-    q.onupgradeneeded = () => q.result.createObjectStore("drives", { keyPath: "id" }); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+  return new Promise((res, rej) => { if (!window.indexedDB) return rej(new Error("no IndexedDB")); const q = indexedDB.open("obd-live", 2);
+    q.onupgradeneeded = () => { const d = q.result; if (!d.objectStoreNames.contains("drives")) d.createObjectStore("drives", { keyPath: "id" }); if (!d.objectStoreNames.contains("chunks")) d.createObjectStore("chunks", { keyPath: "id" }).createIndex("drive", "drive"); };
+    q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
 }
 async function loadDrives() {
-  try { const d = await db(); drives = await new Promise((res, rej) => { const q = d.transaction("drives").objectStore("drives").getAll(); q.onsuccess = () => res(q.result.sort((a, b) => a.start - b.start)); q.onerror = () => rej(q.error); }); } catch (e) { drives = []; }
+  try { const d = await db(), all = await new Promise((res, rej) => { const q = d.transaction("drives").objectStore("drives").getAll(); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+    drives = all.filter(x => (x.vehicle || "sierra") === vid).sort((a, b) => a.start - b.start); } catch (e) { drives = []; }
 }
-async function putDrives(list) {
+async function putDrives(list, chunks = []) {
   const d = await db();
-  await new Promise((res, rej) => { const t = d.transaction("drives", "readwrite"); list.forEach(x => t.objectStore("drives").put(x)); t.oncomplete = res; t.onerror = () => rej(t.error); });
+  await new Promise((res, rej) => { const t = d.transaction(["drives", "chunks"], "readwrite"); list.forEach(x => t.objectStore("drives").put(x)); chunks.forEach(x => t.objectStore("chunks").put(x)); t.oncomplete = res; t.onerror = () => rej(t.error); });
 }
-async function saveDrive() {
-  if (Date.now() - driveStart < 60000 || !driveId) return;
+async function driveRows(id) {
+  const d = await db(), a = await new Promise((res, rej) => { const q = d.transaction("chunks").objectStore("chunks").index("drive").getAll(id); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+  return a.sort((x, y) => x.seq - y.seq).flatMap(c => c.rows);
+}
+async function deleteDrive(id) {
+  const d = await db(), keys = await new Promise((res, rej) => { const q = d.transaction("chunks").objectStore("chunks").index("drive").getAllKeys(id); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+  await new Promise((res, rej) => { const t = d.transaction(["drives", "chunks"], "readwrite"); t.objectStore("drives").delete(id); keys.forEach(k => t.objectStore("chunks").delete(k)); t.oncomplete = res; t.onerror = () => rej(t.error); });
+  await loadDrives();
+}
+const sessionMeta = () => ({ id: driveId, start: driveStart, codes, monitor, mode06, supported: supported ? [...supported] : [] });
+async function saveDrive(final) {
+  if (!driveId || Date.now() - driveStart < 60000) return;
   const summary = {}; for (const id in stats) { const s = stats[id]; if (s.n) summary[id] = { min: s.min, max: s.max, avg: s.sum / s.n, n: s.n }; }
-  try { await putDrives([{ id: driveId, start: driveStart, end: Date.now(), summary, build: BUILD_ID }]); await loadDrives(); } catch (e) {}
+  const fresh = rows.slice(flushed), chunks = fresh.length ? [{ id: driveId + ":" + chunkSeq, drive: driveId, seq: chunkSeq, rows: fresh }] : [];
+  const rec = { ...sessionMeta(), vehicle: vid, end: Date.now(), summary, build: BUILD_ID };
+  if (final) { try { rec.review = analyzeDrive({ rows, meta: rec, vehicle: vehicles[vid], history: drives }); rec.review = { stats: rec.review.stats, verdict: rec.review.verdict, kind: rec.review.trip.kind }; } catch (e) { console.error(e); } }
+  try { await putDrives([rec], chunks); flushed = rows.length; if (fresh.length) chunkSeq++; await loadDrives(); } catch (e) { console.error(e); }
 }
 function usual(id) {
   const a = drives.map(d => d.summary && d.summary[id]).filter(Boolean);
@@ -548,7 +1009,7 @@ function canvasCtx(c) {
   const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, r.width, r.height);
   return { g, W: r.width, H: r.height };
 }
-const fmt = (m, v) => v === null || v === undefined ? "--" : v.toFixed(m.digits);
+const fmt = (m, v) => v === null || v === undefined ? "--" : typeof v === "string" ? v : v.toFixed(m.digits);
 const TAG = { standard: "Standard", community: "Unverified", derived: "Estimate" };
 function emptyText(m) {
   const s = mstate[m.id];
@@ -690,7 +1151,8 @@ R.gearbox = (w, box) => {
 };
 R.misfire = (w, box) => {
   const g = el("div", { class: "cyl" }), parts = [], read = el("div", { class: "readout" });
-  for (let c = 1; c <= 8; c++) { const i = el("i"), n = el("span"), d = el("div", {}, n, i, el("span", { textContent: String(c) })); parts.push({ i, n, m: byId["mis" + c] }); g.append(d); }
+  const cylN = (vehicles[vid].engine && vehicles[vid].engine.cyl) || 8; g.style.gridTemplateColumns = "repeat(" + cylN + ",1fr)";
+  for (let c = 1; c <= cylN; c++) { const i = el("i"), n = el("span"), d = el("div", {}, n, i, el("span", { textContent: String(c) })); parts.push({ i, n, m: byId["mis" + c] }); g.append(d); }
   box.append(header(w, "Recent misfires by cylinder", "Standard"), el("div", { class: "body" }, g, read));
   return () => {
     const vals = parts.map(p => latest[p.m.id] ?? null), mx = Math.max(1, ...vals.map(v => v ?? 0)); let bad = false, any = false;
@@ -741,6 +1203,24 @@ R.truck = (w, box) => {
   return () => { btn.disabled = !session; const rows2 = [["VIN", truck.vin], ["Calibration ID", truck.cal], ["Odometer", latest.odo != null ? latest.odo.toFixed(0) + " mi" : null], ["Standard PIDs reported", supported ? String(supported.size) : null]].filter(r => r[1]); const s = JSON.stringify(rows2); if (s === sig) return; sig = s; list.textContent = "";
     rows2.forEach(r => list.append(el("div", { class: "row" }, el("span", { textContent: r[0] }), el("span", { textContent: r[1] })))); };
 };
+R.mode06 = (w, box) => {
+  const list = el("div", { class: "scroll" }), btn = el("button", { textContent: "Read self-test results" });
+  btn.onclick = () => readMode06().catch(e => toast(e.message));
+  box.append(header(w, "Computer self-tests with its own limits", "Standard"), el("div", { class: "body" }, btn, list));
+  let sig = "";
+  return () => { btn.disabled = !session; const s = JSON.stringify(mode06); if (s === sig) return; sig = s; list.textContent = ""; if (!mode06) return;
+    if (!mode06.length) { list.append(el("div", { class: "pill", textContent: "No self-test results returned." })); return; }
+    const bad = mode06.some(x => x.pass === false); box.className = "w " + (bad ? "bad" : "good");
+    mode06.forEach(x => list.append(el("div", { class: "row" }, el("span", { textContent: x.name + " · test " + x.tid.toString(16).toUpperCase().padStart(2, "0") }), el("span", { class: "pill " + (x.pass === null ? "" : x.pass ? "good" : "bad"), textContent: x.pass === null ? "Not run" : (x.pass ? "✓ " : "✕ ") + x.val + " (" + x.min + "–" + x.max + ")" })))); };
+};
+R.allsensors = (w, box) => {
+  const list = el("div", { class: "scroll" }), sub = el("div", { class: "sub" });
+  box.append(header(w, "Every reading this vehicle answers", ""), el("div", { class: "body" }, sub, list));
+  let n = 0;
+  return () => { if (n++ % 4) return; list.textContent = ""; const live = METRICS.filter(m => m.id !== "mon" && latest[m.id] !== null && latest[m.id] !== undefined).sort((a, b) => a.group.localeCompare(b.group) || a.label.localeCompare(b.label));
+    sub.textContent = session ? live.length + " readings live" : "Not connected";
+    live.forEach(m => list.append(el("div", { class: "row" }, el("span", { textContent: m.label }), el("span", { textContent: fmt(m, latest[m.id]) + (m.unit ? " " + m.unit : "") + " · " + (TAG[m.basis] || "") })))); };
+};
 R.history = (w, box) => {
   const m = byId[w.metrics[0]]; if (!m) return; const stat = w.stat || "max";
   const c = el("canvas"), read = el("div", { class: "readout" }), h = hoverable(c);
@@ -760,11 +1240,11 @@ R.history = (w, box) => {
 let painters = [];
 function renderTabs() {
   const t = $("tabs"); t.textContent = "";
-  Object.keys(dash).forEach(k => t.append(el("button", { role: "tab", textContent: k, "aria-selected": String(k === tab), onclick: () => { tab = k; store.set("tab", k); renderTabs(); renderGrid(); } })));
+  Object.keys(dash).forEach(k => t.append(el("button", { role: "tab", textContent: k, "aria-selected": String(k === tab), onclick: () => { tab = k; store.set(vkey("tab"), k); renderTabs(); renderGrid(); } })));
 }
 const posOf = w => w.pos[cols()] || (w.pos[cols()] = { ...flow([[Math.min(cols(), 4), 3]], cols())[0], y: 99 });
 function applyPos(w, node) { const p = posOf(w); node.style.gridColumn = (p.x + 1) + " / span " + p.w; node.style.gridRow = (p.y + 1) + " / span " + p.h; }
-function save() { store.set("dash", dash); }
+function save() { store.set(vkey("dash"), dash); }
 function renderGrid() {
   const g = $("grid"); g.textContent = ""; g.style.setProperty("--cols", cols()); painters = [];
   const items = dash[tab]; compactTab();
@@ -802,10 +1282,11 @@ function setEdit(on) {
 
 /* ---------- Dialogs ---------- */
 function showDlg(title, ...kids) { const d = $("dlg"); d.textContent = ""; d.append(el("h2", { textContent: title }), ...kids, el("div", { class: "bar" }, el("button", { textContent: "Close", onclick: () => d.close() }))); if (!d.open) d.showModal(); }
-const NUMERIC = () => METRICS.filter(m => m.id !== "mon");
+const NUMERIC = () => METRICS.filter(m => m.id !== "mon" && !m.rawHex);
 function metricOptions(sel) { const groups = {}; NUMERIC().forEach(m => (groups[m.group] = groups[m.group] || []).push(m)); return Object.entries(groups).map(([g, a]) => el("optgroup", { label: g }, a.map(m => el("option", { value: m.id, textContent: m.label + (m.basis === "community" ? " (unverified)" : m.basis === "derived" ? " (estimate)" : ""), selected: m.id === sel })))); }
 const TYPE_LABEL = { number: "Number with sparkline", needle: "Active needle", line: "Line graph", history: "Per-drive history" };
 function openSettings(w) {
+  $("dlg").classList.remove("wide");
   const pos = posOf(w), kids = [];
   if (TYPE_LABEL[w.type]) {
     const t = el("select", { onchange: () => { w.type = t.value; if (w.type === "line" && !w.win) w.win = 5; if (w.type === "history" && !w.stat) w.stat = "max"; w.metrics = w.metrics.slice(0, w.type === "line" ? 4 : 1); commit(); openSettings(w); } }, Object.entries(TYPE_LABEL).map(([k, v]) => el("option", { value: k, textContent: v, selected: k === w.type })));
@@ -821,9 +1302,9 @@ function openSettings(w) {
     if (w.type === "history") { const st = el("select", { onchange: () => { w.stat = st.value; commit(); } }, ["max","avg","min"].map(n => el("option", { value: n, textContent: n, selected: n === w.stat }))); kids.push(el("label", { textContent: "Statistic" }), st); }
     const m = byId[w.metrics[0]], rule = ruleOf(m) || {};
     const lo = el("input", { type: "number", step: "any", value: rule.lo ?? "", "aria-label": "Red below" }), hi = el("input", { type: "number", step: "any", value: rule.hi ?? "", "aria-label": "Red above" });
-    const applyRule = () => { const o = {}; o.lo = lo.value === "" ? undefined : Number(lo.value); o.hi = hi.value === "" ? undefined : Number(hi.value); if (o.lo === undefined && o.hi === undefined) { rules[m.id] = { off: true }; } else { if (o.lo === undefined) delete o.lo; if (o.hi === undefined) delete o.hi; rules[m.id] = { lo: o.lo, hi: o.hi, when: (m.rule || {}).when, sustainMs: (m.rule || {}).sustainMs, off: false, note: "Your own limit." }; } store.set("rules", rules); commit(); };
+    const applyRule = () => { const o = {}; o.lo = lo.value === "" ? undefined : Number(lo.value); o.hi = hi.value === "" ? undefined : Number(hi.value); if (o.lo === undefined && o.hi === undefined) { rules[m.id] = { off: true }; } else { if (o.lo === undefined) delete o.lo; if (o.hi === undefined) delete o.hi; rules[m.id] = { lo: o.lo, hi: o.hi, when: (m.rule || {}).when, sustainMs: (m.rule || {}).sustainMs, off: false, note: "Your own limit." }; } store.set(vkey("rules"), rules); commit(); };
     lo.onchange = hi.onchange = applyRule;
-    kids.push(el("h3", { textContent: "Green and red limits for " + m.label }), el("div", { class: "fields" }, el("div", {}, el("label", { textContent: "Red below" }), lo), el("div", {}, el("label", { textContent: "Red above" }), hi)), el("p", { textContent: (ruleOf(m) && ruleOf(m).note) || "No limit set. It stays neutral because I found no defensible number." }), el("button", { textContent: "Restore default limit", onclick: () => { delete rules[m.id]; store.set("rules", rules); commit(); openSettings(w); } }));
+    kids.push(el("h3", { textContent: "Green and red limits for " + m.label }), el("div", { class: "fields" }, el("div", {}, el("label", { textContent: "Red below" }), lo), el("div", {}, el("label", { textContent: "Red above" }), hi)), el("p", { textContent: (ruleOf(m) && ruleOf(m).note) || "No limit set. It stays neutral because I found no defensible number." }), el("button", { textContent: "Restore default limit", onclick: () => { delete rules[m.id]; store.set(vkey("rules"), rules); commit(); openSettings(w); } }));
   }
   if (w.type === "share") {
     const s = el("select", { onchange: () => { w.share = s.value; commit(); } }, Object.entries(SHARE).map(([k, v]) => el("option", { value: k, textContent: v.title, selected: k === w.share })));
@@ -838,7 +1319,8 @@ function openSettings(w) {
 function commit() { dashNoNodes(); save(); renderGrid(); }
 function dashNoNodes() { Object.values(dash).flat().forEach(w => { if (w._node) delete w._node; }); }
 function openAdd() {
-  const t = el("select", {}, [["number","Number with sparkline"],["needle","Active needle"],["line","Line graph"],["scatter","RPM vs speed scatter"],["share","Pie/bars: share of time"],["history","Per-drive history"],["gearbox","Gear and slip"],["misfire","Misfire by cylinder"],["status","Check-engine status"],["readiness","Emissions monitors"],["codes","Trouble codes"],["truck","Truck identity"]].map(([k, v]) => el("option", { value: k, textContent: v })));
+  $("dlg").classList.remove("wide");
+  const t = el("select", {}, [["number","Number with sparkline"],["needle","Active needle"],["line","Line graph"],["scatter","RPM vs speed scatter"],["share","Pie/bars: share of time"],["history","Per-drive history"],["gearbox","Gear and slip"],["misfire","Misfire by cylinder"],["status","Check-engine status"],["readiness","Emissions monitors"],["codes","Trouble codes"],["truck","Truck identity"],["mode06","Computer self-tests"],["allsensors","Every reading"]].map(([k, v]) => el("option", { value: k, textContent: v })));
   const m = el("select", {}, metricOptions("trans"));
   showDlg("Add widget", el("label", { textContent: "Widget" }), t, el("label", { textContent: "Reading (when the widget uses one)" }), m, el("div", { class: "bar" }, el("button", { class: "primary", textContent: "Add", onclick: () => {
     const type = t.value, w = { id: "u" + Date.now().toString(36), type, metrics: ["number","needle","line","history"].includes(type) ? [m.value] : type === "scatter" ? ["mph","rpm"] : [], win: 5, stat: "max", share: "drive", view: "donut", pos: {} };
@@ -860,17 +1342,22 @@ function openMore() {
    ["2016 Sierra Denali owner's manual", "https://contentdelivery.ext.gm.com/content/dam/cope/en_us/public/pdf_assets/active/owners_manuals_browse/2k16sierraden1stPrint.pdf", "Official GM owner information. I found no usable numeric limits in the text I could read."],
    ["STN/OBDLink documentation", "https://www.obdsol.com/stn1110/", "Official adapter docs and ELM327 command compatibility."],
    ["GMT Nation forum PID list", "https://gmtnation.com/forums/threads/extra-pids-from-with-obdlink-app.22218/", "Community, 2002 GM vehicle: the source of the Unverified GM requests."],
-   ["LS1Tech forum: TCC slip", "https://ls1tech.com/forums/pcm-diagnostics-tuning/981059-gm-mode22-pids.html", "Community: signed slip formula, not confirmed there."]
+   ["LS1Tech forum: TCC slip", "https://ls1tech.com/forums/pcm-diagnostics-tuning/981059-gm-mode22-pids.html", "Community: signed slip formula, not confirmed there."],
+   ["Motor: Driveability Corner, Feb 2014", "https://www.motor.com/wp-content/uploads/DriveabilityCorner_0214.pdf", "Trade article: ±10% fuel trim window and why one-bank shifts narrow the cause."],
+   ["Motor: Driveability Corner, June 2014", "https://www.motor.com/wp-content/uploads/DriveabilityCorner-June2014.pdf", "Trade article: judge trims across idle, rpm and load; air-leak signature."],
+   ["Vehicle Service Pros: Drivability From The Front Seat", "https://vehicleservicepros.com/service-repair/diagnostics-and-drivability/article/21187242/drivability-from-the-front-seat", "Trade article on a GM 5.3L: idle airflow rule of thumb, full-throttle load and breathing efficiency."],
+   ["OBDLink MX+ product page", "https://www.obdlink.com/products/obdlink-mxp/", "Official: MX+ adds GM SW-CAN and MS-CAN, which reach networks the LX may not."]
   ];
   const ex = el("div"), scanOut = el("div", { class: "scroll", style: "max-height:220px" });
-  const hdr = el("select", {}, ["7E2","7E0","7E1"].map(h => el("option", { value: h, textContent: h === "7E2" ? "7E2 (usually transmission)" : h === "7E0" ? "7E0 (usually engine)" : "7E1 (alternate)" })));
-  const scan = el("button", { textContent: "Scan 1900–19FF, parked only", onclick: async () => {
-    if (!session) return toast("Connect first."); if (!session.link.sim && latest.mph > 0) return toast("Park the truck first.");
-    scan.disabled = true; scanOut.textContent = ""; const h = hdr.value;
-    for (let d = 0x1900; d <= 0x19FF && session; d++) { const did = d.toString(16).toUpperCase(); try { const raw = await askH(h, "22" + did), b = dataBytes(raw, "62" + did); if (b) scanOut.append(foundRow(h, did, b)); } catch (e) { break; } scan.textContent = "Scanning " + did; }
-    scan.textContent = "Scan 1900–19FF, parked only"; scan.disabled = false; if (!scanOut.children.length) scanOut.textContent = "No answers on this module.";
+  const hdr = el("select", { "aria-label": "Module" }, ["7E2","7E0","7E1"].map(h => el("option", { value: h, textContent: h === "7E2" ? "7E2 (usually transmission)" : h === "7E0" ? "7E0 (usually engine)" : "7E1 (alternate)" })));
+  const range = el("select", { "aria-label": "Range" }, ["1900","1100","1200","1A00","2000","2800","3000"].map(r => el("option", { value: r, textContent: r + "–" + r.slice(0, 2) + "FF" })));
+  const scan = el("button", { textContent: "Scan, parked only", onclick: async () => {
+    if (!session) return toast("Connect first."); if (!session.link.sim && latest.mph > 0) return toast("Park the vehicle first.");
+    scan.disabled = true; scanOut.textContent = ""; const h = hdr.value, r0 = parseInt(range.value, 16);
+    for (let d = r0; d <= r0 + 255 && session; d++) { const did = d.toString(16).toUpperCase(); try { const raw = await askH(h, "22" + did), b = isNoData(raw) ? null : dataBytes(raw, "62" + did); if (b) { scanOut.append(foundRow(h, did, b)); if (!rawDids.some(x => x.did === did && x.header === h)) { const rec = { did, header: h }; rawDids.push(rec); registerRawDid(rec); store.set(vkey("rawdids"), rawDids); } } } catch (e) { break; } scan.textContent = "Scanning " + did; }
+    scan.textContent = "Scan, parked only"; scan.disabled = false; if (!scanOut.children.length) scanOut.textContent = "No answers in this range.";
   } });
-  ex.append(el("p", { textContent: "Asks the truck which GM read requests it answers. It sends read requests only. Results still need checking against a known value before you trust them." }), hdr, scan, scanOut);
+  ex.append(el("p", { textContent: "Asks the vehicle which GM read requests it answers. It sends read requests only. Anything that answers is logged raw from then on. Its meaning stays unknown until you check it against a known value." }), hdr, range, scan, scanOut);
   showDlg("Data and sources",
     el("div", { class: "bar" }, el("button", { textContent: "Export session CSV", onclick: exportCsv }), el("button", { textContent: "Export history", onclick: exportHistory }), el("button", { textContent: "Import history", onclick: importHistory })),
     el("h3", { textContent: "This session (table view of all readings)" }), stat,
@@ -881,20 +1368,82 @@ function openMore() {
 }
 function foundRow(h, did, b) {
   const name = el("input", { value: "GM " + did, "aria-label": "Name" }), f = el("select", { "aria-label": "Formula" }, Object.entries(FORMULAS).map(([k, v]) => el("option", { value: k, textContent: v.label })));
-  return el("div", {}, el("div", { class: "row" }, el("span", { textContent: h + " " + did }), el("span", { textContent: b.map(x => x.toString(16).padStart(2, "0")).join(" ") })), name, f, el("button", { textContent: "Add as reading", onclick: () => { const c = { did, header: h, name: name.value, formula: f.value }; customs.push(c); store.set("customs", customs); registerCustom(c); toast("Added under Custom in the widget list."); } }));
+  return el("div", {}, el("div", { class: "row" }, el("span", { textContent: h + " " + did }), el("span", { textContent: b.map(x => x.toString(16).padStart(2, "0")).join(" ") })), name, f, el("button", { textContent: "Add as reading", onclick: () => { const c = { did, header: h, name: name.value, formula: f.value }; customs.push(c); store.set(vkey("customs"), customs); registerCustom(c); toast("Added under Custom in the widget list."); } }));
 }
 function download(name, text, type) { const a = el("a", { href: URL.createObjectURL(new Blob([text], { type })), download: name }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
 const stampName = () => new Date().toISOString().replace(/[:.]/g, "-");
+function rowsCsv(rs, sim) {
+  const keys = new Set(); rs.forEach(r => Object.keys(r).forEach(k => k !== "t" && keys.add(k)));
+  const cs = [...keys].sort();
+  return "# build," + BUILD_ID + "\n# exported_utc," + new Date().toISOString() + "\n# vehicle," + csvCell(vehicles[vid].name) + "\n# simulator," + sim + "\n" + ["utc", ...cs].map(csvCell).join(",") + "\n" + rs.map(r => [new Date(r.t).toISOString(), ...cs.map(c => r[c])].map(csvCell).join(",")).join("\n") + "\n";
+}
 function exportCsv() {
   if (!rows.length) return toast("No session data yet.");
-  const cs = ["utc", ...METRICS.map(m => m.id)], text = "# build," + BUILD_ID + "\n# exported_utc," + new Date().toISOString() + "\n# simulator," + !!(session && session.link.sim) + "\n" + cs.map(csvCell).join(",") + "\n" + rows.map(r => cs.map(c => csvCell(typeof r[c] === "number" ? r[c].toFixed(3) : r[c])).join(",")).join("\n") + "\n";
-  download("sierra-obd-" + stampName() + ".csv", text, "text/csv");
+  download(vid + "-obd-" + stampName() + ".csv", rowsCsv(rows, !!(session && session.link.sim)), "text/csv");
 }
-function exportHistory() { download("sierra-obd-history-" + stampName() + ".json", JSON.stringify({ build: BUILD_ID, exported: new Date().toISOString(), drives }, null, 1), "application/json"); }
+function exportHistory() { download(vid + "-obd-history-" + stampName() + ".json", JSON.stringify({ build: BUILD_ID, exported: new Date().toISOString(), vehicle: vid, drives }, null, 1), "application/json"); }
 function importHistory() {
   const i = el("input", { type: "file", accept: "application/json", onchange: async () => {
-    try { const j = JSON.parse(await i.files[0].text()), clean = (j.drives || []).filter(d => d && typeof d.id === "string" && Number.isFinite(d.start) && d.summary && typeof d.summary === "object"); await putDrives(clean); await loadDrives(); toast("Imported " + clean.length + " drives."); } catch (e) { toast("Couldn't read that file."); }
+    try { const j = JSON.parse(await i.files[0].text()), clean = (j.drives || []).filter(d => d && typeof d.id === "string" && Number.isFinite(d.start) && d.summary && typeof d.summary === "object").map(d => ({ ...d, vehicle: j.vehicle === vid ? vid : (d.vehicle || vid) })); await putDrives(clean); await loadDrives(); toast("Imported " + clean.length + " drives."); } catch (e) { toast("Couldn't read that file."); }
   } }); i.click();
+}
+
+/* ---------- Drive review ---------- */
+function renderReport(host, rep, veh, meta, rs) {
+  host.textContent = ""; const t = rep.trip;
+  const ico = { attention: "✕", watch: "▲", good: "✓", info: "i", limited: "–", nodata: "–" };
+  host.append(el("div", { class: "verdict " + rep.verdict.level }, el("b", { textContent: ico[rep.verdict.level] + " " + rep.verdict.headline }), el("span", { textContent: rep.verdict.detail })));
+  const stat = (a, b) => el("div", {}, el("b", { textContent: a }), b);
+  host.append(el("div", { class: "stats" }, stat(t.kind, "Drive type"), stat(t.miles.toFixed(1) + " mi", "Distance"), stat((t.seconds / 60).toFixed(0) + " min", "Time"), stat(String(t.stops), "Stops"), stat((t.idleSeconds / 60).toFixed(1) + " min", "Idling"), stat((t.highwaySeconds / 60).toFixed(1) + " min", "At 55+ mph"), stat(String(rep.channels), "Signals logged"), stat((rep.sampleRate || 0).toFixed(1) + "/s", "Log rate")));
+  const names = { attention: "Needs attention", watch: "Watch", good: "Looks good", info: "Context" };
+  ["attention","watch","good","info"].forEach(l => { const a = rep.findings.filter(f => f.level === l); if (!a.length) return; host.append(el("h3", { textContent: names[l] + " (" + a.length + ")" }));
+    a.forEach(f => { const d = el("details", { class: "f", open: l === "attention" || l === "watch" }, el("summary", {}, el("span", { class: "lv " + l, textContent: ico[l] }), f.system + ": " + f.title), el("p", { textContent: f.evidence }), el("p", { textContent: f.meaning }), f.causes.length ? el("p", { textContent: "Possible explanations: " + f.causes.join("; ") + "." }) : null, f.next.length ? el("p", { textContent: "Next: " + f.next.join(" ") }) : null, el("small", { textContent: "Basis: " + f.basis })); host.append(d); }); });
+  if (rep.notAssessed.length) { host.append(el("h3", { textContent: "Not tested on this drive" })); rep.notAssessed.forEach(n => host.append(el("div", { class: "row" }, el("span", { textContent: n.system }), el("span", { textContent: n.why })))); }
+  const tag = new Date(meta.start || Date.now()).toISOString().replace(/[:.]/g, "-");
+  host.append(el("div", { class: "bar", style: "margin-top:12px" },
+    el("button", { textContent: "Download report", onclick: () => download(vid + "-review-" + tag + ".md", reportMarkdown(rep, veh, meta), "text/markdown") }),
+    el("button", { textContent: "Download data CSV", onclick: () => download(vid + "-drive-" + tag + ".csv", rowsCsv(rs, false), "text/csv") }),
+    el("button", { textContent: "Package for Claude review", onclick: () => { const thin = rs.filter((r, i) => i % 5 === 0); download(vid + "-claude-packet-" + tag + ".json", JSON.stringify({ build: BUILD_ID, generated: new Date().toISOString(), vehicle: { name: veh.name, engine: veh.engine, afm: veh.afm, trans: veh.trans, notes: veh.notes }, meta: { start: meta.start, end: meta.end, codes: meta.codes, monitor: meta.monitor, mode06: meta.mode06, supported: meta.supported }, report: rep, rowsEvery5s: thin }), "application/json"); } })));
+}
+async function openReview() {
+  await loadDrives();
+  const host = el("div"), sel = el("select", { "aria-label": "Drive" });
+  if (rows.length) sel.append(el("option", { value: "__live", textContent: "Current session" + (session && session.link.sim ? " (simulator)" : "") }));
+  [...drives].reverse().forEach(d => sel.append(el("option", { value: d.id, textContent: new Date(d.start).toLocaleString() + (d.review ? " · " + d.review.kind : "") })));
+  const del = el("button", { textContent: "Delete this drive" });
+  const show = async () => {
+    host.textContent = "Analyzing…"; del.hidden = sel.value === "__live" || !sel.value; del.textContent = "Delete this drive"; del.dataset.arm = "";
+    if (!sel.value) { host.textContent = "No drives yet. Connect, drive for at least a minute, then disconnect."; return; }
+    let meta, rs;
+    if (sel.value === "__live") { meta = sessionMeta(); rs = rows; } else { meta = drives.find(d => d.id === sel.value); rs = await driveRows(sel.value); }
+    const rep = analyzeDrive({ rows: rs, meta, vehicle: vehicles[vid], history: drives.filter(d => d.start < (meta.start || Infinity)) });
+    if (sel.value !== "__live" && !(session && meta.id === driveId)) { const rec = { ...meta, review: { stats: rep.stats, verdict: rep.verdict, kind: rep.trip.kind } }; try { await putDrives([rec]); const i = drives.findIndex(d => d.id === rec.id); if (i >= 0) drives[i] = rec; } catch (e) {} }
+    renderReport(host, rep, vehicles[vid], meta, rs);
+  };
+  del.onclick = async () => { if (del.dataset.arm !== "1") { del.dataset.arm = "1"; del.textContent = "Tap again to delete"; return; } const id = sel.value; await deleteDrive(id); openReview(); };
+  sel.onchange = show; $("dlg").classList.add("wide");
+  showDlg("Drive review: " + vehicles[vid].name, el("p", { textContent: "An automated review using generic OBD data, vehicle self-tests, your own history, and published diagnostic methods. It points you where to look; it can't confirm a diagnosis." }), el("div", { class: "bar" }, sel, del), host);
+  show();
+}
+function renderVehicleSelect() { const v = $("vehicle"); v.textContent = ""; Object.values(vehicles).forEach(x => v.append(el("option", { value: x.id, textContent: x.name, selected: x.id === vid }))); }
+function openVehicle() {
+  const v = vehicles[vid], kids = [];
+  const nm = el("input", { value: v.name, "aria-label": "Name", onchange: () => { v.name = nm.value.slice(0, 60) || v.name; saveVehicles(); renderVehicleSelect(); } });
+  kids.push(el("label", { textContent: "Name" }), nm);
+  const choices = ENGINE_CHOICES[vid] || [];
+  if (choices.length) { const e = el("select", { "aria-label": "Engine", onchange: () => { const pick = choices.find(c => c.label === e.value); v.engine = pick ? { ...pick } : null; v.layout = pick ? pick.layout : null; saveVehicles(); renderGrid(); } }, el("option", { value: "", textContent: "Not set (detected on connect)" }), choices.map(c => el("option", { value: c.label, textContent: c.label, selected: v.engine && v.engine.label === c.label }))); kids.push(el("label", { textContent: "Engine" }), e); }
+  else { const L = el("input", { type: "number", step: "0.1", value: v.engine ? v.engine.L : "", "aria-label": "Displacement" }), c = el("input", { type: "number", step: "1", value: v.engine ? v.engine.cyl : "", "aria-label": "Cylinders" });
+    const up = () => { const lv = Number(L.value), cv = Number(c.value); if (lv > 0 && cv > 0) { v.engine = { label: lv + "L " + cv + "-cylinder", L: lv, cyl: cv }; saveVehicles(); renderGrid(); } }; L.onchange = c.onchange = up;
+    kids.push(el("div", { class: "fields" }, el("div", {}, el("label", { textContent: "Liters" }), L), el("div", {}, el("label", { textContent: "Cylinders" }), c))); }
+  const tr = el("input", { value: v.trans || "", placeholder: "MYC, M5U, 6T45, 6T70…", "aria-label": "Transmission", onchange: () => { v.trans = tr.value.slice(0, 40); saveVehicles(); } });
+  const notes = el("textarea", { value: v.notes || "", rows: 4, style: "width:100%;background:var(--bg);color:var(--text);border:1px solid var(--axis);border-radius:8px;padding:8px;font:inherit", "aria-label": "Known issues", onchange: () => { v.notes = notes.value.slice(0, 1000); saveVehicles(); } });
+  kids.push(el("label", { textContent: "Transmission (code from glove box label or manual)" }), tr, el("label", { textContent: "Known issues and recent repairs (stays on this device; included only if you package a drive)" }), notes);
+  kids.push(el("p", { textContent: v.vin ? "A VIN is remembered on this device to choose this profile automatically. It isn't included in exports." : "No VIN remembered yet. It's read on connect and stays on this device." }));
+  if (v.vin) kids.push(el("button", { textContent: "Forget VIN", onclick: () => { delete v.vin; saveVehicles(); openVehicle(); } }));
+  kids.push(el("h3", { textContent: "Add another vehicle" }));
+  const add = el("input", { placeholder: "Year make model", "aria-label": "New vehicle" });
+  kids.push(add, el("button", { textContent: "Add vehicle", onclick: () => { const name = add.value.trim().slice(0, 60); if (!name) return; const id = "v" + Date.now().toString(36); vehicles[id] = { id, name, engine: null, layout: null, afm: false, trans: "", notes: "" }; saveVehicles(); loadVehicle(id); resetLive(); renderVehicleSelect(); renderTabs(); renderGrid(); loadDrives(); openVehicle(); } }));
+  $("dlg").classList.remove("wide"); showDlg("Vehicle settings", ...kids);
 }
 
 /* ---------- Wiring ---------- */
@@ -907,14 +1456,17 @@ $("stop").onclick = () => stop(false);
 $("editBtn").onclick = () => setEdit(!editMode);
 $("addBtn").onclick = openAdd;
 $("resetBtn").onclick = () => { dash[tab] = buildDash(tab); commit(); };
-$("moreBtn").onclick = openMore;
+$("moreBtn").onclick = () => { $("dlg").classList.remove("wide"); openMore(); };
+$("reviewBtn").onclick = openReview;
+$("vehBtn").onclick = openVehicle;
+$("vehicle").onchange = async e => { loadVehicle(e.target.value); resetLive(); renderTabs(); renderGrid(); await loadDrives(); };
 let lastCols = cols();
 addEventListener("resize", () => { if (cols() !== lastCols) { lastCols = cols(); renderGrid(); } });
 document.addEventListener("visibilitychange", async () => { if (session && document.visibilityState === "visible") { try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {} } });
 setInterval(() => { painters.forEach(p => { try { p(); } catch (e) { console.error(e); } }); }, 250);
 $("stamp").textContent = "Build " + BUILD_ID + " · " + BUILD_UTC;
 if (!("serial" in navigator)) { $("unsupported").hidden = false; $("connect").disabled = true; }
-renderTabs(); renderGrid(); loadDrives();
+loadVehicle(vid); resetLive(); renderVehicleSelect(); renderTabs(); renderGrid(); loadDrives();
 </script>
 </body>
 </html>
