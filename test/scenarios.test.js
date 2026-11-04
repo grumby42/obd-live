@@ -49,7 +49,7 @@ const four = { name: "Equinox", engine: { L: 2.4, cyl: 4 }, layout: "I" };
 let seed = 7; const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647, noise = a => (rand() - .5) * 2 * a;
 function drive(kind, o = {}) {
   const prof = { city: [[0,20,0],[25,90,35],[0,30,0],[32,120,35],[0,45,0],[28,120,35],[0,30,0],[35,180,35],[0,25,0],[30,200,35],[0,40,0],[35,240,35]], interstate: [[0,30,0],[45,120,30],[70,1500,70]], short: [[0,15,0],[25,120,25],[0,10,0]], mixed: [[0,30,0],[32,300,35],[0,30,0],[65,600,70],[0,30,0],[30,300,35]] }[kind];
-  const rows = [], t0 = 1.7e12; let t = 0, mph = 0, ect = o.warmStart ? 195 : 70, trans = o.warmStart ? 170 : 70;
+  const total = prof.reduce((n, p) => n + p[1], 0), rows = [], t0 = 1.7e12; let t = 0, mph = 0, ect = o.warmStart ? 195 : 70, trans = o.warmStart ? 170 : 70;
   for (const [, dur, target] of prof) for (let i = 0; i < dur; i++, t++) {
     const prev = mph; mph += Math.max(-3, Math.min(2.5, target - mph)); if (target && Math.abs(mph - target) < 1) mph = target + noise(.4);
     const acc = mph - prev, ratio = mph >= 62 ? 26 : mph >= 40 ? 36 : mph >= 25 ? 52 : 75;
@@ -71,7 +71,8 @@ function drive(kind, o = {}) {
     r.slip = o.slip !== undefined ? (mph >= 40 ? o.slip + noise(10) : 80 + noise(40)) : (mph >= 40 ? 8 + noise(5) : 60 + noise(30));
     if (o.slipFlat) r.slip = 42;
     for (let c = 1; c <= (o.cyl || 8); c++) r["mis" + c] = 0;
-    if (o.mis4) r.mis4 = o.mis4;
+    if (o.mis4) r.mis4 = Math.floor(o.mis4 * (t + 1) / total);
+    if (o.misHeld) r.mis4 = o.misHeld;
     rows.push(r);
   }
   if (o.flares) [400, 700, 1000, 1300].forEach(k => { if (rows[k]) { rows[k].rpm += 400; rows[k + 1].rpm += 450; rows[k + 2].rpm += 250; } });
@@ -98,12 +99,19 @@ r = rep(drive("interstate", { transMax: 232 })); assert(has(r, /above the guide/
 r = rep(drive("interstate", { transMax: 255 })); assert(has(r, /very hot/, "attention"));
 r = rep(drive("interstate", { coolHigh: 245 })); assert(has(r, /Coolant ran hot/, "attention"));
 r = rep(drive("interstate", { coolHigh: 170, transMax: 150 })); assert(has(r, /Coolant stayed low/), "thermostat " + bad(r));
-r = rep(drive("interstate", { slip: 70 })); assert(has(r, /Moderate torque converter slip/, "watch"), "slip mod " + bad(r));
+r = rep(drive("interstate", { slip: 70 })); assert(has(r, /Moderate torque converter slip/, "info"), "slip mod " + bad(r));
 r = rep(drive("interstate", { slip: 180 })); assert(has(r, /High torque converter slip/, "watch"), "slip high unconfirmed");
-r = rep(drive("interstate", { slip: 180, scatter: true })); assert(has(r, /High torque converter slip/, "attention"), "slip confirmed " + bad(r)); assert(has(r, /wasn't locked/), "ratio scatter");
+r = rep(drive("interstate", { slip: 180, scatter: true })); assert(has(r, /High torque converter slip/, "watch"), "slip capped " + bad(r)); assert(has(r, /wasn't locked/), "ratio scatter");
 r = rep(drive("interstate", { flares: true })); assert(has(r, /rpm flare/), "flares " + bad(r));
 r = rep(drive("interstate", { mis4: 6 })); assert(has(r, /concentrated on cylinder 4/, "watch")); { const f = r.findings.find(x => /cylinder 4/.test(x.title)); assert(/AFM lifter/.test(f.causes.join()), "AFM link"); assert(/Bank 2/.test(f.evidence), "bank link"); }
-r = rep(drive("interstate", { mis4: 30, bank: true })); assert(has(r, /How these findings may connect/), "cross-link"); assert.strictEqual(r.verdict.level, "attention");
+r = rep(drive("interstate", { mis4: 30, bank: true })); assert(has(r, /How these findings may connect/), "cross-link");
+r = rep(drive("interstate", { misHeld: 25 })); assert(has(r, /No new misfire counts/, "info"), "held counter"); assert(!bad(r).some(x => /Misfire/.test(x)));
+r = rep(drive("interstate", { mis4: 800 })); assert(has(r, /concentrated on cylinder 4/, "attention"), "high rate");
+assert.strictEqual(api.parseMode06Full("46A10B2400320000000000".slice(0, 20), 0xA1)[0].pass, null);
+r = rep(drive("interstate"), sierra, { mode06: [{ mid: 0xA5, name: "Misfire cylinder 4", tid: 12, val: 9, min: 0, max: 1, pass: false }] }); assert(!has(r, /self-test/), "misfire MID neither pass nor fail");
+const missing = drive("interstate"); missing.slice(100, 110).forEach(x => delete x.rpm); r = rep(missing); assert(!has(r, /MAP and barometric/), "missing rpm isn't engine off");
+const lows = drive("interstate"); lows.slice(200, 400).forEach(x => x.volt = 11.9); r = rep(lows); assert(has(r, /dipped low/, "watch"), "median mustn't hide low voltage");
+r = rep(drive("interstate", { coolHigh: 205 })); assert(!has(r, /Coolant stayed low/), "warm-up mustn't read as thermostat");
 r = rep(drive("interstate", { gearBad: true })); assert.strictEqual(r.validation.gear, "suspect"); assert(has(r, /Ignored a questionable GM reading: gear/));
 r = rep(drive("interstate", { slipFlat: true })); assert.strictEqual(r.validation.slip, "suspect"); assert(!has(r, /torque converter slip/i));
 r = rep(drive("interstate", { noBank2: true, cyl: 4 }), four); assert(!has(r, /Banks disagree/)); assert.deepStrictEqual(bad(r), [], "4cyl " + bad(r));

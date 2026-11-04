@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261104-1645Z">
-<meta name="build-timestamp-utc" content="2026-11-04T16:45:24Z">
+<meta name="build-id" content="OBD-20261104-1648Z">
+<meta name="build-timestamp-utc" content="2026-11-04T16:48:11Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -97,7 +97,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261104-1645Z", BUILD_UTC = "2026-11-04T16:45:24Z";
+const BUILD_ID = "OBD-20261104-1648Z", BUILD_UTC = "2026-11-04T16:48:11Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -413,7 +413,7 @@ function validateSignals(rows, meta) {
     out.gear = med.length < 2 ? "unknown" : med.every((v, i) => !i || v < med[i - 1]) ? "ok" : "suspect";
   }
   const flat = k => { const a = nums(drive, k); return mins >= 5 && a.length >= 30 && Math.max(...a) - Math.min(...a) < 1e-6; };
-  if (has("slip")) { const a = nums(drive, "slip"); out.slip = flat("slip") ? "suspect" : a.length && mins >= 3 ? (pctl(a.map(Math.abs), .5) < 900 ? "ok" : "suspect") : "unknown"; }
+  if (has("slip")) { const a = nums(drive, "slip"); out.slip = flat("slip") || (a.length && mins >= 3 && pctl(a.map(Math.abs), .5) >= 900) ? "suspect" : "unknown"; }
   for (const k of ["trans", "oilt"]) if (has(k)) {
     const a = nums(rows, k), first = a[0], amb = nums(rows, "amb")[0] ?? nums(rows, "iat")[0], cold = nums(rows, "ect")[0] < 100;
     if (flat(k)) out[k] = "suspect";
@@ -455,7 +455,7 @@ function ratioClusters(rows) {
   });
   return { n, clean: n ? tight / n : null };
 }
-function flares(rows) {
+function flares(rows, gearOk) {
   const ev = [];
   for (let i = 3; i < rows.length; i++) {
     const a = rows[i - 3], b = rows[i];
@@ -463,6 +463,7 @@ function flares(rows) {
     if (b.rpm - a.rpm >= 250 && Math.abs(b.mph - a.mph) <= 1.5 && typeof a.tps === "number" && typeof b.tps === "number" && b.tps - a.tps <= 3) {
       // A downshift holds its higher ratio; a flare falls back within a few seconds at the same speed.
       const after = rows.slice(i + 1, i + 7).find(r => r.rpm <= a.rpm * 1.05 && Math.abs(r.mph - b.mph) <= 3);
+      if (after && gearOk && (a.gear !== b.gear || after.gear !== b.gear)) continue;
       if (after && (!ev.length || b.t - ev[ev.length - 1].t > 15000)) ev.push({ t: b.t, mph: b.mph, rise: b.rpm - a.rpm });
     }
   }
@@ -479,7 +480,7 @@ function parseMode06Full(raw, mid) {
       if (b[i] !== mid) { i++; continue; }
       const sgn = b[i + 2] >= 0x80, rd = (a, c) => sgn ? s16(a, c) : u16(a, c);
       const val = rd(b[i + 3], b[i + 4]), min = rd(b[i + 5], b[i + 6]), max = rd(b[i + 7], b[i + 8]);
-      const notRun = val === 0 && min === 0 && max === 0;
+      const notRun = min === 0 && max === 0; // no usable limit reported
       out.push({ mid, midHex, name: midName(mid), tid: b[i + 1], uas: b[i + 2], val, min, max, pass: notRun ? null : val >= min && val <= max });
       i += 9;
     }
@@ -513,10 +514,10 @@ function analyzeDrive(input) {
   // Codes and status are the highest-authority inputs.
   const codes = meta.codes;
   if (codes) {
-    const all = [...(codes.stored || []).map(c => [c, "stored"]), ...(codes.pending || []).map(c => [c, "pending"]), ...(codes.permanent || []).map(c => [c, "permanent"])];
+    const all = [...(codes.stored || []).map(c => [c, "stored"]), ...(codes.pending || []).map(c => [c, "pending"]), ...(codes.permanent || []).map(c => [c, "permanent"])]; // read at connection
     tested.push("Trouble codes");
     if (all.length) add("Codes", (codes.stored || []).length ? "attention" : "watch", all.length + " trouble code" + (all.length > 1 ? "s" : "") + " reported", all.map(([c, t]) => c + " (" + t + ", " + dtcFamily(c) + ")").join("; "), "A code means the computer's own test failed or is close to failing. It names the failed test, not always the failed part.", [], ["Look up each code in the service manual for this vehicle before replacing parts."], LIT.j1979);
-    else add("Codes", "good", "No stored, pending, or permanent codes", "All three requests returned none.", "The computer isn't reporting a failed emissions-related test.", [], [], LIT.j1979);
+    else { const inc = meta.monitor && meta.monitor.monitors ? meta.monitor.monitors.filter(x => x.state === "incomplete").map(x => x.name) : []; add("Codes", "good", "No stored, pending, or permanent codes when read", "All three requests returned none at connection. A code set later in this drive wouldn't appear." + (inc.length ? " Monitors not finished: " + inc.join(", ") + "." : ""), "The computer wasn't reporting a failed emissions-related test when read.", [], [], LIT.j1979); }
   } else need("Codes", "Codes weren't read during this drive.");
   if (meta.monitor && meta.monitor.mil) add("Codes", "attention", "Check-engine light is commanded on", meta.monitor.dtcCount + " confirmed codes in the status report.", "The computer has confirmed a fault.", [], [], LIT.j1979);
   const fsBad = nums(rows, "fuelstat", r => r.fuelstat === 8 || r.fuelstat === 16).length;
@@ -526,28 +527,29 @@ function analyzeDrive(input) {
   const m06 = (meta.mode06 || []).filter(x => x.pass !== null);
   if (m06.length) {
     tested.push("Computer self-tests (" + m06.length + ")");
-    const failed = m06.filter(x => x.pass === false && !(x.mid >= 0xA1 && x.mid <= 0xAD));
+    const isMis = x => x.mid >= 0xA1 && x.mid <= 0xAD, nonMis = m06.filter(x => !isMis(x)), failed = nonMis.filter(x => x.pass === false);
+    const unfinished = meta.monitor && meta.monitor.monitors ? meta.monitor.monitors.filter(x => x.state === "incomplete").map(x => x.name) : [], unfinishedNote = unfinished.length ? " Monitors not finished, so these results may be old or missing: " + unfinished.join(", ") + "." : "";
     if (failed.length) add("Computer self-tests", "attention", failed.length + " self-test result" + (failed.length > 1 ? "s" : "") + " outside the computer's limits", failed.slice(0, 8).map(x => x.name + " test " + x.tid.toString(16).toUpperCase() + ": " + x.val + " vs " + x.min + "–" + x.max).join("; "), "These are limits the vehicle's computer applies to itself, so they carry more weight than general guides.", [], ["Check the service manual for this monitor. A failed result can appear before a code sets."], LIT.j1979);
-    else add("Computer self-tests", "good", "All reported self-tests are within the computer's limits", m06.length + " results checked.", "Includes whatever monitors have run since codes were last cleared.", [], [], LIT.j1979);
+    else if (nonMis.length) add("Computer self-tests", "good", "Reported self-tests were within the computer's limits when read", nonMis.length + " results, read at connection. Misfire counters are judged separately." + unfinishedNote, "Includes whatever monitors have run since codes were last cleared.", [], [], LIT.j1979);
   } else need("Computer self-tests", "No test results were recorded.");
 
   // Cooling
   const ect = nums(rows, "ect");
   if (ect.length >= 10) {
     tested.push("Engine cooling");
-    const peak = pctl(ect, .99), plateauWin = rows.filter(r => r._cruise && r.ect >= 120), plateau = plateauWin.length >= 60 ? pctl(nums(plateauWin, "ect"), .5) : null;
+    const peak = pctl(ect, .99), plateauWin = rows.filter(r => r._cruise && r.ect >= 120).slice(-300), plateauVals = nums(plateauWin, "ect"), settled = plateauVals.length >= 120 && Math.abs(avg(plateauVals.slice(-60)) - avg(plateauVals.slice(0, 60))) <= 4, plateau = settled ? pctl(plateauVals, .5) : null;
     stats.ectPeak = peak; if (plateau !== null) stats.ectPlateau = plateau;
     if (coldStart) { const t0 = rows[0].t, to = f => { const r = rows.find(x => x.ect >= f); return r ? (r.t - t0) / 60000 : null; }; const t160 = to(160), t190 = to(190); stats.warm160 = t160;
       if (t160 !== null) add("Cooling", "info", "Warm-up: " + rnd(t160, 1) + " minutes to 160°F", "Started at " + rnd(firstEct) + "°F" + (t190 !== null ? ", reached 190°F at " + rnd(t190, 1) + " minutes." : "."), "Warm-up time depends heavily on outside temperature and how hard the engine is working.", [], [], "Measured from this drive"); }
     if (peak > 235) add("Cooling", "attention", "Coolant ran hot", "99th percentile " + rnd(peak) + "°F.", "That's hot enough to compare against the dash gauge and any warning.", ["Heavy load or heat", "Low coolant, thermostat, fan, or water pump"], ["Check coolant level with the engine cold.", "Note whether it happened at idle or at speed."]);
     else if (peak > 225) add("Cooling", "watch", "Coolant ran warm", "99th percentile " + rnd(peak) + "°F.", "This may be normal under heavy load, but it deserves comparison with your other drives.", ["Towing, grades, or hot weather"], ["Watch whether this repeats without heavy load."]);
     else if (peak >= 170) add("Cooling", "good", "Coolant stayed in a sensible range", "Peak " + rnd(peak) + "°F" + (plateau !== null ? ", steady-cruise " + rnd(plateau) + "°F." : "."), "No sign of overheating on this drive.");
-    if (plateau !== null && plateau < 175 && trip.cruiseSeconds >= 300) add("Cooling", "watch", "Coolant stayed low during sustained cruise", "Median " + rnd(plateau) + "°F across " + rnd(trip.cruiseSeconds / 60, 1) + " cruising minutes.", "An engine that won't reach normal temperature at cruise can point to a thermostat opening early.", ["Thermostat stuck partly open", "Very cold outside air"], ["Compare with the dash gauge and repeat on a warmer day."]);
+    if (plateau !== null && plateau < 175 && trip.cruiseSeconds >= 300) add("Cooling", "watch", "Coolant stayed low during sustained cruise", "Settled at about " + rnd(plateau) + "°F over the last " + rnd(plateauVals.length / 60, 1) + " cruising minutes.", "An engine that won't reach normal temperature at cruise can point to a thermostat opening early.", ["Thermostat stuck partly open", "Very cold outside air"], ["Compare with the dash gauge and repeat on a warmer day."]);
   } else need("Cooling", "Coolant temperature wasn't recorded.");
 
   // Fuel trims: never judge from one point (Warren); compare operating regions and banks.
   const twoBanks = nums(rows, "stft2").length >= MIN_REGION && nums(rows, "ltft2").length >= MIN_REGION;
-  const regions = { idle: r => r._idle, cruise: r => r._cruise && r.load < 75, load: r => r._running && r.load >= 50 && r.load < 85 && !r._idle };
+  const regions = { idle: r => r._idle, cruise: r => r._cruise && r.load < 75, load: r => r._running && r.load >= 50 && r.load < 85 && !r._idle && !r._cruise };
   const T = {}; [1, 2].forEach(b => { T[b] = {}; for (const k in regions) T[b][k] = trimRegion(rows, b, regions[k]); });
   const bankList = twoBanks ? [1, 2] : [1], regionOK = k => T[1][k].total !== null;
   if (!warmSec) need("Fuel trims", "The engine never reached operating temperature with fuel trims available.");
@@ -556,15 +558,16 @@ function analyzeDrive(input) {
     const parts = bankList.map(b => "Bank " + b + ": " + Object.keys(regions).filter(k => T[b][k].total !== null).map(k => k + " " + signed(T[b][k].total) + "%").join(", ")).join(". ");
     bankList.forEach(b => { for (const k in regions) if (T[b][k].total !== null) stats["trim" + b + k] = T[b][k].total; });
     const worst = Math.max(...bankList.flatMap(b => Object.keys(regions).map(k => T[b][k].total).filter(v => v !== null).map(Math.abs)));
-    const idle = T[1].idle.total, cruise = T[1].cruise.total, load = T[1].load.total, idle2 = T[2].idle.total, cruise2 = T[2].cruise.total;
+    const idle = T[1].idle.total, cruise = T[1].cruise.total, load1 = T[1].load.total, idle2 = T[2].idle.total, cruise2 = T[2].cruise.total, load2 = T[2].load.total;
+    const load = twoBanks && load1 !== null && load2 !== null ? (load1 + load2) / 2 : load1, capAfm = l => vehicle.afm && l === "attention" ? "watch" : l;
     const meanIdle = twoBanks && idle !== null && idle2 !== null ? (idle + idle2) / 2 : idle, meanCruise = twoBanks && cruise !== null && cruise2 !== null ? (cruise + cruise2) / 2 : cruise;
     const afmNote = vehicle.afm ? " This engine can deactivate cylinders, which can shift trims in light-load cruise." : "";
     let patterned = false;
     if (meanIdle !== null && meanCruise !== null && meanIdle >= 10 && meanIdle - meanCruise >= 7) { patterned = true; add("Fuel trims", meanIdle >= 18 ? "attention" : "watch", "Lean correction is largest at idle and fades at speed", parts + ".", "That's the classic signature of unmetered air, because a fixed leak matters most when airflow is low." + afmNote, ["Vacuum or intake leak, including PCV and intake gaskets", "Exhaust leak ahead of the front O2 sensor", "Purge valve leaking at idle"], ["Inspect intake boots and vacuum lines.", "Compare trims at a held 2,500 rpm.", "A smoke test can confirm a leak."], LIT.warren); }
-    else if (meanCruise !== null && load !== null && meanCruise >= 8 && load >= 10 && (meanIdle === null || meanIdle < meanCruise)) { patterned = true; add("Fuel trims", load >= 18 ? "attention" : "watch", "Lean correction grows with airflow or load", parts + ".", "The computer is adding more fuel as demand rises, which is not the leak pattern." + afmNote, ["Low fuel delivery", "MAF reading low", "Fuel quality or ethanol content"], ["Test fuel pressure and volume under load.", "Check the air filter and the MAF for contamination."]); }
-    else if (bankList.every(b => Object.keys(regions).filter(k => T[b][k].total !== null).every(k => T[b][k].total <= -10)) ) { patterned = true; add("Fuel trims", worst >= 18 ? "attention" : "watch", "Rich correction across conditions", parts + ".", "The computer is removing fuel everywhere it could measure." + afmNote, ["MAF over-reporting airflow", "Leaking injector or high fuel pressure", "Fuel in the oil or purge vapor"], ["Check whether trims improve with the purge inactive, and inspect the MAF."], LIT.moore); }
+    else if (meanCruise !== null && load !== null && meanCruise >= 8 && load >= 10 && load >= meanCruise + 3 && (meanIdle === null || meanIdle < meanCruise)) { patterned = true; add("Fuel trims", capAfm(load >= 18 ? "attention" : "watch"), "Lean correction grows with airflow or load", parts + ".", "The computer is adding more fuel as demand rises, which is not the leak pattern." + afmNote, ["Low fuel delivery", "MAF reading low", "Fuel quality or ethanol content"], ["Test fuel pressure and volume under load.", "Check the air filter and the MAF for contamination."]); }
+    else if (Object.keys(regions).filter(k => T[1][k].total !== null).length >= 2 && bankList.every(b => Object.keys(regions).filter(k => T[b][k].total !== null).every(k => T[b][k].total <= -10))) { patterned = true; add("Fuel trims", worst >= 18 ? "attention" : "watch", "Rich correction across conditions", parts + ".", "The computer is removing fuel in every region with enough data." + afmNote, ["MAF over-reporting airflow", "Leaking injector or high fuel pressure", "Fuel in the oil or purge vapor"], ["Check whether trims improve with the purge inactive, and inspect the MAF."], LIT.moore); }
     if (twoBanks) { const ds = Object.keys(regions).filter(k => T[1][k].total !== null && T[2][k].total !== null).map(k => [k, T[1][k].total - T[2][k].total]).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])); stats.bankSplit = ds[0] ? ds[0][1] : null;
-      if (ds.length && Math.abs(ds[0][1]) >= 10) { patterned = true; add("Fuel trims", Math.abs(ds[0][1]) >= 18 ? "attention" : "watch", "Banks disagree by " + rnd(Math.abs(ds[0][1])) + " points at " + ds[0][0], parts + ".", "A problem in shared air or fuel usually affects both banks, so a one-sided shift narrows the search to that bank." + afmNote, ["Injector or O2 sensor on one bank", "Exhaust or intake leak on one side"], ["Compare O2 sensor behavior between banks."], LIT.warren); } }
+      if (ds.length && Math.abs(ds[0][1]) >= 10) { patterned = true; add("Fuel trims", capAfm(Math.abs(ds[0][1]) >= 18 ? "attention" : "watch"), "Banks disagree by " + rnd(Math.abs(ds[0][1])) + " points at " + ds[0][0], parts + ".", "A problem in shared air or fuel usually affects both banks, so a one-sided shift narrows the search to that bank." + afmNote, ["Injector or O2 sensor on one bank", "Exhaust or intake leak on one side"], ["Compare O2 sensor behavior between banks."], LIT.warren); } }
     if (!patterned && worst >= 10) add("Fuel trims", worst >= 20 ? "attention" : "watch", "Fuel trim beyond ±10% without a clear pattern", parts + ".", "A correction of this size is outside the usual ±10% window, but the regions tested don't isolate a cause." + afmNote, [], ["Capture idle, a held 2,500 rpm, and steady cruise when warm."], LIT.warren);
     else if (!patterned) add("Fuel trims", "good", "Fuel trims look balanced", parts + ".", "Total correction stayed within ±10% in every region with enough data.", [], [], LIT.warren);
     for (const k in regions) if (T[1][k].total === null) need("Fuel trims", "Not enough warm " + k + " data to judge that region.");
@@ -578,41 +581,45 @@ function analyzeDrive(input) {
     if (per < .55 || per > 1.6) add("Airflow", "watch", "Idle airflow looks unusual for this engine", rnd(m, 1) + " g/s at " + rnd(rp) + " rpm, " + rnd(per, 2) + " g/s per liter at a 500 rpm basis. Rule of thumb is about 1.", "This is a rough check that shifts with electrical load, air conditioning, and transmission load.", ["MAF contamination or scaling", "Unusual accessory load"], ["Repeat with accessories off."], LIT.moore);
     else add("Airflow", "good", "Idle airflow is in a believable range", rnd(m, 1) + " g/s at " + rnd(rp) + " rpm.", "This agrees with the roughly 1 g/s per liter rule of thumb, allowing for load.", [], [], LIT.moore);
   } else if (!L) need("Airflow", "Set this vehicle's engine in Vehicle settings to enable airflow checks.");
-  const veRows = rows.filter(r => r.tps >= 75 && r.rpm >= 2000 && r.maf > 0 && r.map > 0 && typeof r.iat === "number" && r._warm);
+  const baroRef = pctl(nums(rows, "baro"), .5), veRows = baroRef ? rows.filter(r => r.tps >= 80 && r.rpm >= 2000 && r.maf > 0 && typeof r.iat === "number" && r._warm) : [];
   if (L && veRows.length >= 4) {
-    const ves = veRows.map(r => { const rho = r.map * 1000 / (287.05 * ((r.iat - 32) * 5 / 9 + 273.15)), vol = r.maf / 1000 / rho, swept = L / 1000 * r.rpm / 120; return vol / swept * 100; }), ve = pctl(ves, .5), loads = nums(veRows, "load"), pkLoad = pctl(loads, .95);
+    const ves = veRows.map(r => { const rho = baroRef * 1000 / (287.05 * ((r.iat - 32) * 5 / 9 + 273.15)), vol = r.maf / 1000 / rho, swept = L / 1000 * r.rpm / 120; return vol / swept * 100; }), ve = pctl(ves, .5), loads = nums(veRows, "load"), pkLoad = pctl(loads, .95);
     stats.ve = ve; tested.push("Full-throttle breathing");
     if (ve < 70) add("Airflow", "watch", "Estimated breathing efficiency is low at high throttle", "About " + rnd(ve) + "% from " + veRows.length + " samples, peak load " + rnd(pkLoad) + "%. A healthy engine at full throttle is often in the 80s.", "Low numbers can mean a restriction or a MAF reading low. This estimate depends on brief, low-rate samples.", ["MAF reading low", "Intake or exhaust restriction", "Cam timing"], ["Repeat a full-throttle pull at a safe location and compare with fuel trims."], LIT.moore);
-    else if (ve >= 75 && ve <= 115) add("Airflow", "good", "Estimated breathing efficiency looks healthy", "About " + rnd(ve) + "% from " + veRows.length + " high-throttle samples.", "That doesn't suggest a major intake restriction, MAF under-reading, or exhaust restriction.", [], [], LIT.moore);
-  } else if (L) need("Full-throttle breathing", "Needs a warm, high-throttle pull above 2,000 rpm.");
-  const keyOn = rows.filter(r => !(r.rpm > 50) && typeof r.map === "number" && typeof r.baro === "number");
-  if (keyOn.length >= 3) { const d = Math.abs(pctl(nums(keyOn, "map"), .5) - pctl(nums(keyOn, "baro"), .5)); tested.push("MAP vs barometric sensor check"); if (d > 8) add("Sensor checks", "watch", "MAP and barometric readings disagree with the engine off", "Difference of " + rnd(d) + " kPa.", "With the engine stopped they should nearly match.", ["MAP sensor bias", "Reading taken just after shutdown"], ["Check again after sitting key-on, engine off for 30 seconds."], "Physics check"); }
+    else if (ve >= 75 && ve <= 115) add("Airflow", "good", "Estimated breathing efficiency looks healthy", "About " + rnd(ve) + "% from " + veRows.length + " high-throttle samples.", "At the throttle reached, that doesn't suggest a major restriction or MAF under-reading. This is an estimate from brief samples.", [], [], LIT.moore);
+  } else if (L) need("Full-throttle breathing", "Needs a warm, high-throttle pull above 2,000 rpm with barometric pressure logged.");
+  const keyOn = rows.filter(r => typeof r.rpm === "number" && r.rpm <= 50 && typeof r.map === "number");
+  if (keyOn.length >= 3 && baroRef) { const d = Math.abs(pctl(nums(keyOn, "map"), .5) - baroRef); tested.push("MAP vs barometric sensor check"); if (d > 8) add("Sensor checks", "watch", "MAP and barometric readings disagree with the engine off", "Difference of " + rnd(d) + " kPa.", "With the engine stopped they should nearly match.", ["MAP sensor bias", "Reading taken just after shutdown"], ["Check again after sitting key-on, engine off for 30 seconds."], "Physics check"); }
   if (coldStart && typeof nums(rows, "iat")[0] === "number") { const iat0 = nums(rows, "iat")[0]; if (Math.abs(iat0 - firstEct) > 25) add("Sensor checks", "info", "Coolant and intake sensors differed at start", rnd(firstEct) + "°F coolant vs " + rnd(iat0) + "°F intake.", "After a long cold soak they usually agree. A short restart or heat soak explains most differences.", [], ["Compare after an overnight sit."], "Physics check"); }
 
   // Combustion
   const misKeys = Object.keys(rows.reduce((o, r) => { Object.keys(r).forEach(k => { if (/^mis\d+$/.test(k)) o[k] = 1; }); return o; }, {})).filter(k => !cyl || Number(k.slice(3)) <= cyl);
   if (misKeys.length) {
     tested.push("Misfire counts");
-    const mx = misKeys.map(k => [Number(k.slice(3)), pctl(nums(rows, k), 1) ?? 0]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+    const growth = k => { const v = nums(rows, k); let g = 0; for (let i = 1; i < v.length; i++) if (v[i] > v[i - 1]) g += v[i] - v[i - 1]; return g; };
+    const held = misKeys.filter(k => (nums(rows, k)[0] ?? 0) > 0), revs = rows.reduce((s, r) => s + (r.rpm > 0 ? r.rpm / 60 * r._dt : 0), 0);
+    const mx = misKeys.map(k => [Number(k.slice(3)), growth(k)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
     stats.misTotal = mx.reduce((s, x) => s + x[1], 0);
-    if (!mx.length) add("Combustion", "good", "No misfire counts recorded", misKeys.length + " cylinders reported.", "The computer's recent misfire counters stayed at zero throughout.", [], [], LIT.j1979);
+    if (!mx.length && held.length) add("Combustion", "info", "No new misfire counts this drive", "Counters for cylinder " + held.map(k => k.slice(3)).join(", ") + " held a value from before but didn't rise.", "That earlier count may come from a previous drive. Watch whether it rises later.", [], [], LIT.j1979);
+    else if (!mx.length) add("Combustion", "good", "No misfire counts recorded", misKeys.length + " cylinders reported.", "The computer's recent misfire counters stayed at zero. They update slowly, so a brief event could be missed.", [], [], LIT.j1979);
     else {
       const tot = mx.reduce((s, x) => s + x[1], 0), single = mx.length === 1 || mx[0][1] >= tot * .7, one = mx[0][0], afmCyl = vehicle.afmCyls && vehicle.afmCyls.includes(one);
       const side = vehicle.layout === "V" && single ? (one % 2 ? 1 : 2) : null;
       const sideTrim = side && T[side].cruise.total !== null ? " Bank " + side + " holds that cylinder, with a cruise trim of " + signed(T[side].cruise.total) + "%." : "";
-      add("Combustion", tot >= 20 ? "attention" : "watch", single ? "Misfires concentrated on cylinder " + one : "Misfires across " + mx.length + " cylinders", mx.map(x => "cyl " + x[0] + ": " + rnd(x[1])).join(", ") + "." + sideTrim, single ? "One cylinder standing out points toward something specific to it, not shared fuel or air." : "Spread-out misfires point more toward a shared cause like fuel, air, or ignition supply.", single ? ["Spark plug, coil, or injector on that cylinder", "Compression or valvetrain" + (afmCyl ? ", including its AFM lifter, because this is a cylinder-deactivation cylinder" : "")] : ["Fuel pressure or quality", "Vacuum leak", "Ignition supply voltage"], ["Note whether counts occur at idle, cruise, or under load.", single ? "Swap the coil to another cylinder and see if the count moves." : "Compare with the fuel trim findings."], LIT.j1979);
+      add("Combustion", revs && tot / revs * 1000 >= 5 && tot >= 20 ? "attention" : "watch", single ? "Misfires concentrated on cylinder " + one : "Misfires across " + mx.length + " cylinders", mx.map(x => "cyl " + x[0] + ": +" + rnd(x[1])).join(", ") + " new counts over about " + rnd(revs / 1000) + "k engine revolutions." + sideTrim, single ? "One cylinder standing out points toward something specific to it, not shared fuel or air." : "Spread-out misfires point more toward a shared cause like fuel, air, or ignition supply.", single ? ["Spark plug, coil, or injector on that cylinder", "Compression or valvetrain" + (afmCyl ? ", including its AFM lifter, because this is a cylinder-deactivation cylinder" : "")] : ["Fuel pressure or quality", "Vacuum leak", "Ignition supply voltage"], ["Note whether counts occur at idle, cruise, or under load.", single ? "Swap the coil to another cylinder and see if the count moves." : "Compare with the fuel trim findings."], LIT.j1979);
     }
   } else need("Combustion", "Misfire counters weren't recorded.");
   if (usable("knock")) { const hi = pctl(nums(rows, "knock", r => r._running), .98); stats.knock = hi; if (hi >= 6) add("Combustion", "watch", "Repeated knock retard", "98th percentile " + rnd(hi, 1) + "°." + unverified("knock"), "The computer may be pulling timing to protect the engine.", ["Lower-octane fuel", "Heat or heavy load", "Carbon buildup"], ["Check fuel grade and compare under similar conditions."]); }
 
   // Electrical
-  const vr = rows.filter(r => r._running && typeof r.volt === "number"), voff = nums(rows, "volt", r => !(r.rpm > 50));
+  const vr = rows.filter(r => r._running && typeof r.volt === "number"), voff = nums(rows, "volt", r => typeof r.rpm === "number" && r.rpm <= 50);
   if (vr.length >= 20) {
     tested.push("Charging voltage");
     const lo = pctl(nums(vr, "volt"), .05), hi = pctl(nums(vr, "volt"), .95), med = pctl(nums(vr, "volt"), .5); stats.voltMed = med;
-    const lowFor = secondsTrue(rows, r => r._running && r.volt < 12.4), highFor = secondsTrue(rows, r => r._running && r.volt > 15.2);
+    const lowFor = secondsTrue(rows, r => r._running && r.volt < 12.4), highFor = secondsTrue(rows, r => r._running && r.volt > 15.5);
     if (lowFor >= 60 && med < 12.6) add("Electrical", "attention", "Charging voltage stayed low", "Median " + rnd(med, 1) + " V, under 12.4 V for " + rnd(lowFor) + " seconds.", "A running engine should normally hold above resting battery voltage, though GM systems can drop to save fuel.", ["Alternator, belt, or cable fault", "Failing battery"], ["Test the battery and alternator."]);
-    else if (highFor >= 30) add("Electrical", "attention", "Charging voltage ran high", "Above 15.2 V for " + rnd(highFor) + " seconds.", "Sustained high voltage can damage batteries and electronics.", ["Voltage regulation fault"], ["Test the charging system."]);
+    else if (lowFor >= 60) add("Electrical", "watch", "Charging voltage dipped low for a while", "Under 12.4 V for " + rnd(lowFor) + " seconds, median " + rnd(med, 1) + " V.", "GM systems can lower voltage to save fuel, but a long stretch this low is worth comparing with other drives.", ["Fuel-saving charge strategy", "Weak battery or alternator"], ["Test the charging system if this repeats."]);
+    else if (highFor >= 120) add("Electrical", "attention", "Charging voltage ran high", "Above 15.5 V for " + rnd(highFor) + " seconds.", "Sustained high voltage can damage batteries and electronics.", ["Voltage regulation fault"], ["Test the charging system."]);
     else add("Electrical", "good", "Charging voltage looks normal", "Typical range " + rnd(lo, 1) + "–" + rnd(hi, 1) + " V while running.", "GM systems can intentionally vary voltage, so some movement is expected.");
     if (voff.length >= 3 && pctl(voff, .5) < 12) add("Electrical", "watch", "Battery was low before start", rnd(pctl(voff, .5), 1) + " V with the engine off.", "A rested battery is usually near 12.6 V. Readings right after a start or shutdown can mislead.", ["Weak battery", "Parasitic drain"], ["Measure after sitting overnight."]);
   } else need("Electrical", "Running voltage wasn't recorded long enough.");
@@ -636,19 +643,19 @@ function analyzeDrive(input) {
   if (clusters.n >= 60) {
     tested.push("Gear ratio stability");
     if (clusters.clean < .75) add("Transmission", "watch", "Engine speed wasn't locked closely to road speed at steady cruise", rnd(clusters.clean * 100) + "% of " + clusters.n + " cruise samples sat on a stable ratio.", "This standard-data check doesn't rely on GM requests. Scatter can mean torque converter slip, but hills and frequent shifts also cause it.", ["Normal controlled converter slip or grade changes", "Slipping clutch or converter"], ["Repeat on a flat road at a constant speed and open the rpm-vs-speed scatter."]);
-    else add("Transmission", "good", "Engine speed tracked road speed cleanly at cruise", rnd(clusters.clean * 100) + "% of " + clusters.n + " cruise samples sat on a stable ratio.", "That doesn't suggest slipping at the steady speeds in this drive. It can't test full-throttle slip or an intermittent fault.");
+    else add("Transmission", "good", "Engine speed tracked road speed steadily at cruise", rnd(clusters.clean * 100) + "% of " + clusters.n + " cruise samples sat on a stable ratio.", "The ratio was stable, not necessarily locked: steady converter slip would look the same. It doesn't suggest erratic slipping at these speeds, and it can't test full-throttle slip or an intermittent fault.");
   } else need("Gear ratio stability", "Needs at least a minute of steady driving above 40 mph.");
-  const fl = flares(rows); stats.flares = fl.length;
-  if (fl.length >= 2 || (fl.length === 1 && trip.miles < 5)) add("Transmission", fl.length >= 4 ? "attention" : "watch", fl.length + " possible rpm flare" + (fl.length > 1 ? "s" : ""), fl.slice(0, 5).map(x => "+" + rnd(x.rise) + " rpm at " + rnd(x.mph) + " mph").join(", ") + ".", "Engine speed rose and fell back without a matching speed or throttle change, which is what slipping can look like. One-second data can also catch a quick downshift.", ["Clutch or converter slip", "Downshift on a grade", "Clearing wheel spin"], ["Note where these occurred and whether you felt them.", "Share the CSV with your transmission shop."]);
+  const fl = flares(rows, val.gear === "ok"); stats.flares = fl.length;
+  if (fl.length >= 2 || (fl.length === 1 && trip.miles < 5)) add("Transmission", "watch", fl.length + " possible rpm flare" + (fl.length > 1 ? "s" : ""), fl.slice(0, 5).map(x => "+" + rnd(x.rise) + " rpm at " + rnd(x.mph) + " mph").join(", ") + ".", "Engine speed rose and fell back without a matching speed or throttle change, which is what slipping can look like. Normal converter unlock and relock or a quick downshift can look the same in one-second data.", ["Clutch or converter slip", "Downshift on a grade", "Clearing wheel spin"], ["Note where these occurred and whether you felt them.", "Share the CSV with your transmission shop."]);
   if (usable("slip") && val.slip !== "suspect") {
     const s = nums(rows, "slip", r => r._cruise).map(Math.abs);
     if (s.length >= 30) { tested.push("Torque converter slip"); const med = pctl(s, .5), hi = pctl(s, .95); stats.slipCruise = med; stats.slipCruiseP95 = hi;
-      const sustained = secondsTrue(rows, r => r._cruise && Math.abs(r.slip) > 100), confirmed = clusters.clean !== null && clusters.clean < .8;
-      if (med > 100 || (sustained >= 30 && confirmed)) add("Transmission", confirmed ? "attention" : "watch", "High torque converter slip at steady cruise", "Median " + rnd(med) + " rpm, 95th percentile " + rnd(hi) + " rpm." + unverified("slip") + (confirmed ? " The standard rpm-to-speed check agrees." : " The standard rpm-to-speed check doesn't confirm it."), "Some controlled slip is normal, especially below full lockup, but sustained high slip at steady cruise adds heat.", ["Converter not locking", "Fluid or control fault", "Normal operating strategy at that speed"], ["Check temperature during the same stretch.", "Compare with your shop's scan tool."]);
-      else if (med > 50) add("Transmission", "watch", "Moderate torque converter slip at cruise", "Median " + rnd(med) + " rpm." + unverified("slip"), "This can be normal controlled slip, so the trend across drives matters most.", [], ["Compare with later drives at the same speed."]);
+      const sustained = secondsTrue(rows, r => r._cruise && Math.abs(r.slip) > 100);
+      if (med > 100 || sustained >= 30) add("Transmission", "watch", "High torque converter slip at steady cruise", "Median " + rnd(med) + " rpm, 95th percentile " + rnd(hi) + " rpm." + unverified("slip"), "Some controlled slip is normal, especially below full lockup, but sustained high slip at steady cruise adds heat.", ["Converter not locking", "Fluid or control fault", "Normal operating strategy at that speed"], ["Check temperature during the same stretch.", "Compare with your shop's scan tool."]);
+      else if (med > 50) add("Transmission", "info", "Moderate torque converter slip at cruise", "Median " + rnd(med) + " rpm." + unverified("slip"), "This can be normal controlled slip, especially in fuel-saving operation, so the trend across drives matters most.", [], ["Compare with later drives at the same speed."]);
       else add("Transmission", "good", "Torque converter slip was low at cruise", "Median " + rnd(med) + " rpm, 95th percentile " + rnd(hi) + " rpm." + unverified("slip"), "The converter appears close to locked during steady driving."); }
   }
-  if (usable("gear") && val.gear === "ok") { let ch = 0, prev = null, hwyMiles = 0; rows.forEach(r => { if (r.mph >= 50 && r._steady) { hwyMiles += r.mph * r._dt / 3600; if (prev !== null && r.gear !== prev) ch++; prev = r.gear; } }); stats.hunting = hwyMiles ? ch / hwyMiles : null; if (hwyMiles >= 5 && ch / hwyMiles > 1) add("Transmission", "watch", "Frequent shifts at steady highway speed", rnd(ch) + " gear changes over " + rnd(hwyMiles, 1) + " steady miles.", "Busy shifting adds heat and may be noticeable as hunting.", ["Hills or wind", "Tow-mode or calibration behavior"], ["Compare on a flat stretch."]); }
+  if (usable("gear") && val.gear === "ok") { let ch = 0, prev = null, hwyMiles = 0; rows.forEach(r => { if (r.mph >= 50 && r._steady) { hwyMiles += r.mph * r._dt / 3600; if (prev !== null && r.gear !== prev) ch++; prev = r.gear; } else prev = null; }); stats.hunting = hwyMiles ? ch / hwyMiles : null; if (hwyMiles >= 5 && ch / hwyMiles > 1) add("Transmission", "watch", "Frequent shifts at steady highway speed", rnd(ch) + " gear changes over " + rnd(hwyMiles, 1) + " steady miles.", "Busy shifting adds heat and may be noticeable as hunting.", ["Hills or wind", "Tow-mode or calibration behavior"], ["Compare on a flat stretch."]); }
   if (trip.highLoadSeconds < 5) need("Transmission under load", "This drive had almost no hard acceleration, so slip under load wasn't tested.");
 
   // Catalyst, O2
@@ -670,19 +677,19 @@ function analyzeDrive(input) {
   const peers = history.filter(d => d.review && d.review.stats && d.review.stats.kind === trip.kind && d.id !== meta.id);
   if (peers.length >= 3) {
     tested.push("Comparison with " + peers.length + " similar drives");
-    const compare = [["transPeak", "Peak transmission temperature", "°F", 15, 0], ["transCruise", "Cruise transmission temperature", "°F", 12, 0], ["ectPlateau", "Cruise coolant temperature", "°F", 10, 0], ["trim1idle", "Bank 1 idle fuel trim", "%", 6, 1], ["trim1cruise", "Bank 1 cruise fuel trim", "%", 6, 1], ["trim2idle", "Bank 2 idle fuel trim", "%", 6, 1], ["trim2cruise", "Bank 2 cruise fuel trim", "%", 6, 1], ["slipCruise", "Cruise converter slip", " rpm", 30, 0], ["voltMed", "Running voltage", " V", .5, 1], ["idleMafPerL", "Idle airflow per liter", "", .25, 2], ["mpg", "Estimated MPG", " mpg", 15, 1], ["ratioClean", "Cruise ratio stability", "", .12, 2]];
+    const compare = [["transPeak", "Peak transmission temperature", "°F", 15, 0], ["transCruise", "Cruise transmission temperature", "°F", 12, 0], ["ectPlateau", "Cruise coolant temperature", "°F", 10, 0], ["trim1idle", "Bank 1 idle fuel trim", "%", 6, 1], ["trim1cruise", "Bank 1 cruise fuel trim", "%", 6, 1], ["trim2idle", "Bank 2 idle fuel trim", "%", 6, 1], ["trim2cruise", "Bank 2 cruise fuel trim", "%", 6, 1], ["slipCruise", "Cruise converter slip", " rpm", 30, 0], ["voltMed", "Running voltage", " V", .5, 1], ["idleMafPerL", "Idle airflow per liter", "", .25, 2], ["mpg", "Estimated MPG", " mpg", 3, 1], ["ratioClean", "Cruise ratio stability", "", .12, 2]];
     let changed = 0;
     compare.forEach(([k, label, unit, thr, d]) => { const past = peers.map(p => p.review.stats[k]).filter(v => typeof v === "number"), now = stats[k]; if (past.length < 3 || typeof now !== "number") return; const med = pctl(past, .5); if (Math.abs(now - med) >= thr) { changed++; add("Compared with your baseline", "watch", label + " changed from your normal", rnd(now, d) + unit + " now vs a median of " + rnd(med, d) + unit + " across " + past.length + " " + trip.kind.toLowerCase() + " drives.", "A change on the same kind of drive is often more meaningful than any fixed limit, but weather and load can explain it.", [], ["See whether the change repeats on the next similar drive."], "Your own history"); } });
     if (!changed) add("Compared with your baseline", "good", "In line with your similar drives", "No tracked measure moved past its change threshold across " + peers.length + " " + trip.kind.toLowerCase() + " drives.", "Stability across drives is a useful sign, within what these measures can see.", [], [], "Your own history");
   } else need("Baseline comparison", "Needs at least 3 saved " + trip.kind.toLowerCase() + " drives on this vehicle (" + peers.length + " so far).");
 
   // Cross-system reasoning
-  const lev = (s, l) => F.some(f => f.system === s && f.level === l), anyBad = s => lev(s, "attention") || lev(s, "watch");
+  const lev = (s, l) => F.some(f => f.system === s && f.level === l), anyBad = s => lev(s, "attention") || lev(s, "watch"), misBad = F.some(f => f.system === "Combustion" && /Misfire/.test(f.title) && (f.level === "attention" || f.level === "watch")), lowV = F.some(f => /Charging voltage (stayed|dipped) low/.test(f.title));
   const links = [];
-  if (anyBad("Combustion") && anyBad("Fuel trims")) links.push("Misfires and fuel-trim corrections appear together. Check whether they share a bank or condition before treating them as separate problems.");
-  if (F.some(f => /Lean correction is largest at idle/.test(f.title)) && anyBad("Combustion")) links.push("An idle-biased lean pattern with misfires makes an air leak near a cylinder worth checking early.");
+  if (misBad && anyBad("Fuel trims")) links.push("Misfires and fuel-trim corrections appear together. Check whether they share a bank or condition before treating them as separate problems.");
+  if (F.some(f => /Lean correction is largest at idle/.test(f.title)) && misBad) links.push("An idle-biased lean pattern with misfires makes an air leak near a cylinder worth checking early.");
   if (F.some(f => f.system === "Transmission" && /rpm flare|ratio|Engine speed wasn't|converter slip/i.test(f.title) && f.level !== "good") && F.some(f => f.system === "Transmission" && /temperature|fluid/i.test(f.title) && f.level !== "good" && f.level !== "info")) links.push("Slip-type signs and elevated transmission temperature point in the same direction, because slip creates heat.");
-  if (anyBad("Electrical") && anyBad("Combustion")) links.push("Low system voltage can weaken ignition, so resolve the charging finding before chasing misfires.");
+  if (lowV && misBad) links.push("Low system voltage can weaken ignition, so resolve the charging finding before chasing misfires.");
   if (anyBad("Cooling") && (F.some(f => f.system === "Transmission" && f.level !== "good" && f.level !== "info"))) links.push("Coolant and transmission heat rising together suggests load or cooling capacity. The transmission cooler also depends on engine cooling.");
   links.forEach(t => add("Connecting the findings", "info", "How these findings may connect", t, "This is a hypothesis to test, not a diagnosis.", [], [], "Cross-signal reasoning"));
 
@@ -691,7 +698,7 @@ function analyzeDrive(input) {
   const level = att.length ? "attention" : wat.length ? "watch" : tested.length >= 3 ? "good" : "limited";
   const top = (att.length ? att : wat).slice(0, 3).map(f => f.title.toLowerCase());
   const headline = level === "attention" ? att.length + " finding" + (att.length > 1 ? "s" : "") + " deserve attention" : level === "watch" ? wat.length + " item" + (wat.length > 1 ? "s" : "") + " to watch, nothing urgent found" : level === "good" ? "Nothing stood out in what this drive could test" : "Too little data for a meaningful review";
-  const detail = (top.length ? "Top items: " + top.join("; ") + ". " : "") + "This " + trip.kind.toLowerCase() + " drive tested " + tested.length + " area" + (tested.length === 1 ? "" : "s") + " and left " + na.length + " untested. A clean result only covers what this drive could exercise.";
+  const detail = (top.length ? "Top items: " + top.join("; ") + ". " : "") + "This drive (" + trip.kind.toLowerCase() + ") tested " + tested.length + " area" + (tested.length === 1 ? "" : "s") + " and left " + na.length + " untested. A clean result only covers what this drive could exercise.";
   const order = { attention: 0, watch: 1, good: 2, info: 3 };
   F.sort((a, b) => order[a.level] - order[b.level]);
   return { trip, findings: F, notAssessed: na, tested, channels: channels.size, sampleRate: rate, validation: val, stats, verdict: { level, headline, detail } };
@@ -809,6 +816,7 @@ function ratingOf(m, v) {
 function record(id, v, t) {
   latest[id] = v;
   if (v === null || v === undefined) return;
+  if (mstate[id]) mstate[id].updated = t;
   const s = series[id] || (series[id] = { t: [], v: [] }); s.t.push(t); s.v.push(v);
   if (s.t.length > 9000) { s.t.splice(0, 1000); s.v.splice(0, 1000); }
   const st = stats[id] || (stats[id] = { min: v, max: v, sum: 0, n: 0 });
@@ -821,7 +829,9 @@ function tick(now) { // once per second
   if (latest.mph !== undefined && latest.mph !== null) { addShare("drive", driveState(latest.mph, prevMph === null ? 0 : latest.mph - prevMph)); prevMph = latest.mph; }
   if (latest.gear !== undefined && latest.gear !== null) addShare("gear", String(latest.gear));
   if (latest.trans !== undefined && latest.trans !== null) addShare("temp", tempBand(latest.trans));
-  const r = { t: now }; METRICS.forEach(m => { const v = latest[m.id]; if (v !== null && v !== undefined) r[m.id] = typeof v === "number" ? Number(v.toFixed(4)) : v; }); rows.push(r);
+  // Log only fresh values: a stale reading must not count as a new sample in the review.
+  const MAX_AGE = { fast: 3000, med: 8000, slow: 1100 };
+  const r = { t: now }; METRICS.forEach(m => { const v = latest[m.id], st = mstate[m.id] || {}; if (v === null || v === undefined || (m.tier && now - (st.updated || 0) > MAX_AGE[m.tier])) return; r[m.id] = typeof v === "number" ? Number(v.toFixed(4)) : v; }); rows.push(r);
 }
 
 /* ---------- Adapter link ---------- */
@@ -887,7 +897,7 @@ async function pollOnce(m) {
   const raw = await askH(headers[s.headerIdx] || headers[0], m.cmd);
   if (m.rawHex) {
     const b = isNoData(raw) ? null : dataBytes(raw, m.pre);
-    if (b && b.length) { latest[m.id] = b.map(x => x.toString(16).padStart(2, "0")).join(""); s.status = "ok"; s.misses = 0; }
+    if (b && b.length) { latest[m.id] = b.map(x => x.toString(16).padStart(2, "0")).join(""); s.updated = Date.now(); s.status = "ok"; s.misses = 0; }
     else { latest[m.id] = null; s.misses++; if (s.misses >= 3) { s.status = "failed"; s.misses = 0; } }
     return;
   }
