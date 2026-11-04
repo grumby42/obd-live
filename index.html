@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261104-1939Z">
-<meta name="build-timestamp-utc" content="2026-11-04T19:39:53Z">
+<meta name="build-id" content="OBD-20261104-1940Z">
+<meta name="build-timestamp-utc" content="2026-11-04T19:40:02Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261104-1939Z", BUILD_UTC = "2026-11-04T19:39:53Z";
+const BUILD_ID = "OBD-20261104-1940Z", BUILD_UTC = "2026-11-04T19:40:02Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -919,7 +919,7 @@ function pearson(x, y) {
   return b && c ? a / Math.sqrt(b * c) : null;
 }
 const CROSS_PAIRS = [ ["pedal", "pedale", "Accelerator pedal sensors D and E"], ["tps", "cmdtps", "Actual and commanded throttle"], ["tps", "tpsb", "Throttle sensors A and B"], ["maf", "_mapflow", "Air flow and manifold-pressure estimate"], ["load", "absload", "Calculated and absolute load"] ];
-const CROSS_SINCE = "OBD-20261104-1940Z"; // earlier builds polled the second sensor too slowly to compare
+const CROSS_SINCE = "OBD-20261104-1939Z"; // earlier builds polled the second sensor too slowly to compare
 function crossChecks(rows, limit = 300) {
   const rs = rows.slice(-limit);
   return CROSS_PAIRS.map(([a, b, name]) => {
