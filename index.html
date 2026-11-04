@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261104-1705Z">
-<meta name="build-timestamp-utc" content="2026-11-04T17:05:55Z">
+<meta name="build-id" content="OBD-20261104-1717Z">
+<meta name="build-timestamp-utc" content="2026-11-04T17:17:39Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -70,6 +70,20 @@ label{display:block;font-size:.8rem;color:var(--muted);margin:8px 0 2px}
 table{width:100%;border-collapse:collapse;font-size:.8rem}th,td{padding:4px 6px;border-bottom:1px solid var(--grid);text-align:left}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .check{display:flex;gap:6px;align-items:center;font-size:.85rem;color:var(--text);margin:3px 0}.check input{min-height:20px;width:20px}
 #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--raised);border:1px solid var(--axis);border-radius:8px;padding:8px 12px;font-size:.85rem;max-width:calc(100vw - 32px);z-index:50}
+.w{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+body.fit,html.fit{overflow:hidden;height:100%}
+body.fit main{height:100vh;height:100dvh;display:flex;flex-direction:column;padding:6px 8px}
+body.fit footer,body.fit #unsupported{display:none}
+body.fit:not(.showctl) header,body.fit:not(.showctl) main>.bar{display:none}
+body.fit .tabs{margin:0 0 6px;flex:none}body.fit .tabs button{min-height:36px}
+body.fit #grid{flex:1;min-height:0;grid-auto-rows:unset;grid-template-rows:repeat(var(--rows),minmax(0,1fr));gap:6px}
+body.fit .w{padding:5px 8px}body.fit .w .sub{display:none}
+#ctlBtn{display:none}body.fit #ctlBtn{display:block;margin-left:auto;position:sticky;right:0;background:var(--raised);color:var(--text)}
+.evhead{grid-column:1/-1;margin:10px 0 0;font-size:.95rem}.evhint{grid-column:1/-1;font-size:.82rem;color:var(--muted);margin:0}
+#grid.ev{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));grid-auto-rows:auto}
+.evt{display:flex;flex-direction:column;gap:3px;min-width:0}.evt .w{height:180px}.evt.big2{grid-column:span 2}.evt.big2 .w{height:250px}.evt p{margin:0;font-size:.72rem;color:var(--muted)}
+.evpause{grid-column:1/-1;padding:24px 8px;text-align:center}
+.emptyhint{grid-column:1/-1;color:var(--muted);padding:20px 4px;font-size:.9rem}
 footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0}
 </style>
 </head>
@@ -87,6 +101,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
  <button id="addBtn" hidden>+ Add widget</button>
  <button id="resetBtn" hidden>Reset tab</button>
  <button id="reviewBtn" class="primary">Drive review</button>
+ <button id="screensBtn">Screens</button>
  <button id="moreBtn">Data &amp; sources</button>
 </div>
 <nav class="tabs" id="tabs" role="tablist" aria-label="Dashboards"></nav>
@@ -97,7 +112,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261104-1705Z", BUILD_UTC = "2026-11-04T17:05:55Z";
+const BUILD_ID = "OBD-20261104-1717Z", BUILD_UTC = "2026-11-04T17:17:39Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -827,8 +842,8 @@ function toast(t) { const n = $("toast"); n.textContent = t; n.hidden = false; c
 const W = (type, metrics, p, d, o = {}) => ({ type, metrics, p, d, ...o });
 const PRESETS = {
  "Health check": [ W("healthcheck",[],[4,9],[6,8]), W("healthcard",[],[4,8],[6,8]), W("needle",["rpm"],[4,4],[4,4]), W("number",["ect"],[2,3],[4,4]), W("number",["volt"],[2,3],[4,4]) ],
- Glance: [ W("needle",["rpm"],[4,4],[4,5]), W("needle",["mph"],[4,4],[4,5]), W("gearbox",[],[4,3],[4,5]),
-   W("number",["trans"],[2,3],[3,3]), W("number",["ect"],[2,3],[3,3]), W("number",["volt"],[2,3],[3,3]), W("number",["slip"],[2,3],[3,3]), W("status",[],[4,3],[12,2]) ],
+ Glance: [ W("needle",["rpm"],[2,5],[4,5]), W("needle",["mph"],[2,5],[4,5]), W("gearbox",[],[4,3],[4,5]),
+   W("number",["trans"],[2,3],[3,3]), W("number",["ect"],[2,3],[3,3]), W("number",["volt"],[2,3],[3,3]), W("number",["slip"],[2,3],[3,3]), W("status",[],[4,2],[12,2]) ],
  Transmission: [ W("gearbox",[],[4,3],[3,4]), W("needle",["trans"],[4,4],[3,4]), W("line",["slip"],[4,4],[6,4],{win:5}), W("scatter",["mph","rpm"],[4,5],[6,5]),
    W("line",["trans"],[4,4],[6,5],{win:15}), W("share",[],[4,4],[4,4],{share:"gear",view:"bars"}), W("share",[],[4,4],[4,4],{share:"temp",view:"donut"}),
    W("share",[],[4,4],[4,4],{share:"drive",view:"donut"}), W("number",["sh12"],[2,3],[3,3]), W("number",["sh23"],[2,3],[3,3]), W("number",["sh34"],[2,3],[3,3]), W("number",["ratio"],[2,3],[3,3]), W("history",["trans"],[4,4],[12,4],{stat:"max"}) ],
@@ -851,7 +866,8 @@ const vkey = k => "v." + vid + "." + k;
 function saveVehicles() { store.set("vehicles", vehicles); }
 // Earlier builds stored one layout; it belonged to the Sierra.
 if (store.get("dash", null) && !store.get("v.sierra.dash", null)) { store.set("v.sierra.dash", store.get("dash")); store.set("v.sierra.rules", store.get("rules", {})); store.set("v.sierra.customs", store.get("customs", [])); try { ["dash","rules","customs"].forEach(k => localStorage.removeItem("obd." + k)); } catch (e) {} }
-let dash, tab, customs, rules, rawDids;
+const EV = "Everything";
+let dash, tab, customs, rules, rawDids, fits = {}, evPassenger = false;
 function registerCustom(c) {
   const f = FORMULAS[c.formula]; if (!f || !/^[0-9A-F]{4}$/.test(c.did) || !/^[0-9A-F]{3}$/.test(c.header)) return;
   const m = { id: "c" + c.header + c.did, label: String(c.name).slice(0, 40), group: "Custom", cmd: "22" + c.did, pre: "62" + c.did, headers: [c.header], unit: f.unit, tier: "med", digits: f.digits, min: f.min, max: f.max, f: f.f, basis: "community" };
@@ -874,9 +890,11 @@ function loadVehicle(id) {
   vid = id; store.set("vid", vid); dropDynamic();
   const saved = store.get(vkey("dash"), null); dash = saved && typeof saved === "object" ? saved : {};
   Object.keys(PRESETS).forEach(k => { if (!Array.isArray(dash[k])) dash[k] = buildDash(k); });
+  if (store.get(vkey("glancev"), 0) !== 2) { dash.Glance = buildDash("Glance"); store.set(vkey("glancev"), 2); }
+  fits = store.get(vkey("fits"), {});
   rules = store.get(vkey("rules"), {}); customs = store.get(vkey("customs"), []); rawDids = store.get(vkey("rawdids"), []);
   customs.forEach(registerCustom); rawDids.forEach(registerRawDid);
-  tab = store.get(vkey("tab"), "Health check"); if (!dash[tab]) tab = "Health check";
+  tab = store.get(vkey("tab"), "Health check"); if (!dash[tab] && tab !== EV) tab = "Health check";
 }
 function resetLive() {
   series = {}; stats = {}; latest = {}; rows = []; flushed = 0; chunkSeq = 0; monitor = null; truck = {}; codes = null; mode06 = null; supported = null; prevMph = null; stableBuf = [];
@@ -884,7 +902,7 @@ function resetLive() {
   METRICS.forEach(m => mstate[m.id] = { status: "unknown", misses: 0, last: 0, headerIdx: 0, badSince: 0 });
 }
 resetLive();
-const cols = () => innerWidth >= 760 ? 12 : 4;
+const cols = () => innerWidth >= 760 || (innerWidth > innerHeight && innerWidth >= 560) ? 12 : 4;
 function ruleOf(m) { const o = rules[m.id]; if (o && o.off) return null; return o ? { ...(m.rule || {}), ...o } : (m.rule || null); }
 function ctx() { const v = stableBuf; return { rpm: latest.rpm, mph: latest.mph, ect: latest.ect, stable: v.length >= 5 && spread(v.map(x => x.tps)) < 4 && spread(v.map(x => x.mph)) < 3 }; }
 const spread = a => Math.max(...a) - Math.min(...a);
@@ -953,7 +971,8 @@ async function askH(header, cmd) {
 }
 function visibleIds() {
   const ids = new Set(["rpm","mph","tps","ect"]);
-  dash[tab].forEach(w => { (w.metrics || []).forEach(i => ids.add(i));
+  if (tab === EV) METRICS.forEach(m => { if (m.cmd) ids.add(m.id); });
+  (dash[tab] || []).forEach(w => { (w.metrics || []).forEach(i => ids.add(i));
     if (w.type === "gearbox") ["gear","slip","gratio"].forEach(i => ids.add(i));
     if (w.type === "misfire") for (let c = 1; c <= 8; c++) ids.add("mis" + c);
     if (w.type === "status" || w.type === "readiness") ids.add("mon");
@@ -1018,7 +1037,7 @@ async function start(link, label) {
     const known = new Set(METRICS.filter(m => m.pid).map(m => m.pid));
     supported.forEach(p => { if (p % 32 !== 0 && !known.has(p)) { const h = p.toString(16).toUpperCase().padStart(2, "0"); addDynamic({ id: "p" + h, label: "Standard PID " + h + " (raw)", group: "Raw", pid: p, cmd: "01" + h, pre: "41" + h, rawHex: true, tier: "slow", digits: 0, unit: "", min: 0, max: 255, basis: "standard" }); } });
     METRICS.forEach(m => { if (m.pid && !supported.has(m.pid)) { mstate[m.id].status = "unsupported"; (m.kids || []).forEach(k => mstate[k.id].status = "unsupported"); } });
-    renderVehicleSelect(); renderTabs(); renderGrid();
+    renderVehicleSelect(); syncEditControls(); renderTabs(); renderGrid();
     readCodes().then(readMode06).catch(() => {});
     setStatus("Live: " + label, "ok");
     $("stop").disabled = false; $("connect").disabled = $("sim").disabled = true; $("vehicle").disabled = true;
@@ -1055,6 +1074,7 @@ async function stop(keep) {
   if (wakeLock) { try { await wakeLock.release(); } catch (e) {} wakeLock = null; }
   $("stop").disabled = true; $("connect").disabled = !("serial" in navigator); $("sim").disabled = false; $("vehicle").disabled = false;
   if (!keep) setStatus("Not connected");
+  renderGrid();
 }
 function setStatus(t, c = "") { $("status").textContent = t; $("status").className = c; }
 
@@ -1348,22 +1368,39 @@ R.history = (w, box) => {
 let painters = [];
 function renderTabs() {
   const t = $("tabs"); t.textContent = "";
-  Object.keys(PRESETS).forEach(k => t.append(el("button", { role: "tab", textContent: k, "aria-selected": String(k === tab), onclick: () => { tab = k; store.set(vkey("tab"), k); renderTabs(); renderGrid(); } })));
+  [...Object.keys(PRESETS), ...Object.keys(dash).filter(k => !PRESETS[k]), EV].forEach(k => t.append(el("button", { role: "tab", textContent: k, "aria-selected": String(k === tab), onclick: () => { tab = k; store.set(vkey("tab"), k); if (k === EV) { setEdit(false); evPassenger = false; } syncEditControls(); renderTabs(); renderGrid(); } })));
+  t.append(el("button", { id: "ctlBtn", textContent: "⋯", "aria-label": "Show controls", onclick: () => { document.body.classList.toggle("showctl"); } }));
 }
 const posOf = w => w.pos[cols()] || (w.pos[cols()] = { ...flow([[Math.min(cols(), 4), 3]], cols())[0], y: 99 });
 function applyPos(w, node) { const p = posOf(w); node.style.gridColumn = (p.x + 1) + " / span " + p.w; node.style.gridRow = (p.y + 1) + " / span " + p.h; }
 function save() { store.set(vkey("dash"), dash); }
 function renderGrid() {
-  const g = $("grid"); g.textContent = ""; g.style.setProperty("--cols", cols()); painters = [];
-  const items = dash[tab]; compactTab();
+  const g = $("grid"); g.textContent = ""; g.className = ""; g.style.setProperty("--cols", cols()); painters = [];
+  if (tab === EV) { applyFit(); return renderEverything(g); }
+  const items = dash[tab]; compactTab(); applyFit();
+  if (!items.length) g.append(el("div", { class: "emptyhint", textContent: "This screen is empty. Long-press anything on another screen, or on Everything, and choose Copy to." }));
   items.forEach(w => {
     const node = el("div", { class: "w", "data-wid": w.id }); const fn = R[w.type] ? R[w.type](w, node) : null;
     const cog = el("button", { class: "gear-cog", textContent: "⚙", "aria-label": "Widget settings", onclick: e => { e.stopPropagation(); openSettings(w); } });
     const handle = el("button", { class: "gear-handle", textContent: "⤡", "aria-label": "Resize widget" });
     const mover = el("button", { class: "move-handle", textContent: "✥", "aria-label": "Move widget" });
-    node.append(cog, handle, mover); applyPos(w, node); g.append(node); w._node = node; bindDrag(w, node, handle);
+    node.append(cog, handle, mover); applyPos(w, node); g.append(node); w._node = node; bindDrag(w, node, handle); bindLongPress(node, w);
     if (fn) painters.push(fn);
   });
+}
+function isFit() { return !!session && !editMode && tab !== EV && (tab === "Glance" || !!fits[tab]); }
+function applyFit() {
+  const on = isFit(); document.body.classList.toggle("fit", on); document.documentElement.classList.toggle("fit", on); if (!on) document.body.classList.remove("showctl");
+  if (on) { const rows = Math.max(1, ...dash[tab].map(w => { const p = posOf(w); return p.y + p.h; })); $("grid").style.setProperty("--rows", rows); }
+}
+function syncEditControls() { $("editBtn").disabled = tab === EV; const custom = dash[tab] && !PRESETS[tab]; $("resetBtn").textContent = custom ? "Clear screen" : "Reset tab"; }
+function movingNow() { return !!session && !session.link.sim && latest.mph > 3; }
+function bindLongPress(node, w) {
+  let timer = null, sx = 0, sy = 0; const clear = () => { clearTimeout(timer); timer = null; };
+  node.addEventListener("pointerdown", e => { if (editMode || e.target.closest("button,input,select,summary,a")) return; sx = e.clientX; sy = e.clientY; clear(); timer = setTimeout(() => { timer = null; try { navigator.vibrate && navigator.vibrate(20); } catch (err) {} openCopy(w); }, 550); });
+  node.addEventListener("pointermove", e => { if (timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 10) clear(); });
+  ["pointerup", "pointercancel", "pointerleave"].forEach(n => node.addEventListener(n, clear));
+  node.addEventListener("contextmenu", e => { if (editMode) return; e.preventDefault(); clear(); openCopy(w); });
 }
 function compactTab(fixed) { compact(dash[tab].map(posWithId), cols(), fixed); }
 function posWithId(w) { const p = posOf(w); p.id = w.id; return p; }
@@ -1385,7 +1422,7 @@ function bindDrag(w, node, handle) {
 }
 function setEdit(on) {
   if (on && session && !session.link.sim && latest.mph > 3) { toast("Layout editing locks while moving."); return; }
-  editMode = on; $("app").classList.toggle("edit", on); $("editBtn").classList.toggle("on", on); $("editBtn").textContent = on ? "Done" : "Edit layout"; $("addBtn").hidden = $("resetBtn").hidden = !on;
+  const changed = editMode !== on; editMode = on; $("app").classList.toggle("edit", on); if (changed && tab !== EV && dash[tab]) renderGrid(); $("editBtn").classList.toggle("on", on); $("editBtn").textContent = on ? "Done" : "Edit layout"; $("addBtn").hidden = $("resetBtn").hidden = !on;
 }
 
 /* ---------- Dialogs ---------- */
@@ -1538,6 +1575,69 @@ async function openReview() {
   showDlg("Drive review: " + vehicles[vid].name, el("p", { textContent: "An automated review using generic OBD data, vehicle self-tests, your own history, and published diagnostic methods. It points you where to look; it can't confirm a diagnosis." }), el("div", { class: "bar" }, sel, del), host);
   show();
 }
+/* ---------- Copy to, custom screens, Everything ---------- */
+const METRIC_TYPES = { number: "Number with sparkline", needle: "Active needle", line: "Line graph", history: "Per-drive history" };
+function openCopy(w) {
+  if ($("dlg").open) return;
+  if (movingNow()) { toast("Copying is locked while moving."); return; }
+  $("dlg").classList.remove("wide");
+  const isMetric = !!METRIC_TYPES[w.type], type = isMetric ? el("select", { "aria-label": "Show as" }, Object.entries(METRIC_TYPES).map(([k, v]) => el("option", { value: k, textContent: v, selected: k === w.type }))) : null;
+  const send = name => {
+    const { _node, pos, id, ...rest } = w, c = JSON.parse(JSON.stringify(rest)); c.id = "c" + Date.now().toString(36) + Math.floor(Math.random() * 1e4);
+    if (type) { c.type = type.value; c.metrics = c.metrics.slice(0, c.type === "line" ? 4 : 1); c.win = c.win || 5; c.stat = c.stat || "max"; }
+    const small = c.type === "number"; c.pos = { 4: { x: 0, y: 999, w: small ? 2 : 4, h: small ? 3 : 4 }, 12: { x: 0, y: 999, w: small ? 3 : 6, h: small ? 3 : 4 } };
+    (dash[name] = dash[name] || []).push(c); store.set(vkey("dash"), dash); $("dlg").close(); renderTabs(); renderGrid(); toast("Copied to " + name + ".");
+  };
+  const names = [...Object.keys(dash).filter(k => !PRESETS[k]), ...Object.keys(PRESETS)];
+  const nw = el("input", { placeholder: "New screen name", "aria-label": "New screen name", maxLength: 30 });
+  const add = el("button", { class: "primary", textContent: "Create and copy", onclick: () => { const n = cleanScreenName(nw.value); if (n) send(n); } });
+  showDlg("Copy to…", type ? el("label", { textContent: "Show as" }) : null, type, el("h3", { textContent: "New screen" }), nw, el("div", { class: "bar" }, add), el("h3", { textContent: "Existing screens" }), el("div", { class: "bar" }, names.map(n => el("button", { textContent: n, onclick: () => send(n) }))));
+}
+function cleanScreenName(v) { const n = String(v).trim().replace(/\s+/g, " ").slice(0, 30); if (!n) { toast("Enter a name."); return null; } if (n === EV || PRESETS[n] || dash[n] || n === "__proto__") { toast("That name is already in use."); return null; } return n; }
+function openScreens() {
+  $("dlg").classList.remove("wide");
+  const nw = el("input", { placeholder: "New screen name", "aria-label": "New screen name", maxLength: 30 });
+  const rowsOut = Object.keys(dash).filter(k => !PRESETS[k]).map(n => {
+    const del = el("button", { textContent: "Delete", onclick: () => { if (del.dataset.arm !== "1") { del.dataset.arm = "1"; del.textContent = "Tap again"; return; } delete dash[n]; delete fits[n]; store.set(vkey("dash"), dash); store.set(vkey("fits"), fits); if (tab === n) tab = "Health check"; renderTabs(); renderGrid(); openScreens(); } });
+    const ren = el("input", { value: n, "aria-label": "Screen name", maxLength: 30, onchange: () => { const c = cleanScreenName(ren.value); if (!c) { ren.value = n; return; } dash[c] = dash[n]; delete dash[n]; if (fits[n]) { fits[c] = true; delete fits[n]; } if (tab === n) tab = c; store.set(vkey("dash"), dash); store.set(vkey("fits"), fits); renderTabs(); renderGrid(); openScreens(); } });
+    const fit = el("label", { class: "check" }, el("input", { type: "checkbox", checked: !!fits[n], onchange: e => { fits[n] = e.target.checked; store.set(vkey("fits"), fits); renderGrid(); } }), "Fit to one screen while connected");
+    return el("div", { class: "row", style: "display:block;padding:8px 0" }, ren, fit, del);
+  });
+  showDlg("Your screens", el("p", { textContent: "Screens belong to the selected vehicle. Long-press anything on any screen to copy it to one." }), ...(rowsOut.length ? rowsOut : [el("p", { textContent: "No custom screens yet." })]), el("h3", { textContent: "Add a screen" }), nw, el("div", { class: "bar" }, el("button", { class: "primary", textContent: "Create", onclick: () => { const n = cleanScreenName(nw.value); if (!n) return; dash[n] = []; store.set(vkey("dash"), dash); tab = n; store.set(vkey("tab"), n); syncEditControls(); renderTabs(); renderGrid(); openScreens(); } })));
+}
+const ABOUT = {
+ rpm:"How fast the engine is turning.", mph:"Road speed from the vehicle's sensors. It can differ slightly from GPS.", load:"How hard the engine is working compared with its capacity.", tps:"How far the throttle is open.", pedal:"How far you're pressing the accelerator.", map:"Pressure in the intake. It's low at idle and near outside pressure at full throttle.", maf:"How much air is entering the engine.", timing:"When the spark fires. The computer moves it constantly.", torq:"The computer's estimate of engine twist.", ect:"Engine coolant temperature, which is the main sign of engine heat.", iat:"Temperature of air entering the engine.", amb:"Outside air temperature.", cat1:"Estimated or measured catalytic converter heat.", volt:"Electrical supply at the computer, reflecting battery and alternator health.", stft1:"Fast fuel correction on bank 1. Positive means adding fuel.", ltft1:"Learned fuel correction on bank 1. It reveals longer-term problems.", stft2:"Fast fuel correction on bank 2.", ltft2:"Learned fuel correction on bank 2.", lambda:"Air-fuel mix being requested. 1.00 is chemically ideal.", frate:"Fuel use reported by the computer, when available.", fuel:"Fuel tank level.", baro:"Outside air pressure, which falls with altitude.", runtime:"Time since this engine start.", clrdist:"Miles since codes were cleared. Low numbers mean less history.", warmups:"Warm-ups since codes were cleared.", mildist:"Miles driven with the check-engine light on.", reftq:"The engine torque figure used to calculate percentage torque.", odo:"Odometer, on vehicles that report it.", gratio:"Current gear ratio, on vehicles that report it.", trans:"Transmission fluid heat. Sustained heat ages the fluid.", gear:"The gear the transmission reports.", slip:"Speed difference across the torque converter. Lots at steady cruise creates heat.", sh12:"Time taken for the 1-2 shift.", sh23:"Time taken for the 2-3 shift.", sh34:"Time taken for the 3-4 shift.", oilt:"Engine oil heat.", oilts:"Engine oil heat from the standard data set.", oilp:"Oil pressure, if this request is valid on this vehicle.", oill:"Calculated oil life. It's not a measurement of the oil.", knock:"Timing pulled back to prevent engine knock.", ratio:"Engine rpm for each mph. It's steady in a locked gear.", mpg:"Fuel economy estimated from airflow. Use it for comparison.", hp:"Power estimated from reported torque and rpm.", fuelstat:"Fuel control mode. 2 means closed loop using O2 feedback.", fuelp:"Fuel pressure, where reported.", purge:"How much fuel vapor is being drawn from the tank system.", egrc:"Commanded exhaust gas recirculation.", egre:"Difference between requested and actual EGR.", absload:"Air per intake stroke, a load figure that can exceed 100%.", cmdtps:"Throttle opening the computer is requesting.", demtq:"Torque you're requesting with the pedal.", ethanol:"Reported ethanol fuel percentage.", miltime:"Engine time with the check-engine light on.", clrtime:"Engine time since codes were cleared."
+};
+function aboutOf(m) { if (ABOUT[m.id]) return ABOUT[m.id]; if (/^o2v/.test(m.id)) return "Oxygen sensor signal. Sensor 1 is before the catalyst and sensor 2 is after."; if (/^o2t/.test(m.id)) return "Fuel correction tied to this oxygen sensor."; if (/^wb|^wc/.test(m.id)) return "Wide-range oxygen sensor reading. It measures air-fuel mix directly."; if (/^mis/.test(m.id)) return "Recent misfire count for this cylinder from the computer's monitor."; if (/^so2/.test(m.id)) return "Fuel correction from the sensor after the catalyst."; if (/^cat/.test(m.id)) return "Catalytic converter heat, often calculated."; if (/^evap/.test(m.id)) return "Fuel vapor system pressure, used in leak checks."; if (/^rail/.test(m.id)) return "Fuel rail pressure, where reported."; if (/^tps|^pedal|^reltps|^relpedal/.test(m.id)) return "A related throttle or pedal sensor. Duplicates let the computer cross-check them."; if (/^(p|r)[0-9A-F]/.test(m.id)) return "Raw value this vehicle answered. Its meaning isn't known yet."; if (m.group === "Custom") return "A reading you added."; if (m.inj) return ""; return m.label + "."; }
+function evWidgets() {
+  const F = (type, about, extra = {}, big = true) => ({ w: { id: "ev" + type + (extra.share || (extra.metrics || []).join("")), type, metrics: [], ...extra }, about, big });
+  const views = [
+    ["Vehicle status", [F("status", "Whether the check-engine light is on, and code counts."), F("gearbox", "Current gear and converter slip together."), F("misfire", "Recent misfires per cylinder, which shows whether a problem is localized."), F("readiness", "Which emissions self-tests have finished."), F("codes", "Stored, pending, and permanent trouble codes, plus freeze frame."), F("mode06", "Computer self-test results against the vehicle's own limits."), F("truck", "VIN, calibration, and odometer. It stays on this device.")]],
+    ["Gauges", ["rpm","mph","trans","ect","volt","fuel"].map(i => F("needle", "Needle gauge. Colors show its limit, if one exists.", { metrics: [i] }, false))],
+    ["Graphs and pies", [F("line", "Fuel corrections over time.", { metrics: ["stft1","ltft1","stft2","ltft2"], win: 5 }), F("line", "All major heat readings together.", { metrics: ["ect","oilt","trans"], win: 15 }), F("line", "Converter slip over time.", { metrics: ["slip"], win: 5 }), F("scatter", "Each point is engine speed against road speed. Each locked gear forms a straight ray.", { metrics: ["mph","rpm"] }), F("share", "Time in each gear.", { share: "gear", view: "bars" }), F("share", "Time in each transmission temperature band.", { share: "temp", view: "donut" }), F("share", "Time stopped, cruising, accelerating, and slowing.", { share: "drive", view: "donut" }), F("history", "Transmission temperature peak on each saved drive.", { metrics: ["trans"], stat: "max" }), F("history", "Estimated fuel economy on each saved drive.", { metrics: ["mpg"], stat: "avg" })]],
+    ["Health", [F("healthcheck", "The guided steps that exercise more of the vehicle."), F("healthcard", "System-by-system status for this session.")]]
+  ];
+  const groups = {}; METRICS.filter(m => m.id !== "mon" && !m.rawHex).forEach(m => (groups[m.group] = groups[m.group] || []).push(m));
+  Object.keys(groups).sort().forEach(g => views.push([g + " readings", groups[g].map(m => ({ ...F("number", aboutOf(m), { metrics: [m.id] }, false), metric: m }))]));
+  const raws = METRICS.filter(m => m.rawHex); if (raws.length) views.push(["Raw values", raws.map(m => ({ raw: m, about: aboutOf(m) }))]);
+  return views;
+}
+function renderEverything(g) {
+  g.className = "ev";
+  const hint = el("p", { class: "evhint", textContent: "Every reading, gauge, graph, and pie in one place, with what each one shows. Long-press any item to copy it to a screen. Use this while parked." });
+  const pause = el("div", { class: "evpause", hidden: true }, el("p", { textContent: "Everything is paused while the vehicle is moving." }), el("div", { class: "bar", style: "justify-content:center" }, el("button", { class: "primary", textContent: "Go to Glance", onclick: () => { tab = "Glance"; store.set(vkey("tab"), tab); syncEditControls(); renderTabs(); renderGrid(); } }), el("button", { textContent: "A passenger is using this", onclick: () => { evPassenger = true; } })));
+  g.append(hint, pause); const hide = [];
+  evWidgets().forEach(([title, list]) => {
+    const head = el("h2", { class: "evhead", textContent: title }); g.append(head); hide.push(head); const secTiles = [];
+    list.forEach(t => {
+      const node = el("div", { class: "w" }), wrap = el("div", { class: "evt" + (t.big ? " big2" : "") }, node, el("p", { textContent: t.about })); g.append(wrap); hide.push(wrap); secTiles.push({ wrap, t });
+      if (t.raw) { node.append(header({}, t.raw.label, "Raw")); const v = el("div", { class: "sub", style: "white-space:normal;word-break:break-all;font-size:.85rem" }); node.append(el("div", { class: "body" }, v)); painters.push(() => { v.textContent = latest[t.raw.id] || emptyText(t.raw); }); return; }
+      const fn = R[t.w.type](t.w, node); if (fn) painters.push(fn); bindLongPress(node, t.w);
+    });
+    painters.push(() => { if (!session) return; let any = false; secTiles.forEach(({ wrap, t }) => { const m = t.metric, st = m && mstate[m.id] && mstate[m.id].status, off = m && (st === "unsupported" || st === "failed"); wrap.style.display = off ? "none" : ""; if (!off) any = true; }); head.style.display = any ? "" : "none"; });
+  });
+  painters.push(() => { const paused = movingNow() && !evPassenger; pause.hidden = !paused; hint.hidden = paused; g.classList.toggle("paused", paused); hide.forEach(n => { if (paused) n.dataset.pv = "1"; n.style.visibility = paused ? "hidden" : ""; n.style.position = paused ? "absolute" : ""; }); });
+}
 function renderVehicleSelect() { const v = $("vehicle"); v.textContent = ""; Object.values(vehicles).forEach(x => v.append(el("option", { value: x.id, textContent: x.name, selected: x.id === vid }))); }
 function openVehicle() {
   const v = vehicles[vid], kids = [];
@@ -1568,18 +1668,20 @@ $("sim").onclick = () => start(new SimLink(), "simulator (not vehicle data)");
 $("stop").onclick = () => stop(false);
 $("editBtn").onclick = () => setEdit(!editMode);
 $("addBtn").onclick = openAdd;
-$("resetBtn").onclick = () => { dash[tab] = buildDash(tab); commit(); };
+$("resetBtn").onclick = () => { dash[tab] = PRESETS[tab] ? buildDash(tab) : []; commit(); };
+$("screensBtn").onclick = openScreens;
 $("moreBtn").onclick = () => { $("dlg").classList.remove("wide"); openMore(); };
 $("reviewBtn").onclick = openReview;
 $("vehBtn").onclick = openVehicle;
-$("vehicle").onchange = async e => { loadVehicle(e.target.value); resetLive(); renderTabs(); renderGrid(); await loadDrives(); };
+$("vehicle").onchange = async e => { loadVehicle(e.target.value); resetLive(); syncEditControls(); renderTabs(); renderGrid(); await loadDrives(); };
 let lastCols = cols();
-addEventListener("resize", () => { if (cols() !== lastCols) { lastCols = cols(); renderGrid(); } });
+addEventListener("resize", () => { if (cols() !== lastCols) { lastCols = cols(); renderGrid(); } else applyFit(); });
 document.addEventListener("visibilitychange", async () => { if (session && document.visibilityState === "visible") { try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {} } });
-setInterval(() => { painters.forEach(p => { try { p(); } catch (e) { console.error(e); } }); }, 250);
+let paintTick = 0;
+setInterval(() => { if (tab === EV && paintTick++ % 4) return; painters.forEach(p => { try { p(); } catch (e) { console.error(e); } }); }, 250);
 $("stamp").textContent = "Build " + BUILD_ID + " · " + BUILD_UTC;
 if (!("serial" in navigator)) { $("unsupported").hidden = false; $("connect").disabled = true; }
-loadVehicle(vid); resetLive(); renderVehicleSelect(); renderTabs(); renderGrid(); loadDrives();
+loadVehicle(vid); resetLive(); renderVehicleSelect(); syncEditControls(); renderTabs(); renderGrid(); loadDrives();
 </script>
 </body>
 </html>
