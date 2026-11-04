@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261104-1940Z">
-<meta name="build-timestamp-utc" content="2026-11-04T19:40:02Z">
+<meta name="build-id" content="OBD-20261104-1957Z">
+<meta name="build-timestamp-utc" content="2026-11-04T19:57:32Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261104-1940Z", BUILD_UTC = "2026-11-04T19:40:02Z";
+const BUILD_ID = "OBD-20261104-1957Z", BUILD_UTC = "2026-11-04T19:57:32Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -846,15 +846,21 @@ function tuneUpView(findings, trip) {
   ];
 }
 const HEALTH_STEPS = [
- { id: "koeo", title: "Key on, engine off", how: "Parked. Turn the ignition on and connect, then wait 20 seconds before starting.", done: r => secondsTrue(r, x => typeof x.rpm === "number" && x.rpm <= 50) >= 8 || r.filter(x => typeof x.rpm === "number" && x.rpm <= 50).length >= 8 },
- { id: "warm", title: "Warm up", how: "Drive normally until the engine reaches 170°F.", done: r => r.some(x => x._warm) },
- { id: "idle", title: "Warm idle for 1 minute", how: "Stopped safely in Park with accessories off if you can.", done: r => secondsTrue(r, x => x._warm && x._idle) >= 60 },
- { id: "hold", title: "Hold 2,500 rpm for 30 seconds", how: "Parked with the parking brake on, outdoors. Leave this step if you aren't comfortable doing it.", done: r => secondsTrue(r, x => x._warm && x.mph < 1 && x.rpm >= 2200 && x.rpm <= 2800) >= 20 },
- { id: "c45", title: "Steady 40–50 mph for 1 minute", how: "On a suitable road when traffic allows. No need to touch the phone.", done: r => secondsTrue(r, x => x._cruise && x.mph >= 40 && x.mph <= 52) >= 60 },
- { id: "c60", title: "Steady 55+ mph for 2 minutes", how: "On a highway, at the legal speed.", done: r => secondsTrue(r, x => x._cruise && x.mph >= 55) >= 120 },
- { id: "accel", title: "One firm acceleration", how: "Only where safe and legal, such as a clear on-ramp.", done: r => secondsTrue(r, x => x.tps >= 60 && x.mph > 10) >= 3 }
+ { id: "koeo", title: "Key on, engine off, 20 seconds", why: "Captures resting battery voltage and lets the app read codes and self-tests before anything runs.", how: "Parked. Ignition on, engine off, connect, wait.", done: r => r.filter(x => typeof x.rpm === "number" && x.rpm <= 50).length >= 8 },
+ { id: "start", title: "Start the engine while connected", why: "GM targets about 14.5 V for 30 seconds after a start. Seeing it, or not, is the cheapest charging-system clue.", how: "Start it with the app still connected.", done: r => r.some((x, i) => i && typeof r[i - 1].rpm === "number" && r[i - 1].rpm <= 50 && x.rpm > 400) },
+ { id: "warm", title: "Warm up to 170°F", why: "Fuel trims and most ratings only mean something on a warm engine.", how: "Drive normally.", done: r => r.some(x => x._warm) },
+ { id: "idle", title: "Warm idle, 2 minutes, accessories off", why: "The cleanest fuel-trim and airflow sample. Your first drive had 11 seconds of it; the app needs at least 20.", how: "Parked, in Park, air conditioning and blower off.", done: r => secondsTrue(r, x => x._warm && x._idle) >= 120 },
+ { id: "loads", title: "Headlights, rear defogger, blower high for 30 s", why: "GM charging control should raise voltage to about 14 V under this load. If it falls, the charging system needs a test.", how: "Parked, engine running. Then switch them off again.", done: r => { let best = 0; for (let i = 0; i < r.length; i++) { if (!(r[i].rpm > 400) || typeof r[i].volt !== "number") continue; const w = r.slice(Math.max(0, i - 30), i).filter(x => typeof x.volt === "number"); if (w.length >= 10 && Math.abs(r[i].volt - w[0].volt) >= .8) best++; } return best >= 5; }, manual: true },
+ { id: "hold", title: "Hold 2,500 rpm for 30 seconds", why: "Separates an air leak (correction fades with rpm) from a sensor or fuel problem (it doesn't).", how: "Parked, parking brake on, outdoors. Skip it if you aren't comfortable.", done: r => secondsTrue(r, x => x._warm && x.mph < 1 && x.rpm >= 2200 && x.rpm <= 2800) >= 20 },
+ { id: "c45", title: "Steady 40–50 mph for 1 minute", why: "Cruise fuel trims and the first converter-slip sample.", how: "When traffic allows. Don't touch the phone.", done: r => secondsTrue(r, x => x._cruise && x.mph >= 40 && x.mph <= 52) >= 60 },
+ { id: "c60", title: "Steady 55+ mph for 2 minutes", why: "Lockup slip, gear-ratio stability, and the speedometer check against GPS.", how: "On a highway at the legal speed.", done: r => secondsTrue(r, x => x._cruise && x.mph >= 55) >= 120 },
+ { id: "accel", title: "One firm acceleration above 2,000 rpm", why: "Full-throttle breathing estimate and slip under load.", how: "Only where safe and legal, such as a clear on-ramp.", done: r => secondsTrue(r, x => x.tps >= 60 && x.mph > 10 && x.rpm >= 2000) >= 3 },
+ { id: "decel", title: "Coast down from 50 mph without braking hard", why: "Deceleration fuel cut shows the rear oxygen sensors responding, and the converter releasing.", how: "Lift off and let it slow on a clear road.", done: r => secondsTrue(r, x => x.fuelstat === 4 || (x._acc < -0.5 && x.tps < 18 && x.mph > 20)) >= 8 },
+ { id: "mark", title: "Mark any symptom when it happens", why: "A mark pins speed, rpm, gear, and voltage to the moment, which is what turns a complaint into evidence.", how: "Tap Mark, or have a passenger do it.", done: r => r.some(x => x.mark), manual: true },
+ { id: "codes", title: "Read codes and self-tests after the drive", why: "Codes set during the drive only show up if read afterwards.", how: "Parked: Diagnostics tab, Read codes, then Read self-test results.", done: () => false, manual: true, external: "codes" }
 ];
-function healthSteps(rowsIn) { const r = annotate(rowsIn); return HEALTH_STEPS.map(s => ({ id: s.id, title: s.title, how: s.how, done: r.length ? !!s.done(r) : false })); }
+function healthSteps(rowsIn, extra = {}) { const r = annotate(rowsIn); return HEALTH_STEPS.map(s => ({ id: s.id, title: s.title, how: s.how, why: s.why, done: s.external ? !!extra[s.external] : (r.length ? !!s.done(r) : false) })); }
+function healthCoverage(steps) { const n = steps.filter(s => s.done).length; return { done: n, total: steps.length, label: n + " of " + steps.length + " checks completed" }; }
 const GLOSSARY = [
  ["Fuel trim", "The percentage the computer adds to or removes from its base fuel amount. Positive means it's adding fuel because the mix looks lean. Short-term reacts in seconds; long-term is the learned correction."],
  ["Closed loop", "The computer is using oxygen sensor feedback to correct fuel. Open loop means it isn't, as when cold, at full throttle, or coasting."],
@@ -1606,7 +1612,7 @@ async function readCodes() {
   try {
     const stored = parseDtc(await askH("7DF", "03"), "43"), pending = parseDtc(await askH("7DF", "07"), "47"), permanent = parseDtc(await askH("7DF", "0A"), "4A"), freeze = [];
     for (const id of ["rpm","mph","ect","load","stft1","ltft1"]) { const m = byId[id], pp = m.cmd.slice(2), b = dataBytes(await askH("7DF", "02" + pp + "00"), "42" + pp + "00"); if (b && b.length) { const v = m.f(b); if (v !== null && Number.isFinite(v)) freeze.push([m.label, v.toFixed(m.digits) + " " + m.unit]); } }
-    codes = { stored, pending, permanent, freeze };
+    codes = { stored, pending, permanent, freeze, readAt: Date.now() };
   } catch (e) { toast(e.message); }
 }
 R.truck = (w, box) => {
@@ -1622,8 +1628,9 @@ R.healthcheck = (w, box) => {
   const list = el("div", { class: "scroll" }), btn = el("button", { class: "primary", textContent: "See total health", onclick: () => openReview() });
   box.append(header(w, "Guided health check", ""), el("div", { class: "body" }, el("div", { class: "sub", style: "white-space:normal", textContent: "Steps tick themselves off from the data. Do them in any order, and only when safe. Don't touch the phone while moving." }), list, btn));
   let n = 0, sig = "";
-  return () => { if (n++ % 8) return; const st = healthSteps(rows), s = JSON.stringify(st.map(x => x.done)); if (s === sig) return; sig = s; list.textContent = "";
-    st.forEach(x => list.append(el("div", { class: "row", style: "display:block" }, el("b", { class: "pill " + (x.done ? "good" : ""), textContent: (x.done ? "✓ " : "○ ") + x.title }), el("div", { class: "sub", style: "white-space:normal", textContent: x.how })))); };
+  return () => { if (n++ % 8) return; const st = healthSteps(rows, { codes: !!(codes && codes.readAt && codes.readAt > driveStart + 60000) }), s = JSON.stringify(st.map(x => x.done)); if (s === sig) return; sig = s; list.textContent = "";
+    list.append(el("div", { class: "sub", textContent: healthCoverage(st).label }));
+    st.forEach(x => list.append(el("details", { class: "f", style: "padding:6px 8px" }, el("summary", {}, el("b", { class: "pill " + (x.done ? "good" : ""), textContent: (x.done ? "✓ " : "○ ") + x.title })), el("div", { class: "sub", style: "white-space:normal", textContent: x.how }), el("div", { class: "sub", style: "white-space:normal;color:var(--text)", textContent: "Why: " + x.why })))); };
 };
 R.healthcard = (w, box) => {
   const list = el("div", { class: "scroll" }); box.append(header(w, "Total health so far", ""), el("div", { class: "body" }, list));
@@ -1870,6 +1877,7 @@ function renderReport(host, rep, veh, meta, rs) {
   const ico = { attention: "✕", watch: "▲", good: "✓", info: "i", limited: "–", nodata: "–" };
   host.append(el("div", { class: "verdict " + rep.verdict.level }, el("b", { textContent: ico[rep.verdict.level] + " " + rep.verdict.headline }), el("span", { textContent: rep.verdict.detail })));
   const stat = (a, b) => el("div", {}, el("b", { textContent: a }), b);
+  { const hs = healthSteps(rs, { codes: !!(meta.codes && meta.codes.readAt) }), cov = healthCoverage(hs); host.append(el("p", { textContent: "Health-check coverage: " + cov.label + ". Missing: " + (hs.filter(x => !x.done).map(x => x.title).join("; ") || "none") + "." })); }
   host.append(el("div", { class: "stats" }, stat(t.kind, "Drive type"), stat(t.miles.toFixed(1) + " mi", "Distance"), stat((t.seconds / 60).toFixed(0) + " min", "Time"), stat(String(t.stops), "Stops"), stat((t.idleSeconds / 60).toFixed(1) + " min", "Idling"), stat((t.highwaySeconds / 60).toFixed(1) + " min", "At 55+ mph"), stat(String(rep.channels), "Signals logged"), stat((rep.sampleRate || 0).toFixed(1) + "/s", "Log rate")));
   host.append(el("h3", { textContent: "Total health, based on what this drive could test" }));
   (rep.systems || []).forEach(c => host.append(el("details", { class: "f" }, el("summary", {}, el("span", { class: "lv " + (c.status === "good" ? "good" : c.status === "attention" ? "attention" : c.status === "watch" ? "watch" : "info"), textContent: SICON[c.status] }), c.name + ": " + c.label), el("p", { textContent: c.summary }), el("p", { textContent: c.plain }), el("p", { textContent: "How the loop works: " + c.loop }), el("p", { textContent: "Cyber-physical lens: " + c.trust }))));
