@@ -2,7 +2,7 @@
 const fs = require("fs"), assert = require("assert");
 const html = fs.readFileSync("index.html", "utf8");
 const src = html.split("/*PURE-START*/")[1].split("/*PURE-END*/")[0];
-const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,annotate,validateSignals,healthSteps,GLOSSARY};")();
+const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,annotate,validateSignals,healthSteps,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom};")();
 const m = id => api.METRICS.find(x => x.id === id);
 
 // ---- Safety allowlist
@@ -139,5 +139,22 @@ assert(api.reportMarkdown(r, sierra, {}).includes("Total health"));
   const st = api.healthSteps(parked), on = id => st.find(s => s.id === id).done; assert(on("koeo") && on("warm") && on("idle") && on("hold")); assert(!on("c45") && !on("c60") && !on("accel")); assert(api.healthSteps([]).every(s => !s.done));
   // Parked 2,500 rpm can stand in for cruise in the air-leak comparison
   const leak = parked.map(p => ({ ...p, fuelstat: 2, load: 25, stft1: p.rpm === 700 ? 8 : 0, ltft1: p.rpm === 700 ? 10 : 1 })); r = api.analyzeDrive({ rows: leak, vehicle: four, meta: {} }); assert(r.findings.some(f => /largest at idle/.test(f.title)), "hold region " + r.findings.map(f => f.title)); }
+// Electrical
+assert(api.isAllowedCommand("ATRV") && api.isAllowedCommand("ATH1") && !api.isAllowedCommand("ATMA"));
+assert.strictEqual(api.decodeMetric(m("atrv"), "13.8V\r\r>"), 13.8);
+assert.deepStrictEqual(api.ecusFrom("7E8064100BE3FA813\r7EA064100\r\r>"), ["7E8", "7EA"]);
+const st = (mean, sd = .01) => ({ mean, sd, min: mean - sd, max: mean + sd, n: 30 });
+const orderly = api.analyzeLoadSteps([["Baseline (all off)", 12.5], ["Blower low", 12.42], ["Blower medium", 12.33], ["Blower high", 12.2], ["Blower max", 12.05]].map(([name, v]) => ({ name, rpm: 0, stats: st(v) }))); assert.strictEqual(orderly.leaning, "mechanical");
+const dead = api.analyzeLoadSteps([["Baseline (all off)", 12.5], ["Blower low", 12.5], ["Blower medium", 12.5], ["Blower max", 12.05]].map(([name, v]) => ({ name, rpm: 0, stats: st(v) }))); assert.strictEqual(dead.leaning, "electrical", "no load at low speeds");
+const shaky = api.analyzeLoadSteps([{ name: "Baseline (all off)", rpm: 0, stats: st(12.5) }, { name: "Blower low", rpm: 0, stats: st(12.4) }, { name: "Blower high", rpm: 0, stats: st(12.2, .2) }]); assert.strictEqual(shaky.leaning, "electrical", "unsteady");
+assert.strictEqual(api.analyzeLoadSteps([{ name: "Blower high", stats: st(12) }]).leaning, "unknown");
+assert.strictEqual(api.analyzeLoadSteps([["Baseline (all off)", 14], ["Blower low", 14], ["Blower max", 14]].map(([name, v]) => ({ name, rpm: 800, stats: st(v) }))).leaning, "unknown", "alternator can hide load");
+assert.strictEqual(api.crankResult([12.6, 12.6, 12.6, 9, 11, 14].map(v => ({ id: "volt", v }))).level, "attention");
+{ const d = drive("interstate"); [500, 700, 900].forEach(k => { for (let i = 0; i < 6; i++) d[k + i].volt = 11.8; }); const ev = api.voltageEvents(api.annotate(d)); assert(ev.some(e => e.kind === "drop")); r = rep(d); assert(has(r, /sharp voltage drops/, "watch"), "dips " + bad(r)); d[50].mark = "Blower noise"; r = rep(d); assert.strictEqual(r.marks[0].label, "Blower noise"); }
+{ const d = drive("mixed"); d.forEach(x => { x.pedal = x.tps; x.pedale = x.tps / 2; x.cmdtps = 40 - x.tps * 0 + Math.sin(x.t / 7000) * 30; }); const xc = api.crossChecks(d, 100000); assert.strictEqual(xc.find(c => /pedal/.test(c.name)).status, "agree"); assert.strictEqual(xc.find(c => /commanded/.test(c.name)).status, "disagree"); r = rep(d); assert(has(r, /didn't move together/, "watch")); }
+assert(rep(drive("interstate")).crossChecks.length === 5);
+r = rep(drive("interstate"), sierra, { fpChanged: true }); assert(has(r, /fingerprint changed/, "watch"));
+{ const cs = api.conditionStats(drive("interstate"), "rpm"); assert(cs.find(c => c.name === "Steady cruise").n > 100); }
+assert.strictEqual(api.histogram([1, 2, 3], 3).reduce((s, b) => s + b.n, 0), 3);
 assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 console.log("all tests passed");

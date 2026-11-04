@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261104-1717Z">
-<meta name="build-timestamp-utc" content="2026-11-04T17:17:39Z">
+<meta name="build-id" content="OBD-20261104-1851Z">
+<meta name="build-timestamp-utc" content="2026-11-04T18:51:44Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+html,body{overscroll-behavior-y:contain;margin:0;background:var(--bg);color:var(--text);font:15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 main{max-width:1440px;margin:auto;padding:10px 12px 40px}
 header{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;justify-content:space-between}
 h1{font-size:1.05rem;margin:0}
@@ -100,10 +100,12 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
  <button id="editBtn">Edit layout</button>
  <button id="addBtn" hidden>+ Add widget</button>
  <button id="resetBtn" hidden>Reset tab</button>
+ <button id="markBtn">Mark</button>
  <button id="reviewBtn" class="primary">Drive review</button>
  <button id="screensBtn">Screens</button>
  <button id="moreBtn">Data &amp; sources</button>
 </div>
+<div id="recover" class="verdict" hidden></div>
 <nav class="tabs" id="tabs" role="tablist" aria-label="Dashboards"></nav>
 <div id="grid"></div>
 <footer><p>Read-only: only allowlisted read requests can reach the truck. Layout editing locks while moving. Set up before driving.</p><p id="stamp"></p></footer>
@@ -112,7 +114,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261104-1717Z", BUILD_UTC = "2026-11-04T17:17:39Z";
+const BUILD_ID = "OBD-20261104-1851Z", BUILD_UTC = "2026-11-04T18:51:44Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -124,7 +126,7 @@ const s16 = (a, b) => { const v = a * 256 + b; return v >= 32768 ? v - 65536 : v
 // routines (31), security access (27) and session control (10) match nothing here.
 function isAllowedCommand(cmd) {
   const c = String(cmd).toUpperCase().replace(/\s+/g, "");
-  return /^AT(Z|E0|L0|S0|H0|AT1|SP[06]|DPN|RV|I)$/.test(c)
+  return /^AT(Z|E0|L0|S0|H0|H1|AT1|SP[06]|DPN|RV|I)$/.test(c)
     || /^ATSH[0-9A-F]{3}$/.test(c)
     || /^01[0-9A-F]{2}$/.test(c)
     || /^02[0-9A-F]{2}00$/.test(c)
@@ -265,12 +267,14 @@ const METRICS = [
  std("so2lt1","Secondary O2 long trim B1","Oxygen sensors","56","%","med",1,-100,100,trim),
  std("so2st2","Secondary O2 short trim B2","Oxygen sensors","57","%","med",1,-100,100,trim),
  std("so2lt2","Secondary O2 long trim B2","Oxygen sensors","58","%","med",1,-100,100,trim),
- std("volt","Module voltage","Electrical","42","V","med",1,10,16,b=>u16(b[0],b[1])/1000,{rule:{lo:12.5,hi:15,when:"running",note:GUIDE+" GM charging systems can intentionally run lower to save fuel."}}),
+ { id:"atrv",label:"Battery at OBD port",group:"Electrical",cmd:"ATRV",unit:"V",tier:"med",digits:1,min:7,max:18,basis:"adapter",raw:r=>{const q=String(r).match(/(\d+(?:\.\d+)?)\s*V/i);return q?Number(q[1]):undefined;},rule:{lo:12.5,hi:15,when:"running",note:GUIDE} },
+ std("volt","Module voltage","Electrical","42","V","fast",1,10,16,b=>u16(b[0],b[1])/1000,{rule:{lo:12.5,hi:15,when:"running",note:GUIDE+" GM charging systems can intentionally run lower to save fuel."}}),
  std("stft1","Short trim B1","Fuel","06","%","fast",1,-30,30,trim,{rule:{lo:-15,hi:15,when:"warm",note:GUIDE}}),
  std("ltft1","Long trim B1","Fuel","07","%","med",1,-30,30,trim,{rule:{lo:-10,hi:10,when:"warm",note:GUIDE}}),
  std("stft2","Short trim B2","Fuel","08","%","fast",1,-30,30,trim,{rule:{lo:-15,hi:15,when:"warm",note:GUIDE}}),
  std("ltft2","Long trim B2","Fuel","09","%","med",1,-30,30,trim,{rule:{lo:-10,hi:10,when:"warm",note:GUIDE}}),
  std("lambda","Commanded lambda","Fuel","44","λ","med",3,0.6,1.4,b=>u16(b[0],b[1])*2/65536),
+ std("cylfuel","Reported fuel per stroke","Fuel","A2","mg","med",1,0,2048,b=>u16(b[0],b[1])/32),
  std("frate","Reported fuel rate","Fuel","5E","gal/h","med",2,0,40,b=>u16(b[0],b[1])/20/3.785),
  std("fuel","Fuel level","Fuel","2F","%","slow",0,0,100,pct,{rule:{lo:10,note:GUIDE}}),
  std("baro","Barometric pressure","Driving","33","kPa","slow",0,50,110,b=>b[0]),
@@ -295,6 +299,8 @@ const METRICS = [
  ...[1,2,3,4,5,6,7,8].map(n => { const mid = (0xA1 + n).toString(16).toUpperCase();
    return { id:"mis"+n, label:"Cyl "+n+" misfires", group:"Misfire", cmd:"06"+mid, unit:"count", tier:"slow", digits:0, min:0, max:50, basis:"standard", mid, raw:r=>parseMode06(r,mid)[0x0C], rule:{hi:0,note:"Recent-count test result from the OBD misfire monitor. Any count is worth watching; occasional counts can be normal."} }; }),
  { id:"ratio",label:"Engine rpm per mph",group:"Transmission",unit:"rpm/mph",digits:1,min:0,max:200,basis:"derived",need:["rpm","mph"],calc:v=>v.mph>5&&v.rpm>0?v.rpm/v.mph:null },
+ { id:"fflow",label:"Estimated fuel flow",group:"Fuel",unit:"gal/h",digits:2,min:0,max:40,basis:"derived",need:["maf"],calc:v=>v.maf>0?v.maf/(14.7*(v.lambda>0?v.lambda:1))*3600/(6.17*454):null },
+ { id:"alt",label:"Estimated altitude",group:"Driving",unit:"ft",digits:0,min:-500,max:12000,basis:"derived",need:["baro"],calc:v=>v.baro>0?(1-Math.pow(v.baro/101.325,0.1903))*145366:null },
  { id:"mpg",label:"Estimated MPG",group:"Fuel",unit:"mpg",digits:1,min:0,max:60,basis:"derived",need:["mph","maf"],calc:v=>v.mph>2&&v.maf>0?Math.min(99,11.44*v.mph/v.maf):null },
  { id:"hp",label:"Estimated power",group:"Engine",unit:"hp",digits:0,min:0,max:450,basis:"derived",need:["torq","reftq","rpm"],calc:v=>v.reftq>0&&v.rpm>0?Math.max(0,v.torq/100*v.reftq*v.rpm/5252):null }
 ];
@@ -358,6 +364,7 @@ function csvCell(v) {
 // Same text interface as the adapter, so the same parsers run. Never saved to history.
 function simulatorReply(cmd, t) {
   const hex = (n, w = 2) => Math.max(0, Math.round(n)).toString(16).toUpperCase().padStart(w, "0");
+  if (cmd === "ATRV") return (13.9 + Math.sin(t / 4000) * .1).toFixed(1) + "V";
   if (/^AT/.test(cmd)) return cmd === "ATI" ? "SIMULATOR" : "OK";
   const w = Math.sin(t / 9000), mph = 48 + w * 26, g = mph < 20 ? 2 : mph < 32 ? 3 : mph < 45 ? 4 : mph < 58 ? 5 : 6;
   const rpm = mph * [0, 90, 62, 46, 37, 30, 25][g] + 90 * Math.sin(t / 1500) * Math.abs(Math.sin(t / 700));
@@ -638,6 +645,10 @@ function analyzeDrive(input) {
     else if (lowFor >= 60) add("Electrical", "watch", "Charging voltage dipped low for a while", "Under 12.4 V for " + rnd(lowFor) + " seconds, median " + rnd(med, 1) + " V.", "GM systems can lower voltage to save fuel, but a long stretch this low is worth comparing with other drives.", ["Fuel-saving charge strategy", "Weak battery or alternator"], ["Test the charging system if this repeats."]);
     else if (highFor >= 120) add("Electrical", "attention", "Charging voltage ran high", "Above 15.5 V for " + rnd(highFor) + " seconds.", "Sustained high voltage can damage batteries and electronics.", ["Voltage regulation fault"], ["Test the charging system."]);
     else add("Electrical", "good", "Charging voltage looks normal", "Typical range " + rnd(lo, 1) + "–" + rnd(hi, 1) + " V while running.", "GM systems can intentionally vary voltage, so some movement is expected.");
+    const ve = voltageEvents(rows), deep = ve.filter(x => x.kind === "drop" && x.to < 12.2); stats.voltEvents = ve.length;
+    const vIdle = nums(rows, "volt", x => x._idle), vCruise = nums(rows, "volt", x => x._cruise);
+    if (deep.length >= 3) add("Electrical", "watch", deep.length + " sharp voltage drops below 12.2 V", deep.slice(0, 5).map(x => rnd(x.from, 1) + " to " + rnd(x.to, 1) + " V at " + rnd(x.rpm) + " rpm").join("; ") + ".", "Repeated sharp drops can come from a large load switching on or a weak connection, though this one-second log can't show short spikes.", ["Large accessory load, such as a blower or fan", "Loose battery or ground connection", "Weak alternator or battery"], ["Use your marks to see whether drops line up with symptoms, then run the Electrical Lab."]);
+    else if (ve.length) add("Electrical", "info", ve.length + " voltage step" + (ve.length > 1 ? "s" : "") + " of 0.8 V or more", (vIdle.length >= 10 ? "Idle median " + rnd(pctl(vIdle, .5), 1) + " V. " : "") + (vCruise.length >= 10 ? "Cruise median " + rnd(pctl(vCruise, .5), 1) + " V. " : "") + "Largest examples: " + ve.slice(0, 3).map(x => rnd(x.from, 1) + "→" + rnd(x.to, 1) + " V").join(", ") + ".", "GM charging control can deliberately shift voltage, so a step isn't automatically a fault.", [], [], "Measured from this drive");
     if (voff.length >= 3 && pctl(voff, .5) < 12) add("Electrical", "watch", "Battery was low before start", rnd(pctl(voff, .5), 1) + " V with the engine off.", "A rested battery is usually near 12.6 V. Readings right after a start or shutdown can mislead.", ["Weak battery", "Parasitic drain"], ["Measure after sitting overnight."]);
   } else need("Electrical", "Running voltage wasn't recorded long enough.");
 
@@ -711,6 +722,10 @@ function analyzeDrive(input) {
   if (anyBad("Cooling") && (F.some(f => f.system === "Transmission" && f.level !== "good" && f.level !== "info"))) links.push("Coolant and transmission heat rising together suggests load or cooling capacity. The transmission cooler also depends on engine cooling.");
   links.forEach(t => add("Connecting the findings", "info", "How these findings may connect", t, "This is a hypothesis to test, not a diagnosis.", [], [], "Cross-signal reasoning"));
 
+  const xc = crossChecks(rows, 100000), disagree = xc.filter(x => x.status === "disagree" && x.n >= 60); xc.filter(x => x.status === "agree").length && tested.push("Sensor cross-checks");
+  if (disagree.length) add("Sensor checks", "watch", "Related sensors didn't move together", disagree.map(x => x.name + " (correlation " + rnd(x.r, 2) + ")").join("; ") + ".", "Redundant or related signals should broadly agree. Disagreement can mean a sensor issue, or just slow one-second sampling.", ["Sensor or wiring fault", "Sampling timing"], ["Check whether this repeats, and compare codes."], "Physics check");
+  if (meta.fpChanged) add("Computer identity", "watch", "Computer software fingerprint changed since last connect", "Calibration or verification number differs from the value stored on this device.", "This usually means a dealer update, reprogramming, or module replacement. If nothing like that happened, ask why.", ["Dealer software update", "Module replacement", "Aftermarket tune"], ["Check your service records."], LIT.j1979);
+  const marks = markSnapshots(rows);
   // Verdict
   const att = F.filter(f => f.level === "attention"), wat = F.filter(f => f.level === "watch");
   const level = att.length ? "attention" : wat.length ? "watch" : tested.length >= 3 ? "good" : "limited";
@@ -720,7 +735,7 @@ function analyzeDrive(input) {
   const order = { attention: 0, watch: 1, good: 2, info: 3 };
   F.sort((a, b) => order[a.level] - order[b.level]);
   F.forEach(f => { f.sure = howSure(f); f.bestGuess = f.causes[0] || null; f.alsoPossible = f.causes.slice(1); });
-  return { systems: systemCard(F, tested), tuneup: tuneUpView(F, trip), trip, findings: F, notAssessed: na, tested, channels: channels.size, sampleRate: rate, validation: val, stats, verdict: { level, headline, detail } };
+  return { marks, crossChecks: xc, systems: systemCard(F, tested), tuneup: tuneUpView(F, trip), trip, findings: F, notAssessed: na, tested, channels: channels.size, sampleRate: rate, validation: val, stats, verdict: { level, headline, detail } };
 }
 function reportMarkdown(rep, vehicle, meta) {
   const t = rep.trip, L = [];
@@ -729,6 +744,7 @@ function reportMarkdown(rep, vehicle, meta) {
   if (rep.systems) { L.push("## Total health", ""); rep.systems.forEach(s => L.push("- **" + s.name + ":** " + s.label + ". " + s.summary)); L.push(""); }
   if (rep.tuneup) { L.push("## Tune-up view", ""); rep.tuneup.forEach(t => L.push("- **" + t.name + ":** " + t.label + ". " + t.detail)); L.push(""); }
   ["attention", "watch", "good", "info"].forEach(l => { const a = rep.findings.filter(f => f.level === l); if (!a.length) return; L.push("## " + { attention: "Needs attention", watch: "Watch", good: "Looks good", info: "Context" }[l], ""); a.forEach(f => { L.push("### " + f.system + ": " + f.title, f.evidence, "", f.meaning); if (f.bestGuess) L.push("", "Best guess: " + f.bestGuess + (f.alsoPossible.length ? ". Also possible: " + f.alsoPossible.join("; ") : "") + ". How sure: " + f.sure.label + "."); if (f.next.length) L.push("", "Next: " + f.next.join(" ")); L.push("", "_Basis: " + f.basis + "_", ""); }); });
+  if (rep.marks && rep.marks.length) { L.push("## Your marks", ""); rep.marks.forEach(m => L.push("- " + new Date(m.t).toISOString() + ": " + m.label + " (" + rnd(m.mph) + " mph, " + rnd(m.rpm) + " rpm, " + rnd(m.volt, 1) + " V)")); L.push(""); }
   if (rep.notAssessed.length) { L.push("## Not tested on this drive", ""); rep.notAssessed.forEach(n => L.push("- " + n.system + ": " + n.why)); L.push(""); }
   L.push("Automated review based on recorded data. It suggests where to look and doesn't replace a hands-on diagnosis.");
   return L.join("\n");
@@ -778,7 +794,7 @@ function tuneUpView(findings, trip) {
     item("Spark plugs and coils", pick(["Combustion"]), "Data can't show plug wear until it causes misfires. Compare plug age with the owner's manual interval."),
     item("Air filter and airflow sensor", pick(["Airflow"]).concat(pick(["Fuel trims"], /grows with airflow|Rich correction/)), "Look at the filter directly. A dirty filter may show little in light driving."),
     item("Vacuum and intake leaks", pick(["Fuel trims"], /largest at idle|look balanced|without a clear pattern/), "Listen for hissing and inspect hoses and intake boots."),
-    item("Fuel delivery and injectors", pick(["Fuel trims"], /grows with airflow|Banks disagree|look balanced/), "Fuel pressure usually isn't available as a standard reading on this engine type, so a shop test may be needed."),
+    item("Fuel delivery and injectors", pick(["Fuel trims"], /grows with airflow|Banks disagree|look balanced/), "Injector flow isn't measured directly. Rail pressure may be reported, but injector balance usually needs a shop test."),
     item("Battery and charging", pick(["Electrical"]), "Have the battery load-tested, especially if it's several years old."),
     item("Coolant and thermostat", pick(["Cooling"], /Coolant/), "Check coolant level and condition with the engine cold."),
     item("Transmission fluid and behavior", pick(["Transmission"]), "Data can't show fluid age or condition. Check its service history and the manual."),
@@ -809,6 +825,77 @@ const GLOSSARY = [
  ["Lambda", "Air-fuel mix compared with the chemically ideal ratio. 1.00 is ideal, below is rich, above is lean."],
  ["Cyber-physical", "A loop where software reads sensors and moves real hardware. Faults can begin on either side and appear on the other, so cross-checking data against physics matters."]
 ];
+/* ---------- Electrical lab and cross-checks ---------- */
+function voltageEvents(rows) {
+  const ev = [];
+  for (let i = 3; i < rows.length; i++) {
+    const a = rows[i - 3], b = rows[i];
+    if (!(a.rpm > 400) || !(b.rpm > 400) || typeof a.volt !== "number" || typeof b.volt !== "number" || b.t - a.t > 5000) continue;
+    const d = b.volt - a.volt, last = ev[ev.length - 1];
+    if (Math.abs(d) >= 0.8 && (!last || b.t - last.t > 10000)) ev.push({ t: b.t, kind: d < 0 ? "drop" : "rise", from: a.volt, to: b.volt, rpm: b.rpm, mph: b.mph });
+  }
+  return ev;
+}
+function stepStats(samples) {
+  const v = samples.filter(s => typeof s.v === "number").map(s => s.v);
+  if (v.length < 5) return null;
+  const m = avg(v), sd = Math.sqrt(avg(v.map(x => (x - m) ** 2)));
+  return { mean: m, sd, min: Math.min(...v), max: Math.max(...v), n: v.length };
+}
+// A voltage proxy only: load changes show as sag. It can't measure amps or see mechanics directly.
+function analyzeLoadSteps(steps) {
+  const ok = steps.filter(s => s.stats), base = ok.find(s => /baseline/i.test(s.name)), out = { rows: [], verdict: "Inconclusive", leaning: "unknown", reasons: [], engineRunning: ok.some(s => s.rpm > 400) };
+  if (!base) { out.reasons.push("Record the all-off baseline first."); return out; }
+  ok.forEach(s => out.rows.push({ name: s.name, mean: s.stats.mean, drop: base.stats.mean - s.stats.mean, sd: s.stats.sd, n: s.stats.n, inrush: s.inrushMin !== undefined && s.inrushMin !== null ? s.stats.mean - s.inrushMin : null }));
+  const blow = out.rows.filter(r => /blower/i.test(r.name)), ref = out.rows.find(r => /headlight/i.test(r.name));
+  if (blow.length < 2) { out.reasons.push("Record at least two blower speeds."); return out; }
+  if (out.engineRunning) out.reasons.push("The engine was running, so the alternator may hide small loads. An engine-off run shows them more clearly.");
+  const noise = Math.max(.03, base.stats.sd * 2), flat = blow.filter(r => r.drop < Math.max(.04, noise)), rough = blow.filter(r => r.sd > Math.max(.06, base.stats.sd * 2.5));
+  const rising = blow.every((r, i) => !i || r.drop >= blow[i - 1].drop - noise), top = blow[blow.length - 1];
+  let electrical = false;
+  if (flat.length && out.engineRunning) out.reasons.push("No clear voltage change at: " + flat.map(r => r.name).join(", ") + ", but the alternator may be hiding it. Repeat with the engine off.");
+  else if (flat.length) { electrical = true; out.reasons.push("No clear electrical load at: " + flat.map(r => r.name).join(", ") + ". If the fan was set on, that points to control, connection, or the motor not drawing power."); }
+  if (rough.length) { electrical = true; out.reasons.push("Voltage was unsteady at: " + rough.map(r => r.name).join(", ") + ". That can come from a poor connection, worn motor brushes, or a failing control part."); }
+  if (!rising) { electrical = true; out.reasons.push("Load didn't rise with fan speed, which can indicate a control or resistor problem."); }
+  if (ref && top.drop > ref.drop * 3 && ref.drop > .03) { out.reasons.push("Top speed drew much more than the headlights. Blowers can be large loads, but a dragging motor adds load too."); out.heavy = true; }
+  if (electrical) { out.leaning = "electrical"; out.verdict = "Leans electrical or control"; }
+  else if (out.heavy) { out.leaning = "mixed"; out.verdict = "Possible drag: motor or mechanical"; }
+  else if (flat.length) { out.verdict = "Inconclusive with the engine running"; }
+  else { out.leaning = "mechanical"; out.verdict = "Electrical load looks orderly, so any noise leans mechanical"; out.reasons.push("Load rose smoothly with speed. If it's still noisy, check for debris, the fan wheel, and motor bearings."); }
+  return out;
+}
+function crankResult(samples) {
+  const v = samples.filter(s => s.id === "atrv" || s.id === "volt").map(s => s.v);
+  if (v.length < 3) return null;
+  const rest = pctl(v.slice(0, Math.max(3, Math.floor(v.length * .2))), .5), min = Math.min(...v), end = v[v.length - 1];
+  return { rest, min, end, level: min < 9.6 ? "attention" : min < 10.2 ? "watch" : "good", note: min < 9.6 ? "Below the 9.6 V commonly used as a battery load-test floor." : min < 10.2 ? "Near the low end. Compare in similar temperatures." : "No obvious weakness in this one start. A slow sample can miss the lowest point." };
+}
+function pearson(x, y) {
+  const n = x.length; if (n < 10) return null; const mx = avg(x), my = avg(y); let a = 0, b = 0, c = 0;
+  for (let i = 0; i < n; i++) { a += (x[i] - mx) * (y[i] - my); b += (x[i] - mx) ** 2; c += (y[i] - my) ** 2; }
+  return b && c ? a / Math.sqrt(b * c) : null;
+}
+const CROSS_PAIRS = [ ["pedal", "pedale", "Accelerator pedal sensors D and E"], ["tps", "cmdtps", "Actual and commanded throttle"], ["tps", "tpsb", "Throttle sensors A and B"], ["maf", "_mapflow", "Air flow and manifold-pressure estimate"], ["load", "absload", "Calculated and absolute load"] ];
+function crossChecks(rows, limit = 300) {
+  const rs = rows.slice(-limit).filter(r => r.rpm > 400);
+  return CROSS_PAIRS.map(([a, b, name]) => {
+    const x = [], y = []; rs.forEach(r => { const q = b === "_mapflow" ? (typeof r.map === "number" ? r.map * r.rpm : undefined) : r[b]; if (typeof r[a] === "number" && typeof q === "number") { x.push(r[a]); y.push(q); } });
+    if (x.length < 10) return { name, status: "absent", label: "Not reported", r: null, n: x.length };
+    const moved = Math.max(...x) - Math.min(...x) > Math.max(1e-6, Math.abs(avg(x)) * .15), r = pearson(x, y);
+    if (!moved || r === null || x.length < 30) return { name, status: "waiting", label: "Needs more movement", r, n: x.length };
+    return { name, status: r >= .9 ? "agree" : r >= .6 ? "loose" : "disagree", label: r >= .9 ? "They agree" : r >= .6 ? "Loose agreement" : "They disagree", r, n: x.length };
+  });
+}
+function conditionStats(rowsIn, id) {
+  const rows = annotate(rowsIn), C = [["Warming up", r => r._running && !r._warm], ["Warm idle", r => r._warm && r._idle], ["Steady cruise", r => r._warm && r._cruise], ["High load", r => r._warm && r._highload], ["Slowing", r => r._warm && r._acc < -.5 && r.mph > 5]];
+  return C.map(([name, pred]) => { const a = nums(rows, id, pred); return { name, n: a.length, median: pctl(a, .5), low: pctl(a, .05), high: pctl(a, .95) }; });
+}
+function markSnapshots(rows) { return rows.filter(r => r.mark).map(r => ({ t: r.t, label: String(r.mark), mph: r.mph, rpm: r.rpm, gear: r.gear, tps: r.tps, volt: r.volt, ect: r.ect, trans: r.trans })); }
+function histogram(a, bins = 18) {
+  if (!a.length) return []; const lo = Math.min(...a), hi = Math.max(...a), w = (hi - lo) / bins || 1, out = Array.from({ length: bins }, (_, i) => ({ from: lo + i * w, to: lo + (i + 1) * w, n: 0 }));
+  a.forEach(v => out[Math.min(bins - 1, Math.floor((v - lo) / w))].n++); return out;
+}
+function ecusFrom(raw) { const s = new Set(); cleanLines(raw).forEach(l => { const m = l.match(/^(7E[8-F])/); if (m) s.add(m[1]); }); return [...s].sort(); }
 
 function matchVehicle(vin, vehicles) {
   if (!vin || vin.length !== 17) return null;
@@ -847,11 +934,12 @@ const PRESETS = {
  Transmission: [ W("gearbox",[],[4,3],[3,4]), W("needle",["trans"],[4,4],[3,4]), W("line",["slip"],[4,4],[6,4],{win:5}), W("scatter",["mph","rpm"],[4,5],[6,5]),
    W("line",["trans"],[4,4],[6,5],{win:15}), W("share",[],[4,4],[4,4],{share:"gear",view:"bars"}), W("share",[],[4,4],[4,4],{share:"temp",view:"donut"}),
    W("share",[],[4,4],[4,4],{share:"drive",view:"donut"}), W("number",["sh12"],[2,3],[3,3]), W("number",["sh23"],[2,3],[3,3]), W("number",["sh34"],[2,3],[3,3]), W("number",["ratio"],[2,3],[3,3]), W("history",["trans"],[4,4],[12,4],{stat:"max"}) ],
+ Electrical: [ W("elab",[],[4,3],[4,3]), W("needle",["volt"],[2,4],[4,4]), W("number",["atrv"],[2,4],[4,4]), W("line",["volt","atrv"],[4,4],[12,4],{win:15}), W("history",["volt"],[4,4],[12,4],{stat:"min"}) ],
  Engine: [ W("misfire",[],[4,4],[6,4]), W("line",["ect","oilt","trans"],[4,4],[6,4],{win:15}), W("line",["stft1","stft2","ltft1","ltft2"],[4,4],[6,4],{win:5}),
    W("line",["rpm"],[4,3],[6,4],{win:5}), W("number",["oilp"],[2,3],[3,3]), W("number",["oilt"],[2,3],[3,3]), W("number",["knock"],[2,3],[3,3]), W("number",["timing"],[2,3],[3,3]), W("number",["load"],[2,3],[3,3]), W("number",["hp"],[2,3],[3,3]), W("number",["oill"],[2,3],[3,3]), W("number",["map"],[2,3],[3,3]) ],
  Fuel: [ W("number",["mpg"],[2,3],[3,3]), W("needle",["fuel"],[2,3],[3,3]), W("number",["ltft1"],[2,3],[3,3]), W("number",["ltft2"],[2,3],[3,3]), W("line",["mpg"],[4,4],[6,4],{win:15}),
    W("line",["lambda"],[4,3],[6,4],{win:5}), W("number",["maf"],[2,3],[3,3]), W("number",["frate"],[2,3],[3,3]), W("share",[],[4,4],[6,4],{share:"drive",view:"donut"}), W("history",["mpg"],[4,4],[6,4],{stat:"avg"}) ],
- Diagnostics: [ W("status",[],[4,3],[6,3]), W("readiness",[],[4,6],[6,6]), W("codes",[],[4,6],[6,7]), W("truck",[],[4,4],[6,4]), W("misfire",[],[4,4],[6,3]), W("mode06",[],[4,8],[12,7]) ],
+ Diagnostics: [ W("status",[],[4,3],[6,3]), W("readiness",[],[4,6],[6,6]), W("codes",[],[4,6],[6,7]), W("truck",[],[4,5],[6,5]), W("crosscheck",[],[4,5],[6,5]), W("misfire",[],[4,4],[6,3]), W("mode06",[],[4,8],[12,7]) ],
  "All sensors": [ W("allsensors",[],[4,12],[12,12]) ]
 };
 function buildDash(name) {
@@ -882,6 +970,7 @@ const FORMULAS = {
 /* ---------- Live state ---------- */
 let session = null, wakeLock = null, editMode = false;
 const mstate = Object.fromEntries(METRICS.map(m => [m.id, {}]));
+let labBuf = null, markPending = null, dlgPainters = [];
 let series = {}, stats = {}, latest = {}, shares = {}, rows = [], flushed = 0, chunkSeq = 0, supported = null, monitor = null, truck = {}, codes = null, mode06 = null, drives = [], lastTick = 0, driveId = null, driveStart = 0, prevMph = null, stableBuf = [];
 function dropDynamic() { for (let i = METRICS.length - 1; i >= 0; i--) if (METRICS[i].dynamic) { delete byId[METRICS[i].id]; delete mstate[METRICS[i].id]; METRICS.splice(i, 1); } }
 function addDynamic(m) { if (byId[m.id]) return; m.dynamic = true; METRICS.push(m); byId[m.id] = m; mstate[m.id] = { status: "unknown", misses: 0, last: 0, headerIdx: 0, badSince: 0 }; }
@@ -917,6 +1006,7 @@ function ratingOf(m, v) {
 function record(id, v, t) {
   latest[id] = v;
   if (v === null || v === undefined) return;
+  if (labBuf && (id === "volt" || id === "atrv" || id === "rpm")) labBuf.push({ t, id, v });
   if (mstate[id]) mstate[id].updated = t;
   const s = series[id] || (series[id] = { t: [], v: [] }); s.t.push(t); s.v.push(v);
   if (s.t.length > 9000) { s.t.splice(0, 1000); s.v.splice(0, 1000); }
@@ -932,7 +1022,7 @@ function tick(now) { // once per second
   if (latest.trans !== undefined && latest.trans !== null) addShare("temp", tempBand(latest.trans));
   // Log only fresh values: a stale reading must not count as a new sample in the review.
   const MAX_AGE = { fast: 3000, med: 8000, slow: 1100 };
-  const r = { t: now }; METRICS.forEach(m => { const v = latest[m.id], st = mstate[m.id] || {}; if (v === null || v === undefined || (m.tier && now - (st.updated || 0) > MAX_AGE[m.tier])) return; r[m.id] = typeof v === "number" ? Number(v.toFixed(4)) : v; }); rows.push(r);
+  const r = { t: now }; if (markPending) { r.mark = markPending; markPending = null; } METRICS.forEach(m => { const v = latest[m.id], st = mstate[m.id] || {}; if (v === null || v === undefined || (m.tier && now - (st.updated || 0) > MAX_AGE[m.tier])) return; r[m.id] = typeof v === "number" ? Number(v.toFixed(4)) : v; }); rows.push(r);
 }
 
 /* ---------- Adapter link ---------- */
@@ -983,6 +1073,7 @@ function visibleIds() {
 }
 const INTERVAL = { fast: [120, 1000], med: [1000, 3000], slow: [5000, 20000] };
 function nextMetric(now) {
+  if (labBuf) { const f = ["volt", "atrv", "rpm"].map(i => byId[i]).filter(m => mstate[m.id].status !== "unsupported" && mstate[m.id].status !== "failed").sort((a, b) => mstate[a.id].last - mstate[b.id].last); return f[0] || null; }
   const vis = visibleIds(); let best = null, bestScore = 1;
   for (const m of METRICS) {
     if (!m.cmd) continue; const s = mstate[m.id];
@@ -996,7 +1087,7 @@ function nextMetric(now) {
 async function pollOnce(m) {
   const s = mstate[m.id], headers = m.headers || ["7DF"];
   s.last = Date.now();
-  const raw = await askH(headers[s.headerIdx] || headers[0], m.cmd);
+  const raw = await askH(headers[s.headerIdx] || headers[0], m.cmd); s.raw = String(raw).replace(/[\r\n>]+/g, " ").trim();
   if (m.rawHex) {
     const b = isNoData(raw) ? null : dataBytes(raw, m.pre);
     if (b && b.length) { latest[m.id] = b.map(x => x.toString(16).padStart(2, "0")).join(""); s.updated = Date.now(); s.status = "ok"; s.misses = 0; }
@@ -1017,7 +1108,7 @@ async function pollOnce(m) {
 async function runLoop(s) {
   while (session === s) {
     const now = Date.now();
-    if (now - lastTick >= 1000) { lastTick = now; tick(now); if (!s.link.sim && now - s.savedAt > 30000) { s.savedAt = now; saveDrive(); } }
+    if (now - lastTick >= 1000) { lastTick = now; tick(now); if (!s.link.sim && now - s.savedAt > 5000) { s.savedAt = now; saveDrive(); } }
     const m = nextMetric(now);
     if (m) await pollOnce(m); else await new Promise(r => setTimeout(r, 40));
     if (!s.link.sim && editMode && latest.mph > 3) { setEdit(false); toast("Layout editing locked while moving."); }
@@ -1034,6 +1125,7 @@ async function start(link, label) {
     while (base <= 0xA0) { const raw = await askH("7DF", "01" + base.toString(16).toUpperCase().padStart(2, "0")); parseSupport(raw, base).forEach(p => supported.add(p)); if (!supported.has(base + 32)) break; base += 32; }
     if (!supported.size) throw new Error("No response from the truck. Turn the ignition on, then reconnect.");
     await identifyVehicle();
+    if (!link.sim) { try { await resumeIfRecent(); } catch (e) {} } $("recover").hidden = true;
     const known = new Set(METRICS.filter(m => m.pid).map(m => m.pid));
     supported.forEach(p => { if (p % 32 !== 0 && !known.has(p)) { const h = p.toString(16).toUpperCase().padStart(2, "0"); addDynamic({ id: "p" + h, label: "Standard PID " + h + " (raw)", group: "Raw", pid: p, cmd: "01" + h, pre: "41" + h, rawHex: true, tier: "slow", digits: 0, unit: "", min: 0, max: 255, basis: "standard" }); } });
     METRICS.forEach(m => { if (m.pid && !supported.has(m.pid)) { mstate[m.id].status = "unsupported"; (m.kids || []).forEach(k => mstate[k.id].status = "unsupported"); } });
@@ -1048,10 +1140,13 @@ async function start(link, label) {
 async function identifyVehicle() {
   try {
     const vin = asciiFrom(await askH("7DF", "0902"), "4902"); if (vin) truck.vin = vin;
+    try { const h = await exclusive(async () => { await ask("ATH1"); const o = await ask("0100"); await ask("ATH0"); return o; }); truck.ecus = ecusFrom(h); } catch (e) {}
     const guess = matchVehicle(vin, vehicles);
     if (guess && guess !== vid) { loadVehicle(guess); toast("Switched to " + vehicles[guess].name + " from its VIN."); }
     else if (!guess && vin && vin.length === 17 && !session.link.sim) toast("VIN not matched to a profile. Check that " + vehicles[vid].name + " is correct.");
     if (vin && vin.length === 17 && !session.link.sim) { vehicles[vid].vin = vin; saveVehicles(); }
+    try { truck.cal = asciiFrom(await askH("7DF", "0904"), "4904"); const cb = dataBytes(await askH("7DF", "0906"), "4906"); truck.cvn = cb ? cb.map(x => x.toString(16).padStart(2, "0")).join("") : null;
+      const fp = JSON.stringify([truck.cal, truck.cvn]), was = store.get(vkey("fp"), null); if ((truck.cal || truck.cvn) && !session.link.sim) { if (was && was !== fp) truck.fpChanged = true; store.set(vkey("fp"), fp); } } catch (e) {}
     if (!vehicles[vid].engine && ENGINE_CHOICES[vid]) {
       const b = dataBytes(await askH("7DF", "0113"), "4113");
       if (b && b.length) { const v6 = (b[0] & 0xF0) !== 0, pick = ENGINE_CHOICES[vid].find(e => (e.cyl === 6) === v6); vehicles[vid].engine = { ...pick, detected: true }; vehicles[vid].layout = pick.layout; saveVehicles(); toast("Engine looks like " + pick.label + " from its O2 sensor layout. Check this in Vehicle settings."); }
@@ -1069,7 +1164,7 @@ async function readMode06() {
 async function fail(e) { setStatus(e.message || String(e), "bad"); await stop(true); }
 async function stop(keep) {
   const s = session; session = null;
-  if (s && !s.link.sim) await saveDrive(true);
+  if (s && !s.link.sim) { if (keep) await saveDrive(); else { await saveDrive(true); store.set("active", null); } }
   if (s) await s.link.close();
   if (wakeLock) { try { await wakeLock.release(); } catch (e) {} wakeLock = null; }
   $("stop").disabled = true; $("connect").disabled = !("serial" in navigator); $("sim").disabled = false; $("vehicle").disabled = false;
@@ -1101,15 +1196,45 @@ async function deleteDrive(id) {
   await new Promise((res, rej) => { const t = d.transaction(["drives", "chunks"], "readwrite"); t.objectStore("drives").delete(id); keys.forEach(k => t.objectStore("chunks").delete(k)); t.oncomplete = res; t.onerror = () => rej(t.error); });
   await loadDrives();
 }
-const sessionMeta = () => ({ id: driveId, start: driveStart, codes, monitor, mode06, supported: supported ? [...supported] : [] });
+const sessionMeta = () => ({ id: driveId, start: driveStart, codes, monitor, mode06, supported: supported ? [...supported] : [], fpChanged: !!truck.fpChanged, ecus: truck.ecus || [] });
+let saving = false;
 async function saveDrive(final) {
-  if (!driveId || Date.now() - driveStart < 60000) return;
-  const summary = {}; for (const id in stats) { const s = stats[id]; if (s.n) summary[id] = { min: s.min, max: s.max, avg: s.sum / s.n, n: s.n }; }
-  const fresh = rows.slice(flushed), chunks = fresh.length ? [{ id: driveId + ":" + chunkSeq, drive: driveId, seq: chunkSeq, rows: fresh }] : [];
-  const rec = { ...sessionMeta(), vehicle: vid, end: Date.now(), summary, build: BUILD_ID };
-  if (final) { try { rec.review = analyzeDrive({ rows, meta: rec, vehicle: vehicles[vid], history: drives }); rec.review = { stats: rec.review.stats, verdict: rec.review.verdict, kind: rec.review.trip.kind }; } catch (e) { console.error(e); } }
-  try { await putDrives([rec], chunks); flushed = rows.length; if (fresh.length) chunkSeq++; await loadDrives(); } catch (e) { console.error(e); }
+  if (!driveId || saving) return;
+  const age = Date.now() - driveStart;
+  if (age < 20000 && !final) return;
+  if (final && age < 60000) { store.set("active", null); try { await deleteDrive(driveId); } catch (e) {} return; }
+  saving = true;
+  try {
+    const summary = {}; for (const id in stats) { const s = stats[id]; if (s.n) summary[id] = { min: s.min, max: s.max, avg: s.sum / s.n, n: s.n }; }
+    const end = rows.length, fresh = rows.slice(flushed, end), chunks = fresh.length ? [{ id: driveId + ":" + chunkSeq, drive: driveId, seq: chunkSeq, rows: fresh }] : [];
+    const rec = { ...sessionMeta(), vehicle: vid, end: Date.now(), summary, build: BUILD_ID };
+    if (final) { const rv = analyzeDrive({ rows, meta: rec, vehicle: vehicles[vid], history: drives }); rec.review = { stats: rv.stats, verdict: rv.verdict, kind: rv.trip.kind }; }
+    await putDrives([rec], chunks); flushed = end; if (fresh.length) chunkSeq++;
+    if (!final) store.set("active", { id: driveId, vid, start: driveStart, last: Date.now(), seq: chunkSeq });
+    await loadDrives();
+  } catch (e) { console.error(e); toast("Couldn't save to this device: " + e.message); } finally { saving = false; }
 }
+async function resumeIfRecent() {
+  const ac = store.get("active", null);
+  if (!ac || ac.vid !== vid || Date.now() - ac.last > 20 * 60000) return false;
+  const old = await driveRows(ac.id); if (!old.length) return false;
+  driveId = ac.id; driveStart = ac.start; chunkSeq = ac.seq; rows = old; flushed = old.length;
+  const kept = { ...latest }; old.forEach(r => { for (const k in r) if (k !== "t" && typeof r[k] === "number") record(k, r[k], r.t); }); latest = kept;
+  toast("Continuing your unfinished drive."); return true;
+}
+function showRecovery() {
+  const ac = store.get("active", null), box = $("recover");
+  if (!ac || session) { box.hidden = true; return; }
+  const mins = Math.max(1, Math.round((ac.last - ac.start) / 60000)); box.hidden = false; box.textContent = "";
+  box.append(el("b", { textContent: "Unfinished " + (vehicles[ac.vid] ? vehicles[ac.vid].name : "drive") + " drive saved (" + mins + " min)" }), el("div", { class: "bar" },
+    el("button", { class: "primary", textContent: "Reconnect and continue", onclick: async () => { if (ac.vid !== vid) switchVehicle(ac.vid); const ports = navigator.serial ? await navigator.serial.getPorts() : []; if (ports.length) start(new SerialLink(ports[0]), "OBDLink LX"); else $("connect").click(); } }),
+    el("button", { textContent: "Review it", onclick: async () => { if (ac.vid !== vid) { switchVehicle(ac.vid); await loadDrives(); } store.set("active", null); box.hidden = true; openReview(ac.id); } }),
+    el("button", { textContent: "Dismiss", onclick: () => { store.set("active", null); box.hidden = true; } })));
+}
+function switchVehicle(id) { loadVehicle(id); resetLive(); syncEditControls(); renderVehicleSelect(); renderTabs(); renderGrid(); }
+addEventListener("pagehide", () => { if (session && !session.link.sim) saveDrive(); });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && session && !session.link.sim) saveDrive(); });
+addEventListener("beforeunload", e => { if (session && !session.link.sim) { saveDrive(); e.preventDefault(); e.returnValue = ""; } });
 function usual(id) {
   const a = drives.map(d => d.summary && d.summary[id]).filter(Boolean);
   return a.length >= 3 ? { avg: median(a.map(x => x.avg)), max: median(a.map(x => x.max)), n: a.length } : null;
@@ -1123,7 +1248,7 @@ function canvasCtx(c) {
   return { g, W: r.width, H: r.height };
 }
 const fmt = (m, v) => v === null || v === undefined ? "--" : typeof v === "string" ? v : v.toFixed(m.digits);
-const TAG = { standard: "Standard", community: "Unverified", derived: "Estimate" };
+const TAG = { standard: "Standard", community: "Unverified", derived: "Estimate", adapter: "Adapter" };
 function emptyText(m) {
   const s = mstate[m.id];
   if (!session) return "Not connected";
@@ -1313,12 +1438,12 @@ R.truck = (w, box) => {
   btn.onclick = async () => { if (!session) return; try { truck.vin = asciiFrom(await askH("7DF", "0902"), "4902"); truck.cal = asciiFrom(await askH("7DF", "0904"), "4904"); } catch (e) { toast(e.message); } };
   box.append(header(w, "Truck identity", "Standard"), el("div", { class: "body" }, btn, list));
   let sig = "";
-  return () => { btn.disabled = !session; const rows2 = [["VIN", truck.vin], ["Calibration ID", truck.cal], ["Odometer", latest.odo != null ? latest.odo.toFixed(0) + " mi" : null], ["Standard PIDs reported", supported ? String(supported.size) : null]].filter(r => r[1]); const s = JSON.stringify(rows2); if (s === sig) return; sig = s; list.textContent = "";
+  return () => { btn.disabled = !session; const rows2 = [["VIN", truck.vin], ["Calibration ID", truck.cal], ["Software fingerprint", truck.cvn ? truck.cvn + (truck.fpChanged ? " (changed)" : "") : null], ["Computers answering", truck.ecus && truck.ecus.length ? truck.ecus.join(", ") : null], ["Odometer", latest.odo != null ? latest.odo.toFixed(0) + " mi" : null], ["Standard PIDs reported", supported ? String(supported.size) : null]].filter(r => r[1]); const s = JSON.stringify(rows2); if (s === sig) return; sig = s; list.textContent = "";
     rows2.forEach(r => list.append(el("div", { class: "row" }, el("span", { textContent: r[0] }), el("span", { textContent: r[1] })))); };
 };
 function sessionReport() { return analyzeDrive({ rows, meta: sessionMeta(), vehicle: vehicles[vid], history: drives }); }
 R.healthcheck = (w, box) => {
-  const list = el("div", { class: "scroll" }), btn = el("button", { class: "primary", textContent: "See total health", onclick: openReview });
+  const list = el("div", { class: "scroll" }), btn = el("button", { class: "primary", textContent: "See total health", onclick: () => openReview() });
   box.append(header(w, "Guided health check", ""), el("div", { class: "body" }, el("div", { class: "sub", style: "white-space:normal", textContent: "Steps tick themselves off from the data. Do them in any order, and only when safe. Don't touch the phone while moving." }), list, btn));
   let n = 0, sig = "";
   return () => { if (n++ % 8) return; const st = healthSteps(rows), s = JSON.stringify(st.map(x => x.done)); if (s === sig) return; sig = s; list.textContent = "";
@@ -1331,6 +1456,14 @@ R.healthcard = (w, box) => {
     sessionReport().systems.forEach(c => list.append(el("div", { class: "row" }, el("span", { textContent: c.name }), el("span", { class: "pill " + (c.status === "good" ? "good" : c.status === "attention" ? "bad" : ""), textContent: SICON[c.status] + " " + c.label })))); };
 };
 const SICON = { attention: "✕", watch: "▲", good: "✓", partial: "~", untested: "○", check: "▲", clear: "✓", unknown: "○" };
+R.crosscheck = (w, box) => {
+  const list = el("div", { class: "scroll" }); box.append(header(w, "Do related sensors agree?", "Standard"), el("div", { class: "body" }, list));
+  let n = 0; return () => { if (n++ % 8) return; list.textContent = ""; crossChecks(rows).forEach(c => list.append(el("div", { class: "row" }, el("span", { textContent: c.name }), el("span", { class: "pill " + (c.status === "agree" ? "good" : c.status === "disagree" ? "bad" : ""), textContent: ({ agree: "✓ ", disagree: "✕ " }[c.status] || "") + c.label })))); };
+};
+R.elab = (w, box) => {
+  box.append(header(w, "Electrical Lab", ""), el("div", { class: "body" }, el("div", { class: "sub", style: "white-space:normal", textContent: "Parked tests for starting voltage and accessory load, including a blower test." }), el("button", { class: "primary", textContent: "Open Electrical Lab", onclick: openLab })));
+  return () => {};
+};
 R.mode06 = (w, box) => {
   const list = el("div", { class: "scroll" }), btn = el("button", { textContent: "Read self-test results" });
   btn.onclick = () => readMode06().catch(e => toast(e.message));
@@ -1396,11 +1529,11 @@ function applyFit() {
 function syncEditControls() { $("editBtn").disabled = tab === EV; const custom = dash[tab] && !PRESETS[tab]; $("resetBtn").textContent = custom ? "Clear screen" : "Reset tab"; }
 function movingNow() { return !!session && !session.link.sim && latest.mph > 3; }
 function bindLongPress(node, w) {
-  let timer = null, sx = 0, sy = 0; const clear = () => { clearTimeout(timer); timer = null; };
-  node.addEventListener("pointerdown", e => { if (editMode || e.target.closest("button,input,select,summary,a")) return; sx = e.clientX; sy = e.clientY; clear(); timer = setTimeout(() => { timer = null; try { navigator.vibrate && navigator.vibrate(20); } catch (err) {} openCopy(w); }, 550); });
+  let timer = null, sx = 0, sy = 0, fired = 0; node.addEventListener("click", e => { if (editMode || Date.now() - fired < 800 || $("dlg").open || e.target.closest("button,input,select,summary,a")) return; const id = w.type === "gearbox" ? "slip" : (["number","needle","line","history"].includes(w.type) ? w.metrics[0] : null); if (id) openDrill(id); }); const clear = () => { clearTimeout(timer); timer = null; };
+  node.addEventListener("pointerdown", e => { if (editMode || e.target.closest("button,input,select,summary,a")) return; sx = e.clientX; sy = e.clientY; clear(); timer = setTimeout(() => { timer = null; fired = Date.now(); try { navigator.vibrate && navigator.vibrate(20); } catch (err) {} openCopy(w); }, 550); });
   node.addEventListener("pointermove", e => { if (timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 10) clear(); });
   ["pointerup", "pointercancel", "pointerleave"].forEach(n => node.addEventListener(n, clear));
-  node.addEventListener("contextmenu", e => { if (editMode) return; e.preventDefault(); clear(); openCopy(w); });
+  node.addEventListener("contextmenu", e => { if (editMode) return; e.preventDefault(); clear(); fired = Date.now(); openCopy(w); });
 }
 function compactTab(fixed) { compact(dash[tab].map(posWithId), cols(), fixed); }
 function posWithId(w) { const p = posOf(w); p.id = w.id; return p; }
@@ -1465,7 +1598,7 @@ function commit() { dashNoNodes(); save(); renderGrid(); }
 function dashNoNodes() { Object.values(dash).flat().forEach(w => { if (w._node) delete w._node; }); }
 function openAdd() {
   $("dlg").classList.remove("wide");
-  const t = el("select", {}, [["number","Number with sparkline"],["needle","Active needle"],["line","Line graph"],["scatter","RPM vs speed scatter"],["share","Pie/bars: share of time"],["history","Per-drive history"],["gearbox","Gear and slip"],["misfire","Misfire by cylinder"],["status","Check-engine status"],["readiness","Emissions monitors"],["codes","Trouble codes"],["truck","Truck identity"],["mode06","Computer self-tests"],["healthcheck","Guided health check"],["healthcard","Total health"],["allsensors","Every reading"]].map(([k, v]) => el("option", { value: k, textContent: v })));
+  const t = el("select", {}, [["number","Number with sparkline"],["needle","Active needle"],["line","Line graph"],["scatter","RPM vs speed scatter"],["share","Pie/bars: share of time"],["history","Per-drive history"],["gearbox","Gear and slip"],["misfire","Misfire by cylinder"],["status","Check-engine status"],["readiness","Emissions monitors"],["codes","Trouble codes"],["truck","Truck identity"],["mode06","Computer self-tests"],["crosscheck","Sensor cross-checks"],["elab","Electrical Lab"],["healthcheck","Guided health check"],["healthcard","Total health"],["allsensors","Every reading"]].map(([k, v]) => el("option", { value: k, textContent: v })));
   const m = el("select", {}, metricOptions("trans"));
   showDlg("Add widget", el("label", { textContent: "Widget" }), t, el("label", { textContent: "Reading (when the widget uses one)" }), m, el("div", { class: "bar" }, el("button", { class: "primary", textContent: "Add", onclick: () => {
     const type = t.value, w = { id: "u" + Date.now().toString(36), type, metrics: ["number","needle","line","history"].includes(type) ? [m.value] : type === "scatter" ? ["mph","rpm"] : [], win: 5, stat: "max", share: "drive", view: "donut", pos: {} };
@@ -1547,6 +1680,7 @@ function renderReport(host, rep, veh, meta, rs) {
   const names = { attention: "Needs attention", watch: "Watch", good: "Looks good", info: "Context" };
   ["attention","watch","good","info"].forEach(l => { const a = rep.findings.filter(f => f.level === l); if (!a.length) return; host.append(el("h3", { textContent: names[l] + " (" + a.length + ")" }));
     a.forEach(f => { const d = el("details", { class: "f", open: l === "attention" || l === "watch" }, el("summary", {}, el("span", { class: "lv " + l, textContent: ico[l] }), f.system + ": " + f.title), el("p", { textContent: f.evidence }), el("p", { textContent: f.meaning }), f.bestGuess ? el("p", {}, el("b", { textContent: "Best guess: " }), f.bestGuess + ".") : null, f.alsoPossible && f.alsoPossible.length ? el("p", { textContent: "Also possible: " + f.alsoPossible.join("; ") + "." }) : null, f.sure ? el("p", { textContent: "How sure: " + f.sure.label + ". " + f.sure.why }) : null, f.next.length ? el("p", { textContent: "Next: " + f.next.join(" ") }) : null, el("small", { textContent: "Basis: " + f.basis })); host.append(d); }); });
+  if (rep.marks && rep.marks.length) { host.append(el("h3", { textContent: "Your marks" })); rep.marks.forEach(m => host.append(el("div", { class: "row" }, el("span", { textContent: new Date(m.t).toLocaleTimeString() + " · " + m.label }), el("span", { textContent: [m.mph != null ? Math.round(m.mph) + " mph" : "", m.rpm != null ? Math.round(m.rpm) + " rpm" : "", m.volt != null ? m.volt.toFixed(1) + " V" : ""].filter(Boolean).join(", ") })))); }
   if (rep.notAssessed.length) { host.append(el("h3", { textContent: "Not tested on this drive" })); rep.notAssessed.forEach(n => host.append(el("div", { class: "row" }, el("span", { textContent: n.system }), el("span", { textContent: n.why })))); }
   host.append(el("h3", { textContent: "Learn the terms" })); GLOSSARY.forEach(g => host.append(el("details", { class: "f" }, el("summary", { textContent: g[0] }), el("p", { textContent: g[1] }))));
   const tag = new Date(meta.start || Date.now()).toISOString().replace(/[:.]/g, "-");
@@ -1555,11 +1689,12 @@ function renderReport(host, rep, veh, meta, rs) {
     el("button", { textContent: "Download data CSV", onclick: () => download(vid + "-drive-" + tag + ".csv", rowsCsv(rs, false), "text/csv") }),
     el("button", { textContent: "Package for Claude review", onclick: () => { const thin = rs.filter((r, i) => i % 5 === 0); download(vid + "-claude-packet-" + tag + ".json", JSON.stringify({ build: BUILD_ID, generated: new Date().toISOString(), vehicle: { name: veh.name, engine: veh.engine, afm: veh.afm, trans: veh.trans, notes: veh.notes }, meta: { start: meta.start, end: meta.end, codes: meta.codes, monitor: meta.monitor, mode06: meta.mode06, supported: meta.supported }, report: rep, rowsEvery5s: thin }), "application/json"); } })));
 }
-async function openReview() {
+async function openReview(pickId) {
   await loadDrives();
   const host = el("div"), sel = el("select", { "aria-label": "Drive" });
   if (rows.length) sel.append(el("option", { value: "__live", textContent: "Current session" + (session && session.link.sim ? " (simulator)" : "") }));
   [...drives].reverse().forEach(d => sel.append(el("option", { value: d.id, textContent: new Date(d.start).toLocaleString() + (d.review ? " · " + d.review.kind : "") })));
+  if (typeof pickId === "string") sel.value = pickId;
   const del = el("button", { textContent: "Delete this drive" });
   const show = async () => {
     host.textContent = "Analyzing…"; del.hidden = sel.value === "__live" || !sel.value; del.textContent = "Delete this drive"; del.dataset.arm = "";
@@ -1608,11 +1743,11 @@ function openScreens() {
 const ABOUT = {
  rpm:"How fast the engine is turning.", mph:"Road speed from the vehicle's sensors. It can differ slightly from GPS.", load:"How hard the engine is working compared with its capacity.", tps:"How far the throttle is open.", pedal:"How far you're pressing the accelerator.", map:"Pressure in the intake. It's low at idle and near outside pressure at full throttle.", maf:"How much air is entering the engine.", timing:"When the spark fires. The computer moves it constantly.", torq:"The computer's estimate of engine twist.", ect:"Engine coolant temperature, which is the main sign of engine heat.", iat:"Temperature of air entering the engine.", amb:"Outside air temperature.", cat1:"Estimated or measured catalytic converter heat.", volt:"Electrical supply at the computer, reflecting battery and alternator health.", stft1:"Fast fuel correction on bank 1. Positive means adding fuel.", ltft1:"Learned fuel correction on bank 1. It reveals longer-term problems.", stft2:"Fast fuel correction on bank 2.", ltft2:"Learned fuel correction on bank 2.", lambda:"Air-fuel mix being requested. 1.00 is chemically ideal.", frate:"Fuel use reported by the computer, when available.", fuel:"Fuel tank level.", baro:"Outside air pressure, which falls with altitude.", runtime:"Time since this engine start.", clrdist:"Miles since codes were cleared. Low numbers mean less history.", warmups:"Warm-ups since codes were cleared.", mildist:"Miles driven with the check-engine light on.", reftq:"The engine torque figure used to calculate percentage torque.", odo:"Odometer, on vehicles that report it.", gratio:"Current gear ratio, on vehicles that report it.", trans:"Transmission fluid heat. Sustained heat ages the fluid.", gear:"The gear the transmission reports.", slip:"Speed difference across the torque converter. Lots at steady cruise creates heat.", sh12:"Time taken for the 1-2 shift.", sh23:"Time taken for the 2-3 shift.", sh34:"Time taken for the 3-4 shift.", oilt:"Engine oil heat.", oilts:"Engine oil heat from the standard data set.", oilp:"Oil pressure, if this request is valid on this vehicle.", oill:"Calculated oil life. It's not a measurement of the oil.", knock:"Timing pulled back to prevent engine knock.", ratio:"Engine rpm for each mph. It's steady in a locked gear.", mpg:"Fuel economy estimated from airflow. Use it for comparison.", hp:"Power estimated from reported torque and rpm.", fuelstat:"Fuel control mode. 2 means closed loop using O2 feedback.", fuelp:"Fuel pressure, where reported.", purge:"How much fuel vapor is being drawn from the tank system.", egrc:"Commanded exhaust gas recirculation.", egre:"Difference between requested and actual EGR.", absload:"Air per intake stroke, a load figure that can exceed 100%.", cmdtps:"Throttle opening the computer is requesting.", demtq:"Torque you're requesting with the pedal.", ethanol:"Reported ethanol fuel percentage.", miltime:"Engine time with the check-engine light on.", clrtime:"Engine time since codes were cleared."
 };
-function aboutOf(m) { if (ABOUT[m.id]) return ABOUT[m.id]; if (/^o2v/.test(m.id)) return "Oxygen sensor signal. Sensor 1 is before the catalyst and sensor 2 is after."; if (/^o2t/.test(m.id)) return "Fuel correction tied to this oxygen sensor."; if (/^wb|^wc/.test(m.id)) return "Wide-range oxygen sensor reading. It measures air-fuel mix directly."; if (/^mis/.test(m.id)) return "Recent misfire count for this cylinder from the computer's monitor."; if (/^so2/.test(m.id)) return "Fuel correction from the sensor after the catalyst."; if (/^cat/.test(m.id)) return "Catalytic converter heat, often calculated."; if (/^evap/.test(m.id)) return "Fuel vapor system pressure, used in leak checks."; if (/^rail/.test(m.id)) return "Fuel rail pressure, where reported."; if (/^tps|^pedal|^reltps|^relpedal/.test(m.id)) return "A related throttle or pedal sensor. Duplicates let the computer cross-check them."; if (/^(p|r)[0-9A-F]/.test(m.id)) return "Raw value this vehicle answered. Its meaning isn't known yet."; if (m.group === "Custom") return "A reading you added."; if (m.inj) return ""; return m.label + "."; }
+function aboutOf(m) { if (ABOUT[m.id]) return ABOUT[m.id]; if (m.id === "atrv") return "Voltage at the diagnostic port, measured by the adapter itself."; if (m.id === "fflow") return "Fuel flow estimated from airflow. It isn't a measurement at the injectors."; if (m.id === "cylfuel") return "Fuel per stroke reported by the computer, on vehicles that support it."; if (m.id === "alt") return "Altitude estimated from barometric pressure."; if (/^o2v/.test(m.id)) return "Oxygen sensor signal. Sensor 1 is before the catalyst and sensor 2 is after."; if (/^o2t/.test(m.id)) return "Fuel correction tied to this oxygen sensor."; if (/^wb|^wc/.test(m.id)) return "Wide-range oxygen sensor reading. It measures air-fuel mix directly."; if (/^mis/.test(m.id)) return "Recent misfire count for this cylinder from the computer's monitor."; if (/^so2/.test(m.id)) return "Fuel correction from the sensor after the catalyst."; if (/^cat/.test(m.id)) return "Catalytic converter heat, often calculated."; if (/^evap/.test(m.id)) return "Fuel vapor system pressure, used in leak checks."; if (/^rail/.test(m.id)) return "Fuel rail pressure, where reported."; if (/^tps|^pedal|^reltps|^relpedal/.test(m.id)) return "A related throttle or pedal sensor. Duplicates let the computer cross-check them."; if (/^(p|r)[0-9A-F]/.test(m.id)) return "Raw value this vehicle answered. Its meaning isn't known yet."; if (m.group === "Custom") return "A reading you added."; if (m.inj) return ""; return m.label + "."; }
 function evWidgets() {
   const F = (type, about, extra = {}, big = true) => ({ w: { id: "ev" + type + (extra.share || (extra.metrics || []).join("")), type, metrics: [], ...extra }, about, big });
   const views = [
-    ["Vehicle status", [F("status", "Whether the check-engine light is on, and code counts."), F("gearbox", "Current gear and converter slip together."), F("misfire", "Recent misfires per cylinder, which shows whether a problem is localized."), F("readiness", "Which emissions self-tests have finished."), F("codes", "Stored, pending, and permanent trouble codes, plus freeze frame."), F("mode06", "Computer self-test results against the vehicle's own limits."), F("truck", "VIN, calibration, and odometer. It stays on this device.")]],
+    ["Vehicle status", [F("status", "Whether the check-engine light is on, and code counts."), F("gearbox", "Current gear and converter slip together."), F("misfire", "Recent misfires per cylinder, which shows whether a problem is localized."), F("readiness", "Which emissions self-tests have finished."), F("codes", "Stored, pending, and permanent trouble codes, plus freeze frame."), F("mode06", "Computer self-test results against the vehicle's own limits."), F("truck", "VIN, software fingerprint, and which computers answer. It stays on this device."), F("crosscheck", "Whether related sensors move together."), F("elab", "Parked tests for starting voltage and accessory load.")]],
     ["Gauges", ["rpm","mph","trans","ect","volt","fuel"].map(i => F("needle", "Needle gauge. Colors show its limit, if one exists.", { metrics: [i] }, false))],
     ["Graphs and pies", [F("line", "Fuel corrections over time.", { metrics: ["stft1","ltft1","stft2","ltft2"], win: 5 }), F("line", "All major heat readings together.", { metrics: ["ect","oilt","trans"], win: 15 }), F("line", "Converter slip over time.", { metrics: ["slip"], win: 5 }), F("scatter", "Each point is engine speed against road speed. Each locked gear forms a straight ray.", { metrics: ["mph","rpm"] }), F("share", "Time in each gear.", { share: "gear", view: "bars" }), F("share", "Time in each transmission temperature band.", { share: "temp", view: "donut" }), F("share", "Time stopped, cruising, accelerating, and slowing.", { share: "drive", view: "donut" }), F("history", "Transmission temperature peak on each saved drive.", { metrics: ["trans"], stat: "max" }), F("history", "Estimated fuel economy on each saved drive.", { metrics: ["mpg"], stat: "avg" })]],
     ["Health", [F("healthcheck", "The guided steps that exercise more of the vehicle."), F("healthcard", "System-by-system status for this session.")]]
@@ -1637,6 +1772,70 @@ function renderEverything(g) {
     painters.push(() => { if (!session) return; let any = false; secTiles.forEach(({ wrap, t }) => { const m = t.metric, st = m && mstate[m.id] && mstate[m.id].status, off = m && (st === "unsupported" || st === "failed"); wrap.style.display = off ? "none" : ""; if (!off) any = true; }); head.style.display = any ? "" : "none"; });
   });
   painters.push(() => { const paused = movingNow() && !evPassenger; pause.hidden = !paused; hint.hidden = paused; g.classList.toggle("paused", paused); hide.forEach(n => { if (paused) n.dataset.pv = "1"; n.style.visibility = paused ? "hidden" : ""; n.style.position = paused ? "absolute" : ""; }); });
+}
+/* ---------- Marks ---------- */
+function addMark() {
+  if (!session) return toast("Connect first.");
+  if (movingNow()) { markPending = "Marked while driving"; toast("Marked."); return; }
+  $("dlg").classList.remove("wide"); const put = t => { markPending = t; $("dlg").close(); toast("Marked: " + t); }, txt = el("input", { placeholder: "Your note", maxLength: 60, "aria-label": "Note" });
+  showDlg("Mark this moment", el("p", { textContent: "This pins a note to the log with what the vehicle was doing." }), el("div", { class: "bar" }, ["Blower noise", "Blower speed changed", "Blower stopped", "Lights dimmed", "Shudder", "Slip feeling", "Rough running"].map(t => el("button", { textContent: t, onclick: () => put(t) }))), txt, el("div", { class: "bar" }, el("button", { class: "primary", textContent: "Save note", onclick: () => txt.value.trim() && put(txt.value.trim()) })));
+}
+/* ---------- Gauge drill-in ---------- */
+function openDrill(id) {
+  const m = byId[id]; if (!m) return; if (movingNow()) return toast("Drill-in is locked while moving.");
+  dlgPainters = []; $("dlg").classList.add("wide");
+  const statsBox = el("div", { class: "stats" }), statusLine = el("p", {}), rule = ruleOf(m);
+  const fixed = (type, wx, h = 230) => { const b = el("div", { class: "w", style: "height:" + h + "px" }), fn = R[type]({ id: "d", type, metrics: [], ...wx }, b); if (fn) dlgPainters.push(fn); return b; };
+  const winSel = el("select", { "aria-label": "Time window" }, [[1, "1 minute"], [5, "5 minutes"], [15, "15 minutes"], [60, "60 minutes"]].map(([v, l]) => el("option", { value: v, textContent: l, selected: v === 5 })));
+  const lineHost = el("div"), xHost = el("div"), xSel = el("select", { "aria-label": "Compare with" }, ["rpm","mph","load","tps","volt","ect","maf"].filter(x => x !== id).map(x => el("option", { value: x, textContent: byId[x].label })));
+  let linePaint = null, xPaint = null;
+  const reLine = () => { dlgPainters = dlgPainters.filter(p => p !== linePaint); lineHost.textContent = ""; const b = el("div", { class: "w", style: "height:230px" }); linePaint = R.line({ metrics: [id], win: Number(winSel.value) }, b); lineHost.append(b); if (linePaint) dlgPainters.push(linePaint); };
+  const reX = () => { dlgPainters = dlgPainters.filter(p => p !== xPaint); xHost.textContent = ""; const b = el("div", { class: "w", style: "height:250px" }); xPaint = R.scatter({ metrics: [xSel.value, id] }, b); xHost.append(b); if (xPaint) dlgPainters.push(xPaint); };
+  winSel.onchange = reLine; xSel.onchange = reX; reLine(); reX();
+  const hist = el("canvas", { style: "height:120px;flex:none" }), histLabel = el("p", { style: "font-size:.75rem;color:var(--muted)" }), condBox = el("div"), tips = el("p", { textContent: aboutOf(m) });
+  const stat = (a, b) => el("div", {}, el("b", { textContent: a }), b); let tick = 0;
+  dlgPainters.push(() => {
+    if (tick++ % 4) return; const s = series[m.id], st = stats[m.id], v = latest[m.id] ?? null, ms = mstate[m.id] || {}, vals = s ? s.v : [];
+    statusLine.textContent = "Source: " + (TAG[m.basis] || "") + ". " + (ms.updated ? "Updated " + ((Date.now() - ms.updated) / 1000).toFixed(1) + " s ago. " : "") + (ms.raw ? "Last raw reply: " + ms.raw : "");
+    statsBox.textContent = ""; const r = ratingOf(m, v);
+    statsBox.append(stat(fmt(m, v) + " " + m.unit, "Now" + (r.state !== "none" ? " · " + r.text : "")), stat(st ? st.min.toFixed(m.digits) : "--", "Minimum"), stat(st ? (st.sum / st.n).toFixed(m.digits) : "--", "Average"), stat(st ? st.max.toFixed(m.digits) : "--", "Maximum"), stat(vals.length ? pctl(vals, .95).toFixed(m.digits) : "--", "95% were under"), stat(String(vals.length), "Samples"));
+    const { g, W, H } = canvasCtx(hist), bins = histogram(vals), mx = Math.max(1, ...bins.map(b => b.n));
+    bins.forEach((b, i) => { const bw = W / bins.length, h = b.n / mx * (H - 4); g.fillStyle = COLORS[0]; g.fillRect(i * bw + 1, H - h, Math.max(1, bw - 2), h); });
+    histLabel.textContent = bins.length ? "Time spent at each value, from " + bins[0].from.toFixed(m.digits) + " to " + bins[bins.length - 1].to.toFixed(m.digits) + " " + m.unit : "No samples yet.";
+    condBox.textContent = ""; conditionStats(rows, m.id).filter(c => c.n).forEach(c => condBox.append(el("div", { class: "row" }, el("span", { textContent: c.name + " (" + c.n + ")" }), el("span", { textContent: c.median.toFixed(m.digits) + " " + m.unit + ", typical " + c.low.toFixed(m.digits) + "–" + c.high.toFixed(m.digits) }))));
+    if (!condBox.children.length) condBox.textContent = "Not enough data yet.";
+  });
+  const lo = el("input", { type: "number", step: "any", value: rule && rule.lo != null ? rule.lo : "", "aria-label": "Red below" }), hi = el("input", { type: "number", step: "any", value: rule && rule.hi != null ? rule.hi : "", "aria-label": "Red above" });
+  lo.onchange = hi.onchange = () => { const o = { off: lo.value === "" && hi.value === "", when: (m.rule || {}).when, sustainMs: (m.rule || {}).sustainMs, note: "Your own limit." }; if (lo.value !== "") o.lo = Number(lo.value); else o.lo = undefined; if (hi.value !== "") o.hi = Number(hi.value); else o.hi = undefined; rules[m.id] = o; store.set(vkey("rules"), rules); };
+  showDlg(m.label + (m.unit ? " (" + m.unit + ")" : ""), tips, statusLine, statsBox, el("h3", { textContent: "Over time" }), winSel, lineHost, el("h3", { textContent: "Distribution" }), hist, histLabel, el("h3", { textContent: "By driving condition" }), condBox, el("h3", { textContent: "Compared with" }), xSel, xHost, el("h3", { textContent: "Across saved drives (peak)" }), fixed("history", { metrics: [id], stat: "max" }, 180), el("h3", { textContent: "Limits" }), el("p", { textContent: (rule && rule.note) || "No limit set, so this stays neutral." }), el("div", { class: "fields" }, el("div", {}, el("label", { textContent: "Red below" }), lo), el("div", {}, el("label", { textContent: "Red above" }), hi)), el("div", { class: "bar" }, el("button", { textContent: "Copy to…", onclick: () => { $("dlg").close(); openCopy({ type: "number", metrics: [id], win: 5, stat: "max" }); } })));
+}
+/* ---------- Electrical Lab ---------- */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function captureFor(ms, stopIf) { labBuf = []; const t0 = Date.now(); while (Date.now() - t0 < ms && labBuf && !(stopIf && stopIf())) await sleep(100); const out = labBuf || []; labBuf = null; return out; }
+function openLab() {
+  if (movingNow()) return toast("The Electrical Lab is parked-only."); dlgPainters = []; $("dlg").classList.add("wide");
+  const steps = [], out = el("div"), run = el("div"), past = store.get(vkey("labs"), []);
+  const pick = s => { const v = s.filter(x => x.id === "volt"); return v.length >= 5 ? v : s.filter(x => x.id === "atrv"); };
+  const render = () => { out.textContent = ""; const rs = analyzeLoadSteps(steps); if (!rs.rows.length) return; const tb = el("table", {}, el("thead", {}, el("tr", {}, ["Step","Volts","Drop","Steadiness (±V)","Start-up dip"].map((h, i) => el("th", { class: i ? "n" : "", textContent: h })))), el("tbody", {}, rs.rows.map(r => el("tr", {}, el("td", { textContent: r.name }), el("td", { class: "n", textContent: r.mean.toFixed(2) }), el("td", { class: "n", textContent: r.drop.toFixed(2) }), el("td", { class: "n", textContent: r.sd.toFixed(3) }), el("td", { class: "n", textContent: r.inrush != null ? r.inrush.toFixed(2) : "–" })))));
+    out.append(tb, el("div", { class: "verdict " + (rs.leaning === "electrical" ? "attention" : rs.leaning === "mechanical" ? "good" : "watch") }, el("b", { textContent: "Best guess: " + rs.verdict }), el("span", { textContent: rs.reasons.join(" ") + " How sure: Low to medium, because voltage only hints at current." })));
+    store.set(vkey("labs"), [...past.slice(-19), { t: Date.now(), steps: rs.rows, verdict: rs.verdict }]); };
+  const stepBtn = name => { const b = el("button", { textContent: name, onclick: async () => {
+    if (!session) return toast("Connect first."); if (labBuf) return; b.disabled = true; b.textContent = name + ": recording…";
+    const s = await captureFor(12000), series2 = pick(s), t0 = s.length ? s[0].t : 0, settled = series2.filter(x => x.t - t0 >= 3000), early = series2.filter(x => x.t - t0 < 3000), rp = s.filter(x => x.id === "rpm").map(x => x.v);
+    const i = steps.findIndex(x => x.name === name), rec = { name, stats: stepStats(settled), inrushMin: early.length ? Math.min(...early.map(x => x.v)) : null, rpm: rp.length ? Math.max(...rp) : 0 }; if (i >= 0) steps[i] = rec; else steps.push(rec);
+    b.disabled = false; b.textContent = name + (rec.stats ? " ✓" : " (too few samples)"); render();
+  } }); return b; };
+  const crankBox = el("div"), crank = el("button", { textContent: "Start 30-second capture, then start the engine", onclick: async () => {
+    if (!session) return toast("Connect first."); if (labBuf) return; crank.disabled = true; crank.textContent = "Recording. Start the engine now."; crankBox.textContent = "";
+    let up = 0; const s = await captureFor(30000, () => { if (latest.rpm > 500) up++; return up > 30; }); crank.disabled = false; crank.textContent = "Start 30-second capture, then start the engine";
+    const c = crankResult(s); crankBox.append(c ? el("div", { class: "verdict " + c.level }, el("b", { textContent: "Lowest " + c.min.toFixed(1) + " V, started from " + c.rest.toFixed(1) + " V, ended at " + c.end.toFixed(1) + " V" }), el("span", { textContent: c.note })) : el("p", { textContent: "Too few samples. The adapter can reset while cranking; try again." }));
+  } });
+  run.append(el("h3", { textContent: "Blower and accessory load test" }),
+    el("p", { textContent: "Parked, with the engine off and key on for the clearest result. Turn every accessory off and record the baseline. Set each fan speed, wait 2 seconds, then tap its button. Each takes 12 seconds. Keep the test short so you don't run the battery down." }),
+    el("div", { class: "bar" }, ["Baseline (all off)", "Blower low", "Blower medium", "Blower high", "Blower max", "Headlights only (comparison)"].map(stepBtn)), out,
+    el("h3", { textContent: "Starting test" }), el("p", { textContent: "Parked, with the ignition on and the engine off. The adapter samples quickly, so a brief lowest point can still be missed." }), crank, crankBox,
+    el("h3", { textContent: "Checks data can't do" }), el("p", { textContent: "Listen at each speed with the fan on. A scrape, rattle, or leaves point to debris or the fan wheel, while a squeal or rumble that changes with speed points to the bearing. If it only works on the highest speed, the resistor or control module is a classic suspect. A clamp meter on the blower circuit gives real current, which this adapter can't measure." }));
+  showDlg("Electrical Lab: " + vehicles[vid].name, el("p", { textContent: "These tests use voltage as a stand-in for electrical load. They can suggest a direction, but can't measure current or confirm a failed part." }), run);
 }
 function renderVehicleSelect() { const v = $("vehicle"); v.textContent = ""; Object.values(vehicles).forEach(x => v.append(el("option", { value: x.id, textContent: x.name, selected: x.id === vid }))); }
 function openVehicle() {
@@ -1671,17 +1870,19 @@ $("addBtn").onclick = openAdd;
 $("resetBtn").onclick = () => { dash[tab] = PRESETS[tab] ? buildDash(tab) : []; commit(); };
 $("screensBtn").onclick = openScreens;
 $("moreBtn").onclick = () => { $("dlg").classList.remove("wide"); openMore(); };
-$("reviewBtn").onclick = openReview;
+$("reviewBtn").onclick = () => openReview();
+$("markBtn").onclick = () => addMark();
 $("vehBtn").onclick = openVehicle;
-$("vehicle").onchange = async e => { loadVehicle(e.target.value); resetLive(); syncEditControls(); renderTabs(); renderGrid(); await loadDrives(); };
+$("vehicle").onchange = async e => { loadVehicle(e.target.value); resetLive(); syncEditControls(); renderTabs(); showRecovery(); renderGrid(); await loadDrives(); };
 let lastCols = cols();
 addEventListener("resize", () => { if (cols() !== lastCols) { lastCols = cols(); renderGrid(); } else applyFit(); });
 document.addEventListener("visibilitychange", async () => { if (session && document.visibilityState === "visible") { try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {} } });
 let paintTick = 0;
-setInterval(() => { if (tab === EV && paintTick++ % 4) return; painters.forEach(p => { try { p(); } catch (e) { console.error(e); } }); }, 250);
+$("dlg").addEventListener("close", () => { dlgPainters = []; if (labBuf) labBuf = null; });
+setInterval(() => { dlgPainters.forEach(p => { try { p(); } catch (e) { console.error(e); } }); if (tab === EV && paintTick++ % 4) return; painters.forEach(p => { try { p(); } catch (e) { console.error(e); } }); }, 250);
 $("stamp").textContent = "Build " + BUILD_ID + " · " + BUILD_UTC;
 if (!("serial" in navigator)) { $("unsupported").hidden = false; $("connect").disabled = true; }
-loadVehicle(vid); resetLive(); renderVehicleSelect(); syncEditControls(); renderTabs(); renderGrid(); loadDrives();
+loadVehicle(vid); resetLive(); renderVehicleSelect(); syncEditControls(); renderTabs(); renderGrid(); loadDrives(); showRecovery();
 </script>
 </body>
 </html>
