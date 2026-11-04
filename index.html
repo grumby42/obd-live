@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261104-1957Z">
-<meta name="build-timestamp-utc" content="2026-11-04T19:57:32Z">
+<meta name="build-id" content="OBD-20261104-2002Z">
+<meta name="build-timestamp-utc" content="2026-11-04T20:02:46Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261104-1957Z", BUILD_UTC = "2026-11-04T19:57:32Z";
+const BUILD_ID = "OBD-20261104-2002Z", BUILD_UTC = "2026-11-04T20:02:46Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1095,10 +1095,10 @@ function el(tag, props = {}, ...kids) {
   return e;
 }
 const DEFAULT_VEHICLES = {
-  sierra: { id: "sierra", name: "2016 GMC Sierra 1500", engine: { label: "5.3L V8", L: 5.3, cyl: 8 }, layout: "V", afm: true, afmCyls: [1, 4, 6, 7], bank1Cyls: [1, 3, 5, 7], trans: "6L80 (RPO MYC)", gears: 6, notes: "", match: { wmi: ["1GT"], year: "G" } },
+  sierra: { id: "sierra", name: "2016 GMC Sierra 1500", engine: { label: "5.3L V8", L: 5.3, cyl: 8 }, layout: "V", afm: true, afmCyls: [1, 4, 6, 7], bank1Cyls: [1, 3, 5, 7], bankNote: "Odd cylinders on the driver's side per a secondary source (rerev.com, not year-specific); bank 1 holds cylinder 1 by SAE convention. AFM set is the common GM pattern, unconfirmed for the L83.", trans: "6L80 (RPO MYC)", gears: 6, notes: "", match: { wmi: ["1GT"], year: "G" } },
   equinox: { id: "equinox", name: "2014 Chevrolet Equinox", engine: null, layout: null, afm: false, trans: "6-speed automatic", gears: 6, notes: "", match: { wmi: ["2GN", "2CN"], year: "E" } }
 };
-const ENGINE_CHOICES = { equinox: [{ label: "2.4L 4-cylinder", L: 2.4, cyl: 4, layout: "I" }, { label: "3.6L V6", L: 3.6, cyl: 6, layout: "V" }] };
+const ENGINE_CHOICES = { equinox: [{ label: "2.4L 4-cylinder", L: 2.4, cyl: 4, layout: "I" }, { label: "3.6L V6", L: 3.6, cyl: 6, layout: "V", bank1Cyls: [1, 3, 5], bankNote: "GM's 3.6L V6 service description (2009 STS) puts cylinders 1-3-5 on the right bank, 2-4-6 on the left, firing order 1-2-3-4-5-6; bank 1 holds cylinder 1 by SAE convention. Assumed to apply to the Equinox LFX." }] };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("obd." + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem("obd." + k, JSON.stringify(v, (key, val) => key === "_node" ? undefined : val)); } catch (e) {} }
@@ -1115,6 +1115,7 @@ const PRESETS = {
    W("line",["trans"],[4,4],[6,5],{win:15}), W("share",[],[4,4],[4,4],{share:"gear",view:"bars"}), W("share",[],[4,4],[4,4],{share:"temp",view:"donut"}),
    W("share",[],[4,4],[4,4],{share:"drive",view:"donut"}), W("number",["sh12"],[2,3],[3,3]), W("number",["sh23"],[2,3],[3,3]), W("number",["sh34"],[2,3],[3,3]), W("number",["ratio"],[2,3],[3,3]), W("history",["trans"],[4,4],[12,4],{stat:"max"}) ],
  Electrical: [ W("elab",[],[4,3],[4,3]), W("needle",["volt"],[2,4],[4,4]), W("number",["atrv"],[2,4],[4,4]), W("line",["volt","atrv"],[4,4],[12,4],{win:15}), W("history",["volt"],[4,4],[12,4],{stat:"min"}) ],
+ "System map": [ W("sysmap",[],[4,11],[12,10]) ],
  Phone: [ W("phone",[],[4,3],[4,3]), W("number",["speedo"],[2,3],[4,3]), W("number",["grade"],[2,3],[4,3]), W("line",["mph","gmph"],[4,4],[6,4],{win:5}), W("line",["vib"],[4,4],[6,4],{win:5}), W("line",["noise"],[4,4],[6,4],{win:5}), W("scatter",["mph","vib"],[4,5],[6,5]) ],
  Engine: [ W("misfire",[],[4,4],[6,4]), W("line",["ect","oilt","trans"],[4,4],[6,4],{win:15}), W("line",["stft1","stft2","ltft1","ltft2"],[4,4],[6,4],{win:5}),
    W("line",["rpm"],[4,3],[6,4],{win:5}), W("number",["oilp"],[2,3],[3,3]), W("number",["oilt"],[2,3],[3,3]), W("number",["knock"],[2,3],[3,3]), W("number",["timing"],[2,3],[3,3]), W("number",["load"],[2,3],[3,3]), W("number",["hp"],[2,3],[3,3]), W("number",["oill"],[2,3],[3,3]), W("number",["map"],[2,3],[3,3]) ],
@@ -1331,7 +1332,7 @@ async function identifyVehicle() {
       const fp = JSON.stringify([truck.cal, truck.cvn]), was = store.get(vkey("fp"), null); if ((truck.cal || truck.cvn) && !session.link.sim) { if (was && was !== fp) truck.fpChanged = true; store.set(vkey("fp"), fp); } } catch (e) {}
     if (!vehicles[vid].engine && ENGINE_CHOICES[vid]) {
       const b = dataBytes(await askH("7DF", "0113"), "4113");
-      if (b && b.length) { const v6 = (b[0] & 0xF0) !== 0, pick = ENGINE_CHOICES[vid].find(e => (e.cyl === 6) === v6); vehicles[vid].engine = { ...pick, detected: true }; vehicles[vid].layout = pick.layout; saveVehicles(); toast("Engine looks like " + pick.label + " from its O2 sensor layout. Check this in Vehicle settings."); }
+      if (b && b.length) { const v6 = (b[0] & 0xF0) !== 0, pick = ENGINE_CHOICES[vid].find(e => (e.cyl === 6) === v6); vehicles[vid].engine = { label: pick.label, L: pick.L, cyl: pick.cyl, detected: true }; vehicles[vid].layout = pick.layout; vehicles[vid].bank1Cyls = pick.bank1Cyls; vehicles[vid].bankNote = pick.bankNote; saveVehicles(); toast("Engine looks like " + pick.label + " from its O2 sensor layout. Check this in Vehicle settings."); }
     }
   } catch (e) {}
 }
@@ -1643,6 +1644,44 @@ R.crosscheck = (w, box) => {
   const list = el("div", { class: "scroll" }); box.append(header(w, "Do related sensors agree?", "Standard"), el("div", { class: "body" }, list));
   let n = 0; return () => { if (n++ % 8) return; list.textContent = ""; crossChecks(rows).forEach(c => list.append(el("div", { class: "row" }, el("span", { textContent: c.name }), el("span", { class: "pill " + (c.status === "agree" ? "good" : c.status === "disagree" ? "bad" : ""), textContent: ({ agree: "✓ ", disagree: "✕ " }[c.status] || "") + c.label })))); };
 };
+/* ---------- System map: exact topology, approximate geometry ---------- */
+const SVGNS = "http://www.w3.org/2000/svg";
+function sv(tag, attrs = {}, ...kids) { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); kids.forEach(k => k != null && e.append(k)); return e; }
+function rampColor(frac) { const f = Math.max(0, Math.min(1, frac)); const lo = [28, 53, 80], hi = [127, 181, 242]; return "rgb(" + lo.map((c, i) => Math.round(c + (hi[i] - c) * f)).join(",") + ")"; }
+function nodeColor(m, v) { if (v === null || v === undefined) return "#2a2a28"; const r = ratingOf(m, v); if (r.state === "bad") return "#d03b3b"; if (r.state === "good") return "#0ca30c"; return rampColor((v - m.min) / ((m.max - m.min) || 1)); }
+R.sysmap = (w, box) => {
+  const veh = vehicles[vid], cyl = (veh.engine && veh.engine.cyl) || 8, V = veh.layout === "V" || (!veh.layout && cyl >= 6), bank1 = veh.bank1Cyls || (V ? null : Array.from({ length: cyl }, (_, i) => i + 1));
+  const svg = sv("svg", { viewBox: "0 0 820 560", width: "100%", style: "flex:1;min-height:0;font-family:system-ui;font-size:11px" }), note = el("div", { class: "sub", style: "white-space:normal" });
+  box.append(header(w, "System map: " + veh.name, "Schematic"), el("div", { class: "body" }, svg, note));
+  const nodes = {};
+  const path = (d, col) => svg.append(sv("path", { d, fill: "none", stroke: col, "stroke-width": 3, "marker-end": "url(#arr)", opacity: .7 }));
+  const defs = sv("defs", {}, sv("marker", { id: "arr", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: "auto-start-reverse" }, sv("path", { d: "M0,0 L10,5 L0,10 z", fill: "#8f8e85" }))); svg.append(defs);
+  const node = (id, x, y, wdt, label, opts = {}) => { const g = sv("g", { style: "cursor:pointer" }); const rect = sv("rect", { x: x - wdt / 2, y: y - 16, width: wdt, height: 32, rx: 7, fill: "#2a2a28", stroke: "#383835" }); const t1 = sv("text", { x, y: y - 3, "text-anchor": "middle", fill: "#f0efec", "font-weight": 600 }, label); const t2 = sv("text", { x, y: y + 11, "text-anchor": "middle", fill: "#c3c2b7" }, "--"); g.append(rect, t1, t2); g.onclick = () => { if (opts.drill !== false) openDrill(id); }; svg.append(g); nodes[id] = { rect, t1, t2, m: byId[id], x, y }; return g; };
+  const lbl = (x, y, t, col = "#8f8e85") => svg.append(sv("text", { x, y, fill: col, "font-size": 12, "font-weight": 600 }, t));
+  // Air path (top row)
+  lbl(20, 40, "AIR"); path("M70,70 H740", "#3987e5");
+  node("maf", 120, 70, 110, "Air flow"); node("iat", 240, 70, 100, "Intake air °F"); node("tps", 360, 70, 100, "Throttle"); node("map", 480, 70, 110, "Manifold kPa"); node("baro", 600, 70, 100, "Barometric"); node("purge", 720, 70, 90, "Purge");
+  // Fuel path (second row)
+  lbl(20, 125, "FUEL"); path("M70,155 H560", "#d95926");
+  node("fuel", 120, 155, 100, "Tank level"); node("fuelp", 240, 155, 110, "Low-side psi"); node("railg", 370, 155, 120, "DI rail kPa"); node("ethanol", 500, 155, 100, "Ethanol %");
+  node("ltft1", 640, 140, 150, "Bank 1 long trim"); node("ltft2", 640, 172, 150, "Bank 2 long trim");
+  // Cylinders
+  lbl(20, 225, "CYLINDERS" + (V ? " (two banks)" : " (one bank)"));
+  const cols = V ? Math.ceil(cyl / 2) : cyl, cw = Math.min(90, 640 / cols), x0 = 410 - (cols * cw) / 2 + cw / 2;
+  const banks = V && bank1 ? [bank1, Array.from({ length: cyl }, (_, i) => i + 1).filter(c => !bank1.includes(c))] : V ? [null, null] : [Array.from({ length: cyl }, (_, i) => i + 1)];
+  banks.forEach((list, bi) => { const y = V ? 255 + bi * 48 : 265; lbl(20, y + 4, V ? "Bank " + (bi + 1) : "", "#c3c2b7");
+    const ids = list || Array.from({ length: Math.ceil(cyl / 2) }, (_, i) => bi === 0 ? 2 * i + 1 : 2 * i + 2).filter(c => c <= cyl);
+    ids.forEach((c, i) => { const id = "mis" + c, g = sv("g", { style: "cursor:pointer" }), rect = sv("rect", { x: x0 + i * cw - cw / 2 + 4, y: y - 18, width: cw - 8, height: 36, rx: 6, fill: "#2a2a28", stroke: "#383835" }); g.append(rect, sv("text", { x: x0 + i * cw, y: y - 3, "text-anchor": "middle", fill: "#f0efec", "font-weight": 700 }, String(c)), sv("text", { x: x0 + i * cw, y: y + 11, "text-anchor": "middle", fill: "#c3c2b7" }, "--")); if (veh.afmCyls && veh.afmCyls.includes(c)) g.append(sv("circle", { cx: x0 + i * cw + cw / 2 - 10, cy: y - 12, r: 3, fill: "#c98500" })); g.onclick = () => openDrill(id); svg.append(g); nodes[id] = { rect, t2: g.children[2], m: byId[id], cyl: true }; }); });
+  if (V && !bank1) lbl(20, 350, "Cylinder-to-bank assignment unknown for this engine, so cylinders are placed by number only.", "#c98500");
+  // Exhaust
+  lbl(20, 385, "EXHAUST"); path("M70,415 H760", "#9085e9"); if (V) path("M70,460 H760", "#9085e9");
+  node("o2v1", 150, 415, 120, "B1 front O2 V"); node("cat1", 330, 415, 130, "Catalyst B1 °F"); node("o2v2", 510, 415, 120, "B1 rear O2 V"); node("stft1", 680, 415, 120, "B1 short trim");
+  if (V) { node("o2v5", 150, 460, 120, "B2 front O2 V"); node("cat2", 330, 460, 130, "Catalyst B2 °F"); node("o2v6", 510, 460, 120, "B2 rear O2 V"); node("stft2", 680, 460, 120, "B2 short trim"); }
+  // Loops (bottom)
+  lbl(20, 505, "LOOPS"); node("ect", 110, 530, 110, "Coolant °F"); node("oilt", 230, 530, 100, "Oil °F"); node("oilp", 340, 530, 100, "Oil psi"); node("trans", 460, 530, 110, "Trans fluid °F"); node("gear", 570, 530, 80, "Gear"); node("slip", 670, 530, 100, "TCC slip rpm"); node("volt", 770, 530, 80, "Volts");
+  note.textContent = "Order of sensors is exact; positions are schematic. Color: dim = low, bright = high within each gauge's range; green and red follow that gauge's limit. Amber dot = cylinder-deactivation cylinder. Tap any box to drill in. " + (veh.bankNote || "");
+  return () => { for (const id in nodes) { const n = nodes[id], m = n.m; if (!m) continue; const v = latest[id] ?? null, st = mstate[id] || {}; const col = nodeColor(m, v), bright = col.startsWith("rgb") && Number(col.match(/\d+/g)[2]) > 170; n.rect.setAttribute("fill", col); n.rect.setAttribute("stroke", v === null ? "#383835" : "#8f8e85"); n.t2.setAttribute("fill", bright ? "#0b0b0b" : "#f0efec"); if (n.t1) n.t1.setAttribute("fill", bright ? "#0b0b0b" : "#f0efec"); n.t2.textContent = v === null ? (st.status === "unsupported" || st.status === "failed" ? "n/a" : "--") : fmt(m, v) + (n.cyl ? "" : " " + m.unit); } };
+};
 R.phone = (w, box) => {
   const st = el("div", { class: "sub", style: "white-space:normal" }); box.append(header(w, "Phone sensors", "Phone"), el("div", { class: "body" }, st, el("button", { class: "primary", textContent: "Phone sensor settings", onclick: openPhone })));
   return () => { st.textContent = ["GPS " + (phone.gps ? "on" : "off"), "motion " + (phone.motion ? (phone.motionHz ? "on, " + phone.motionHz.toFixed(0) + " Hz" : "waiting") : "off"), "microphone " + (phone.mic ? "on" : "off")].join(" · "); };
@@ -1785,7 +1824,7 @@ function commit() { dashNoNodes(); save(); renderGrid(); }
 function dashNoNodes() { Object.values(dash).flat().forEach(w => { if (w._node) delete w._node; }); }
 function openAdd() {
   $("dlg").classList.remove("wide");
-  const t = el("select", {}, [["number","Number with sparkline"],["needle","Active needle"],["line","Line graph"],["scatter","RPM vs speed scatter"],["share","Pie/bars: share of time"],["history","Per-drive history"],["gearbox","Gear and slip"],["misfire","Misfire by cylinder"],["status","Check-engine status"],["readiness","Emissions monitors"],["codes","Trouble codes"],["truck","Truck identity"],["mode06","Computer self-tests"],["crosscheck","Sensor cross-checks"],["phone","Phone sensors"],["elab","Electrical Lab"],["healthcheck","Guided health check"],["healthcard","Total health"],["allsensors","Every reading"]].map(([k, v]) => el("option", { value: k, textContent: v })));
+  const t = el("select", {}, [["number","Number with sparkline"],["needle","Active needle"],["line","Line graph"],["scatter","RPM vs speed scatter"],["share","Pie/bars: share of time"],["history","Per-drive history"],["gearbox","Gear and slip"],["misfire","Misfire by cylinder"],["status","Check-engine status"],["readiness","Emissions monitors"],["codes","Trouble codes"],["truck","Truck identity"],["mode06","Computer self-tests"],["crosscheck","Sensor cross-checks"],["sysmap","System map"],["phone","Phone sensors"],["elab","Electrical Lab"],["healthcheck","Guided health check"],["healthcard","Total health"],["allsensors","Every reading"]].map(([k, v]) => el("option", { value: k, textContent: v })));
   const m = el("select", {}, metricOptions("trans"));
   showDlg("Add widget", el("label", { textContent: "Widget" }), t, el("label", { textContent: "Reading (when the widget uses one)" }), m, el("div", { class: "bar" }, el("button", { class: "primary", textContent: "Add", onclick: () => {
     const type = t.value, w = { id: "u" + Date.now().toString(36), type, metrics: ["number","needle","line","history"].includes(type) ? [m.value] : type === "scatter" ? ["mph","rpm"] : [], win: 5, stat: "max", share: "drive", view: "donut", pos: {} };
@@ -1954,7 +1993,7 @@ function aboutOf(m) { if (ABOUT[m.id]) return ABOUT[m.id]; if (m.basis === "phon
 function evWidgets() {
   const F = (type, about, extra = {}, big = true) => ({ w: { id: "ev" + type + (extra.share || (extra.metrics || []).join("")), type, metrics: [], ...extra }, about, big });
   const views = [
-    ["Vehicle status", [F("status", "Whether the check-engine light is on, and code counts."), F("gearbox", "Current gear and converter slip together."), F("misfire", "Recent misfires per cylinder, which shows whether a problem is localized."), F("readiness", "Which emissions self-tests have finished."), F("codes", "Stored, pending, and permanent trouble codes, plus freeze frame."), F("mode06", "Computer self-test results against the vehicle's own limits."), F("truck", "VIN, software fingerprint, and which computers answer. It stays on this device."), F("crosscheck", "Whether related sensors move together."), F("phone", "Opt-in GPS, motion, and microphone capture."), F("elab", "Parked tests for starting voltage and accessory load.")]],
+    ["Vehicle status", [F("status", "Whether the check-engine light is on, and code counts."), F("gearbox", "Current gear and converter slip together."), F("misfire", "Recent misfires per cylinder, which shows whether a problem is localized."), F("readiness", "Which emissions self-tests have finished."), F("codes", "Stored, pending, and permanent trouble codes, plus freeze frame."), F("mode06", "Computer self-test results against the vehicle's own limits."), F("truck", "VIN, software fingerprint, and which computers answer. It stays on this device."), F("crosscheck", "Whether related sensors move together."), F("sysmap", "A schematic of where each sensor sits in the air, fuel, exhaust, coolant, oil, and transmission paths, colored by its live value. Exact in order, approximate in position."), F("phone", "Opt-in GPS, motion, and microphone capture."), F("elab", "Parked tests for starting voltage and accessory load.")]],
     ["Gauges", ["rpm","mph","trans","ect","volt","fuel"].map(i => F("needle", "Needle gauge. Colors show its limit, if one exists.", { metrics: [i] }, false))],
     ["Graphs and pies", [F("line", "Fuel corrections over time.", { metrics: ["stft1","ltft1","stft2","ltft2"], win: 5 }), F("line", "All major heat readings together.", { metrics: ["ect","oilt","trans"], win: 15 }), F("line", "Converter slip over time.", { metrics: ["slip"], win: 5 }), F("scatter", "Each point is engine speed against road speed. Each locked gear forms a straight ray.", { metrics: ["mph","rpm"] }), F("share", "Time in each gear.", { share: "gear", view: "bars" }), F("share", "Time in each transmission temperature band.", { share: "temp", view: "donut" }), F("share", "Time stopped, cruising, accelerating, and slowing.", { share: "drive", view: "donut" }), F("history", "Transmission temperature peak on each saved drive.", { metrics: ["trans"], stat: "max" }), F("history", "Estimated fuel economy on each saved drive.", { metrics: ["mpg"], stat: "avg" })]],
     ["Health", [F("healthcheck", "The guided steps that exercise more of the vehicle."), F("healthcard", "System-by-system status for this session.")]]
@@ -2109,7 +2148,7 @@ function openVehicle() {
   const nm = el("input", { value: v.name, "aria-label": "Name", onchange: () => { v.name = nm.value.slice(0, 60) || v.name; saveVehicles(); renderVehicleSelect(); } });
   kids.push(el("label", { textContent: "Name" }), nm);
   const choices = ENGINE_CHOICES[vid] || [];
-  if (choices.length) { const e = el("select", { "aria-label": "Engine", onchange: () => { const pick = choices.find(c => c.label === e.value); v.engine = pick ? { ...pick } : null; v.layout = pick ? pick.layout : null; saveVehicles(); renderGrid(); } }, el("option", { value: "", textContent: "Not set (detected on connect)" }), choices.map(c => el("option", { value: c.label, textContent: c.label, selected: v.engine && v.engine.label === c.label }))); kids.push(el("label", { textContent: "Engine" }), e); }
+  if (choices.length) { const e = el("select", { "aria-label": "Engine", onchange: () => { const pick = choices.find(c => c.label === e.value); v.engine = pick ? { label: pick.label, L: pick.L, cyl: pick.cyl } : null; v.layout = pick ? pick.layout : null; v.bank1Cyls = pick ? pick.bank1Cyls : undefined; v.bankNote = pick ? pick.bankNote : undefined; saveVehicles(); renderGrid(); } }, el("option", { value: "", textContent: "Not set (detected on connect)" }), choices.map(c => el("option", { value: c.label, textContent: c.label, selected: v.engine && v.engine.label === c.label }))); kids.push(el("label", { textContent: "Engine" }), e); }
   else { const L = el("input", { type: "number", step: "0.1", value: v.engine ? v.engine.L : "", "aria-label": "Displacement" }), c = el("input", { type: "number", step: "1", value: v.engine ? v.engine.cyl : "", "aria-label": "Cylinders" });
     const up = () => { const lv = Number(L.value), cv = Number(c.value); if (lv > 0 && cv > 0) { v.engine = { label: lv + "L " + cv + "-cylinder", L: lv, cyl: cv }; saveVehicles(); renderGrid(); } }; L.onchange = c.onchange = up;
     kids.push(el("div", { class: "fields" }, el("div", {}, el("label", { textContent: "Liters" }), L), el("div", {}, el("label", { textContent: "Cylinders" }), c))); }
