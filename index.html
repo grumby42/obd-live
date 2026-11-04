@@ -3,9 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261104-1920Z">
-<meta name="build-timestamp-utc" content="2026-11-04T19:20:10Z">
+<meta name="build-id" content="OBD-20261104-1929Z">
+<meta name="build-timestamp-utc" content="2026-11-04T19:29:46Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -115,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261104-1920Z", BUILD_UTC = "2026-11-04T19:20:10Z";
+const BUILD_ID = "OBD-20261104-1929Z", BUILD_UTC = "2026-11-04T19:29:46Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1588,7 +1590,7 @@ R.truck = (w, box) => {
   btn.onclick = async () => { if (!session) return; try { truck.vin = asciiFrom(await askH("7DF", "0902"), "4902"); truck.cal = asciiFrom(await askH("7DF", "0904"), "4904"); } catch (e) { toast(e.message); } };
   box.append(header(w, "Truck identity", "Standard"), el("div", { class: "body" }, btn, list));
   let sig = "";
-  return () => { btn.disabled = !session; const rows2 = [["VIN", truck.vin], ["Calibration ID", truck.cal], ["Software fingerprint", truck.cvn ? truck.cvn + (truck.fpChanged ? " (changed)" : "") : null], ["Computers answering", truck.ecus && truck.ecus.length ? truck.ecus.join(", ") : null], ["Odometer", latest.odo != null ? latest.odo.toFixed(0) + " mi" : null], ["Standard PIDs reported", supported ? String(supported.size) : null]].filter(r => r[1]); const s = JSON.stringify(rows2); if (s === sig) return; sig = s; list.textContent = "";
+  return () => { btn.disabled = !session; const rows2 = [["VIN", truck.vin ? truck.vin.slice(0, 3) + "…" + truck.vin.slice(-4) + " (masked)" : null], ["Calibration ID", truck.cal], ["Software fingerprint", truck.cvn ? truck.cvn + (truck.fpChanged ? " (changed)" : "") : null], ["Computers answering", truck.ecus && truck.ecus.length ? truck.ecus.join(", ") : null], ["Odometer", latest.odo != null ? latest.odo.toFixed(0) + " mi" : null], ["Standard PIDs reported", supported ? String(supported.size) : null]].filter(r => r[1]); const s = JSON.stringify(rows2); if (s === sig) return; sig = s; list.textContent = "";
     rows2.forEach(r => list.append(el("div", { class: "row" }, el("span", { textContent: r[0] }), el("span", { textContent: r[1] })))); };
 };
 function sessionReport() { return analyzeDrive({ rows, meta: sessionMeta(), vehicle: vehicles[vid], history: drives }); }
@@ -1795,8 +1797,19 @@ function openMore() {
     el("h3", { textContent: "This session (table view of all readings)" }), stat,
     el("h3", { textContent: "What the green and red colors mean" }),
     el("p", { textContent: "Green and red come from the limit shown in each widget's settings. Most are starting guides, labeled as such. Readings with no defensible limit stay neutral. Tags show where data comes from: Standard is generic OBD, Unverified is a GM request from forums that this truck has not confirmed, Estimate is calculated here." }),
+    el("h3", { textContent: "Privacy" }), privacyPanel(),
     el("h3", { textContent: "Find more GM data" }), ex,
     el("h3", { textContent: "Sources" }), ...src.map(s => el("p", {}, el("a", { href: s[1], target: "_blank", rel: "noopener noreferrer", textContent: s[0] }), ": " + s[2])));
+}
+function privacyPanel() {
+  const wipe = el("button", { textContent: "Delete everything this app stored on this device", onclick: async () => { if (wipe.dataset.arm !== "1") { wipe.dataset.arm = "1"; wipe.textContent = "Tap again to delete all drives, layouts, vehicles, and the VIN"; return; } if (session) await stop(false); try { Object.keys(localStorage).filter(k => k.startsWith("obd.")).forEach(k => localStorage.removeItem(k)); } catch (e) {} await new Promise(res => { const q = indexedDB.deleteDatabase("obd-live"); q.onsuccess = q.onerror = q.onblocked = res; }); location.reload(); } });
+  const li = t => el("li", { textContent: t });
+  return el("div", {}, el("p", { textContent: "This page makes no network requests after it loads: its security policy blocks them, and it has no analytics. Nothing leaves the phone unless you export a file." }),
+    el("ul", {}, li("Stored on this device: drives, layouts, limits, vehicle profiles, the VIN (used only to pick the profile; shown masked), the computer's software fingerprint, and phone-sensor settings."),
+      li("Exports (CSV, review, packet, history) include readings, codes, your marks, and your vehicle notes. They exclude the VIN. Position is excluded unless you allow it in Phone sensors."),
+      li("Never accessed: the camera. Never stored: audio. The microphone, if enabled, produces a level and a pitch number only."),
+      li("Nothing is sent to GM, OBDLink, GitHub, or anyone else. The GitHub-hosted page is static.")),
+    el("div", { class: "bar" }, wipe));
 }
 function foundRow(h, did, b) {
   const name = el("input", { value: "GM " + did, "aria-label": "Name" }), f = el("select", { "aria-label": "Formula" }, Object.entries(FORMULAS).map(([k, v]) => el("option", { value: k, textContent: v.label })));
@@ -1804,8 +1817,10 @@ function foundRow(h, did, b) {
 }
 function download(name, text, type) { const a = el("a", { href: URL.createObjectURL(new Blob([text], { type })), download: name }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
 const stampName = () => new Date().toISOString().replace(/[:.]/g, "-");
-function rowsCsv(rs, sim) {
-  const keys = new Set(); rs.forEach(r => Object.keys(r).forEach(k => k !== "t" && keys.add(k)));
+const PRIVATE_KEYS = ["lat", "lon"];
+function stripRows(rs) { return phonePrefs.exportPosition ? rs : rs.map(r => { if (r.lat === undefined && r.lon === undefined) return r; const c = { ...r }; PRIVATE_KEYS.forEach(k => delete c[k]); return c; }); }
+function rowsCsv(rsIn, sim) {
+  const rs = stripRows(rsIn), keys = new Set(); rs.forEach(r => Object.keys(r).forEach(k => k !== "t" && keys.add(k)));
   const cs = [...keys].sort();
   return "# build," + BUILD_ID + "\n# exported_utc," + new Date().toISOString() + "\n# vehicle," + csvCell(vehicles[vid].name) + "\n# simulator," + sim + "\n" + ["utc", ...cs].map(csvCell).join(",") + "\n" + rs.map(r => [new Date(r.t).toISOString(), ...cs.map(c => r[c])].map(csvCell).join(",")).join("\n") + "\n";
 }
@@ -1813,10 +1828,15 @@ function exportCsv() {
   if (!rows.length) return toast("No session data yet.");
   download(vid + "-obd-" + stampName() + ".csv", rowsCsv(rows, !!(session && session.link.sim)), "text/csv");
 }
-function exportHistory() { download(vid + "-obd-history-" + stampName() + ".json", JSON.stringify({ build: BUILD_ID, exported: new Date().toISOString(), vehicle: vid, drives }, null, 1), "application/json"); }
+async function exportHistory() {
+  const full = []; for (const d of drives) { const { review, ...rest } = d; full.push({ ...rest, review, rows: stripRows(await driveRows(d.id)) }); }
+  download(vid + "-obd-history-" + stampName() + ".json", JSON.stringify({ build: BUILD_ID, exported: new Date().toISOString(), vehicle: vid, drives: full }, null, 0), "application/json");
+}
 function importHistory() {
   const i = el("input", { type: "file", accept: "application/json", onchange: async () => {
-    try { const j = JSON.parse(await i.files[0].text()), clean = (j.drives || []).filter(d => d && typeof d.id === "string" && Number.isFinite(d.start) && d.summary && typeof d.summary === "object").map(d => ({ ...d, vehicle: j.vehicle === vid ? vid : (d.vehicle || vid) })); await putDrives(clean); await loadDrives(); toast("Imported " + clean.length + " drives."); } catch (e) { toast("Couldn't read that file."); }
+    try { const j = JSON.parse(await i.files[0].text()), clean = (j.drives || []).filter(d => d && typeof d.id === "string" && Number.isFinite(d.start) && d.summary && typeof d.summary === "object").map(d => ({ ...d, vehicle: j.vehicle === vid ? vid : (d.vehicle || vid) }));
+      const chunks = []; clean.forEach(d => { if (Array.isArray(d.rows) && d.rows.length) chunks.push({ id: d.id + ":0", drive: d.id, seq: 0, rows: d.rows.filter(x => x && typeof x.t === "number") }); delete d.rows; });
+      await putDrives(clean, chunks); await loadDrives(); toast("Imported " + clean.length + " drives."); } catch (e) { toast("Couldn't read that file."); }
   } }); i.click();
 }
 
@@ -1842,7 +1862,7 @@ function renderReport(host, rep, veh, meta, rs) {
   host.append(el("div", { class: "bar", style: "margin-top:12px" },
     el("button", { textContent: "Download report", onclick: () => download(vid + "-review-" + tag + ".md", reportMarkdown(rep, veh, meta), "text/markdown") }),
     el("button", { textContent: "Download data CSV", onclick: () => download(vid + "-drive-" + tag + ".csv", rowsCsv(rs, false), "text/csv") }),
-    el("button", { textContent: "Package for Claude review", onclick: () => { const thin = rs.filter((r, i) => i % 5 === 0); download(vid + "-claude-packet-" + tag + ".json", JSON.stringify({ build: BUILD_ID, generated: new Date().toISOString(), vehicle: { name: veh.name, engine: veh.engine, afm: veh.afm, trans: veh.trans, notes: veh.notes }, meta: { start: meta.start, end: meta.end, codes: meta.codes, monitor: meta.monitor, mode06: meta.mode06, supported: meta.supported }, report: rep, rowsEvery5s: thin }), "application/json"); } })));
+    el("button", { textContent: "Package for Claude review", onclick: () => { const thin = rs.filter((r, i) => i % 5 === 0); download(vid + "-claude-packet-" + tag + ".json", JSON.stringify({ build: BUILD_ID, generated: new Date().toISOString(), vehicle: { name: veh.name, engine: veh.engine, afm: veh.afm, trans: veh.trans, notes: veh.notes }, meta: { start: meta.start, end: meta.end, codes: meta.codes, monitor: meta.monitor, mode06: meta.mode06, supported: meta.supported }, report: rep, rowsEvery5s: stripRows(thin) }), "application/json"); } })));
 }
 async function openReview(pickId) {
   await loadDrives();
@@ -2017,7 +2037,8 @@ function openPhone() {
   const row = (key, label, note) => el("label", { class: "check", style: "align-items:flex-start" }, el("input", { type: "checkbox", checked: !!phonePrefs[key], onchange: e => { phonePrefs[key] = e.target.checked; store.set("phone", phonePrefs); applyPhonePrefs(); } }), el("span", {}, label, el("div", { class: "sub", style: "white-space:normal", textContent: note })));
   showDlg("Phone sensors", el("p", { textContent: "Uses this phone's own sensors alongside the vehicle data. Everything stays on the device. These settings are per phone, not per vehicle, and need the page served over HTTPS." }),
     row("gps", "GPS: speed, altitude, grade", "Checks the speedometer and separates hills from faults. Keep the phone where it can see the sky."),
-    row("route", "Also record position", "Saves latitude and longitude in the drive log. Off by default. Exports then contain where you drove."),
+    row("route", "Also record position", "Saves latitude and longitude in the drive log on this device. Off by default."),
+    row("exportPosition", "Include position in exports", "Off by default, so exported files never show where you drove unless you choose this."),
     row("motion", "Motion: vibration level and frequency", "Mount the phone firmly. A loose phone measures itself, not the vehicle."),
     row("mic", "Microphone: cabin noise level and pitch", "Relative level only. Useful with marks: tap Mark when a noise appears."),
     el("p", { textContent: "Not available: tire pressure, steering angle, or anything on networks the LX can't reach." }));

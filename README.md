@@ -5,7 +5,7 @@ A single-page, read-only OBD-II dashboard for an OBDLink LX (Bluetooth Classic) 
 - Use Chrome 148+ on Android, or Chrome/Edge on Windows. Samsung Internet and iOS browsers aren't supported.
 - Pair the adapter in your device's Bluetooth settings, turn the ignition on, then tap **Connect LX**.
 - Only allowlisted read requests can reach the vehicle. It can't clear codes or write to any module.
-- Data stays on your device. Nothing is uploaded.
+- Data stays on your device. The page's security policy blocks all network requests after load; nothing is uploaded. Exports exclude the VIN, and exclude position unless you allow it. The camera is never used and audio is never stored.
 
 ## Features
 - Separate profiles, history, limits, and layouts for each vehicle, chosen automatically from the VIN. The VIN stays on the device and isn't exported.
