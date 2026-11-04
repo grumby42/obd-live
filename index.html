@@ -1,0 +1,920 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111110">
+<meta name="build-id" content="OBD-20261104-1628Z">
+<meta name="build-timestamp-utc" content="2026-11-04T16:28:11Z">
+<title>Sierra OBD Live</title>
+<style>
+:root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1440px;margin:auto;padding:10px 12px 40px}
+header{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;justify-content:space-between}
+h1{font-size:1.05rem;margin:0}
+#status{font-size:.82rem;color:var(--muted);overflow-wrap:anywhere}#status.ok{color:#4cc94c}#status.bad{color:#ff8a80}
+.bar{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+button,select,input{font:inherit;color:var(--text)}
+button{min-height:42px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--raised);font-weight:600;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#04152a}
+button.on{outline:2px solid var(--accent)}
+button:disabled{opacity:.4;cursor:default}
+select,input{min-height:42px;padding:0 8px;background:var(--bg);border:1px solid var(--axis);border-radius:8px;max-width:100%}
+.tabs{display:flex;gap:4px;overflow-x:auto;margin:6px 0 10px;scrollbar-width:none}
+.tabs button{flex:none;background:none;border-color:transparent;color:var(--muted)}
+.tabs button[aria-selected=true]{background:var(--raised);border-color:var(--line);color:var(--text)}
+#grid{display:grid;gap:8px;grid-auto-rows:56px;grid-template-columns:repeat(var(--cols),minmax(0,1fr))}
+.w{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
+.w.good{border-color:var(--good)}.w.bad{border-color:var(--bad);background:#2a1716}
+.w.off .body{opacity:.45}
+.edit .w{touch-action:pan-y;cursor:grab;outline:1px dashed var(--faint);user-select:none}
+.edit .w.drag{outline:2px solid var(--accent);z-index:5;cursor:grabbing}
+.wh{display:flex;gap:6px;align-items:center;justify-content:space-between;min-height:18px}
+.wt{font-size:.78rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{flex:none;font-size:.62rem;color:var(--faint);border:1px solid var(--axis);border-radius:4px;padding:0 4px}
+.body{flex:1;min-height:0;display:flex;flex-direction:column}
+.big{font-size:clamp(1.5rem,5.5vw,2.3rem);font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15;white-space:nowrap}
+.unit{font-size:.75rem;color:var(--muted);font-weight:400;margin-left:3px}
+.pill{font-size:.72rem;font-weight:600;color:var(--muted);white-space:nowrap}
+.pill.good{color:#4cc94c}.pill.bad{color:#ff8a80}
+.sub{font-size:.7rem;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+canvas{display:block;flex:1;min-height:0;width:100%}
+.readout{font-size:.7rem;color:var(--muted);min-height:1.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.legend{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:.72rem;color:var(--muted)}
+.key{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px}
+.gear{font-size:clamp(2.6rem,10vw,4.4rem);font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.row{display:flex;justify-content:space-between;gap:10px;padding:2px 0;font-size:.82rem;border-bottom:1px solid var(--grid)}
+.row span:last-child{font-variant-numeric:tabular-nums;text-align:right}
+.scroll{overflow:auto;flex:1;min-height:0}
+.edit .scroll{overflow:hidden}
+.cyl{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;flex:1;min-height:0}
+.cyl div{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;font-size:.7rem;min-height:0;color:var(--muted)}
+.cyl i{display:block;width:70%;background:var(--faint);border-radius:3px 3px 0 0;min-height:2px}
+.cyl i.good{background:var(--good)}.cyl i.bad{background:var(--bad)}
+.gear-handle,.gear-cog,.move-handle{display:none;position:absolute;border:0;background:var(--accent);color:#04152a;min-height:0;padding:0;border-radius:8px}
+.edit .gear-cog{display:block;top:4px;right:4px;width:38px;height:38px;z-index:3}
+.edit .move-handle{display:block;top:4px;left:4px;width:38px;height:38px;z-index:3;touch-action:none;cursor:grab}
+.edit .gear-handle{display:block;right:0;bottom:0;width:38px;height:38px;border-radius:8px 0 8px 0;touch-action:none;cursor:nwse-resize;z-index:3}
+dialog{background:var(--surface);color:var(--text);border:1px solid var(--axis);border-radius:12px;width:min(640px,calc(100vw - 24px));max-height:calc(100vh - 40px);padding:14px}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog h2{font-size:1rem;margin:0 0 8px}dialog h3{font-size:.86rem;margin:14px 0 4px;color:var(--muted)}
+dialog p{margin:0 0 8px;font-size:.86rem}dialog a{color:#7fb5f2}
+label{display:block;font-size:.8rem;color:var(--muted);margin:8px 0 2px}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px}
+table{width:100%;border-collapse:collapse;font-size:.8rem}th,td{padding:4px 6px;border-bottom:1px solid var(--grid);text-align:left}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.check{display:flex;gap:6px;align-items:center;font-size:.85rem;color:var(--text);margin:3px 0}.check input{min-height:20px;width:20px}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--raised);border:1px solid var(--axis);border-radius:8px;padding:8px 12px;font-size:.85rem;max-width:calc(100vw - 32px);z-index:50}
+footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0}
+</style>
+</head>
+<body>
+<main id="app">
+<header><h1>Sierra OBD Live</h1><div id="status" role="status">Not connected</div></header>
+<p id="unsupported" hidden>This browser can't open a Bluetooth serial connection. Use Chrome 148 or later on Android, or Chrome or Edge on Windows. The simulator still works.</p>
+<div class="bar">
+ <button id="connect" class="primary">Connect LX</button>
+ <button id="sim">Simulator</button>
+ <button id="stop" disabled>Disconnect</button>
+ <button id="editBtn">Edit layout</button>
+ <button id="addBtn" hidden>+ Add widget</button>
+ <button id="resetBtn" hidden>Reset tab</button>
+ <button id="moreBtn">Data &amp; sources</button>
+</div>
+<nav class="tabs" id="tabs" role="tablist" aria-label="Dashboards"></nav>
+<div id="grid"></div>
+<footer><p>Read-only: only allowlisted read requests can reach the truck. Layout editing locks while moving. Set up before driving.</p><p id="stamp"></p></footer>
+</main>
+<dialog id="dlg"></dialog>
+<div id="toast" hidden></div>
+<script>
+"use strict";
+const BUILD_ID = "OBD-20261104-1628Z", BUILD_UTC = "2026-11-04T16:28:11Z";
+const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
+
+/*PURE-START*/
+const c2f = c => c * 9 / 5 + 32;
+const u16 = (a, b) => a * 256 + b;
+const s16 = (a, b) => { const v = a * 256 + b; return v >= 32768 ? v - 65536 : v; };
+
+// Only these commands can reach the vehicle. Clear-codes (04), writes (2E),
+// routines (31), security access (27) and session control (10) match nothing here.
+function isAllowedCommand(cmd) {
+  const c = String(cmd).toUpperCase().replace(/\s+/g, "");
+  return /^AT(Z|E0|L0|S0|H0|AT1|SP[06]|DPN|RV|I)$/.test(c)
+    || /^ATSH[0-9A-F]{3}$/.test(c)
+    || /^01[0-9A-F]{2}$/.test(c)
+    || /^02[0-9A-F]{2}00$/.test(c)
+    || /^0[37A]$/.test(c)
+    || /^06[0-9A-F]{2}$/.test(c)
+    || /^09[0-9A-F]{2}$/.test(c)
+    || /^22[0-9A-F]{4}$/.test(c);
+}
+function cleanLines(raw) {
+  return String(raw).toUpperCase().split(/[\r\n]+/).map(l => l.replace(/[\s>]/g, "")).filter(Boolean).filter(l => !/^SEARCHING/.test(l));
+}
+function isNoData(raw) {
+  return /NODATA|UNABLETOCONNECT|\?|ERROR|STOPPED|BUSINIT|BUFFERFULL/.test(String(raw).toUpperCase().replace(/[\s.]/g, ""));
+}
+function toMessages(raw) {
+  const msgs = []; let cur = null;
+  for (const l of cleanLines(raw)) {
+    const m = l.match(/^([0-9A-F]):([0-9A-F]+)$/);
+    if (m) {
+      if (m[1] === "0") { cur = m[2]; msgs.push(cur); }
+      else if (cur !== null) { cur += m[2]; msgs[msgs.length - 1] = cur; }
+    } else if (/^[0-9A-F]{3}$/.test(l)) cur = null;
+    else if (/^[0-9A-F]+$/.test(l)) { msgs.push(l); cur = null; }
+  }
+  return msgs;
+}
+function hexBytes(hex) { const o = []; for (let p = 0; p + 1 < hex.length; p += 2) o.push(parseInt(hex.slice(p, p + 2), 16)); return o; }
+function dataBytes(raw, prefix) {
+  for (const m of toMessages(raw)) if (m.startsWith(prefix)) return hexBytes(m.slice(prefix.length));
+  return null;
+}
+// Support bitmasks: every ECU that answers contributes; bit 7 of the first byte = base+1.
+function parseSupport(raw, base) {
+  const out = new Set(), pre = "41" + base.toString(16).toUpperCase().padStart(2, "0");
+  for (const m of toMessages(raw)) {
+    if (!m.startsWith(pre)) continue;
+    hexBytes(m.slice(4, 12)).forEach((b, i) => { for (let k = 0; k < 8; k++) if (b & (0x80 >> k)) out.add(base + i * 8 + k + 1); });
+  }
+  return out;
+}
+function decodeDtcBytes(a, b) {
+  return "PCBU"[a >> 6] + ((a >> 4) & 3) + (a & 15).toString(16).toUpperCase() + (b >> 4).toString(16).toUpperCase() + (b & 15).toString(16).toUpperCase();
+}
+function parseDtc(raw, resp) {
+  const codes = new Set();
+  for (const m of toMessages(raw)) {
+    if (!m.startsWith(resp)) continue;
+    const n = parseInt(m.slice(2, 4), 16), hex = m.slice(4);
+    for (let i = 0; i < n && i * 4 + 4 <= hex.length; i++) {
+      const a = parseInt(hex.substr(i * 4, 2), 16), b = parseInt(hex.substr(i * 4 + 2, 2), 16);
+      if (a || b) codes.add(decodeDtcBytes(a, b));
+    }
+  }
+  return [...codes];
+}
+function parseMode06(raw, mid) {
+  const bytes = dataBytes(raw, "46" + mid), out = {};
+  if (!bytes) return out;
+  let i = 0;
+  while (i + 8 <= bytes.length) {
+    out[bytes[i]] = u16(bytes[i + 2], bytes[i + 3]);
+    i += 8;
+    if (bytes[i] === parseInt(mid, 16)) i += 1;
+  }
+  return out;
+}
+// PID 01 layout per J1979, spark-ignition mapping. null availability = not fitted.
+function parseMonitor(b) {
+  const row = (name, avail, incomplete) => ({ name, state: !avail ? "na" : incomplete ? "incomplete" : "complete" });
+  const spark = ["Catalyst","Heated catalyst","Evaporative system","Secondary air","A/C refrigerant","Oxygen sensor","O2 sensor heater","EGR/VVT"];
+  const out = { mil: !!(b[0] & 0x80), dtcCount: b[0] & 0x7f, monitors: [
+    row("Misfire", b[1] & 1, b[1] & 16), row("Fuel system", b[1] & 2, b[1] & 32), row("Components", b[1] & 4, b[1] & 64)] };
+  spark.forEach((name, i) => out.monitors.push(row(name, b[2] & (1 << i), b[3] & (1 << i))));
+  return out;
+}
+function asciiFrom(raw, prefix) {
+  const b = dataBytes(raw, prefix);
+  return b ? b.filter(x => x >= 32 && x < 127).map(x => String.fromCharCode(x)).join("").trim() : null;
+}
+
+/* Provenance: standard = J1979 generic data; community = GM request reported on
+   forums for other GM vehicles, unverified on this truck until it answers sanely;
+   derived = calculated here from other readings. */
+const std = (id, label, group, pid, unit, tier, digits, min, max, f, extra = {}) =>
+  ({ id, label, group, pid: parseInt(pid, 16), cmd: "01" + pid, pre: "41" + pid, unit, tier, digits, min, max, f, basis: "standard", ...extra });
+const gm = (id, label, group, did, unit, tier, digits, min, max, f, extra = {}) =>
+  ({ id, label, group, cmd: "22" + did, pre: "62" + did, headers: ["7E2","7E1","7E0"], unit, tier, digits, min, max, f, basis: "community", ...extra });
+const GUIDE = "Starting guide, not a GM specification. Edit it for your truck.";
+const pct = b => b[0] * 100 / 255, trim = b => (b[0] - 128) * 100 / 128, tempF = b => c2f(b[0] - 40);
+const METRICS = [
+ std("rpm","Engine speed","Engine","0C","rpm","fast",0,0,6500,b=>u16(b[0],b[1])/4),
+ std("mph","Vehicle speed","Driving","0D","mph","fast",0,0,120,b=>b[0]*0.621371),
+ std("load","Engine load","Engine","04","%","fast",0,0,100,pct),
+ std("tps","Throttle","Driving","11","%","fast",0,0,100,pct),
+ std("pedal","Accelerator pedal","Driving","49","%","fast",0,0,100,pct),
+ std("map","Manifold pressure","Engine","0B","kPa","fast",0,0,110,b=>b[0]),
+ std("maf","Air flow","Engine","10","g/s","fast",1,0,400,b=>u16(b[0],b[1])/100),
+ std("timing","Timing advance","Engine","0E","°","fast",1,-20,50,b=>b[0]/2-64),
+ std("torq","Actual torque","Engine","62","%","fast",0,-125,130,b=>b[0]-125),
+ std("ect","Coolant","Temperatures","05","°F","med",0,40,280,tempF,{rule:{hi:230,when:"running",note:GUIDE}}),
+ std("iat","Intake air","Temperatures","0F","°F","med",0,-20,200,tempF),
+ std("amb","Ambient air","Temperatures","46","°F","slow",0,-40,130,tempF),
+ std("cat1","Catalyst bank 1","Temperatures","3C","°F","med",0,0,1800,b=>c2f(u16(b[0],b[1])/10-40)),
+ std("cat2","Catalyst bank 2","Temperatures","3E","°F","med",0,0,1800,b=>c2f(u16(b[0],b[1])/10-40)),
+ std("volt","Module voltage","Electrical","42","V","med",1,10,16,b=>u16(b[0],b[1])/1000,{rule:{lo:12.5,hi:15,when:"running",note:GUIDE+" GM charging systems can intentionally run lower to save fuel."}}),
+ std("stft1","Short trim B1","Fuel","06","%","fast",1,-30,30,trim,{rule:{lo:-15,hi:15,when:"warm",note:GUIDE}}),
+ std("ltft1","Long trim B1","Fuel","07","%","med",1,-30,30,trim,{rule:{lo:-10,hi:10,when:"warm",note:GUIDE}}),
+ std("stft2","Short trim B2","Fuel","08","%","fast",1,-30,30,trim,{rule:{lo:-15,hi:15,when:"warm",note:GUIDE}}),
+ std("ltft2","Long trim B2","Fuel","09","%","med",1,-30,30,trim,{rule:{lo:-10,hi:10,when:"warm",note:GUIDE}}),
+ std("lambda","Commanded lambda","Fuel","44","λ","med",3,0.6,1.4,b=>u16(b[0],b[1])*2/65536),
+ std("frate","Reported fuel rate","Fuel","5E","gal/h","med",2,0,40,b=>u16(b[0],b[1])/20/3.785),
+ std("fuel","Fuel level","Fuel","2F","%","slow",0,0,100,pct,{rule:{lo:10,note:GUIDE}}),
+ std("baro","Barometric pressure","Driving","33","kPa","slow",0,50,110,b=>b[0]),
+ std("runtime","Engine run time","Driving","1F","min","slow",1,0,600,b=>u16(b[0],b[1])/60),
+ std("clrdist","Distance since codes cleared","Diagnostics","31","mi","slow",0,0,40000,b=>u16(b[0],b[1])*0.621371),
+ std("warmups","Warm-ups since codes cleared","Diagnostics","30","","slow",0,0,255,b=>b[0]),
+ std("mildist","Distance with check-engine on","Diagnostics","21","mi","slow",0,0,40000,b=>u16(b[0],b[1])*0.621371,{rule:{hi:0,note:"Any distance means the check-engine light has been on since codes were last cleared."}}),
+ std("reftq","Reference torque","Engine","63","lb-ft","slow",0,0,2000,b=>u16(b[0],b[1])*0.7376),
+ std("odo","Odometer","Driving","A6","mi","slow",0,0,1e6,b=>((b[0]*16777216+b[1]*65536+b[2]*256+b[3])/10)*0.621371),
+ std("gratio","Reported gear ratio","Transmission","A4","ratio","fast",2,0,10,b=>(b[0]&128?u16(b[2],b[3])/1000:null)),
+ std("mon","Monitor status","Diagnostics","01","codes","slow",0,0,127,b=>b[0]&0x7f,{rule:{hi:0,note:"Confirmed emissions codes reported through the standard J1979 status."}}),
+ gm("trans","Trans fluid","Transmission","1940","°F","med",0,-20,300,tempF,{rule:{hi:220,when:"running",note:GUIDE+" GM TechLink uses 190°F as a diagnostic warm-up reference, not a limit."}}),
+ gm("gear","Current gear","Transmission","199A","","fast",0,0,10,b=>b[0]),
+ gm("slip","TCC slip","Transmission","1991","rpm","fast",0,-1500,1500,b=>s16(b[0],b[1])/8,{rule:{hi:50,lo:-50,when:"cruise",sustainMs:3000,note:GUIDE+" Rated only during steady cruise. GM bulletin 16-NA-175 expects zero in its locked test, but normal driving can intentionally slip."}}),
+ gm("sh12","1-2 shift time","Transmission","1993","s","slow",2,0,6,b=>b[0]/40),
+ gm("sh23","2-3 shift time","Transmission","1994","s","slow",2,0,6,b=>b[0]/40),
+ gm("sh34","3-4 shift time","Transmission","1995","s","slow",2,0,6,b=>b[0]/40),
+ gm("oilt","Engine oil temp","Temperatures","1154","°F","med",0,-20,320,tempF),
+ gm("oilp","Oil pressure","Engine","1470","psi","med",0,0,120,b=>b[0]*3.985/6.895),
+ gm("oill","Oil life","Engine","119F","%","slow",0,0,100,pct,{rule:{lo:15,note:GUIDE}}),
+ gm("knock","Knock retard","Engine","11A6","°","med",1,0,30,b=>b[0]*0.0878906),
+ ...[1,2,3,4,5,6,7,8].map(n => { const mid = (0xA1 + n).toString(16).toUpperCase();
+   return { id:"mis"+n, label:"Cyl "+n+" misfires", group:"Misfire", cmd:"06"+mid, unit:"count", tier:"slow", digits:0, min:0, max:50, basis:"standard", mid, raw:r=>parseMode06(r,mid)[0x0C], rule:{hi:0,note:"Recent-count test result from the OBD misfire monitor. Any count is worth watching; occasional counts can be normal."} }; }),
+ { id:"ratio",label:"Engine rpm per mph",group:"Transmission",unit:"rpm/mph",digits:1,min:0,max:200,basis:"derived",need:["rpm","mph"],calc:v=>v.mph>5&&v.rpm>0?v.rpm/v.mph:null },
+ { id:"mpg",label:"Estimated MPG",group:"Fuel",unit:"mpg",digits:1,min:0,max:60,basis:"derived",need:["mph","maf"],calc:v=>v.mph>2&&v.maf>0?Math.min(99,11.44*v.mph/v.maf):null },
+ { id:"hp",label:"Estimated power",group:"Engine",unit:"hp",digits:0,min:0,max:450,basis:"derived",need:["torq","reftq","rpm"],calc:v=>v.reftq>0&&v.rpm>0?Math.max(0,v.torq/100*v.reftq*v.rpm/5252):null }
+];
+function decodeMetric(m, raw) {
+  if (isNoData(raw)) return null;
+  let v;
+  if (m.raw) v = m.raw(raw);
+  else { const b = dataBytes(raw, m.pre); v = b && b.length ? m.f(b) : null; }
+  if (v === undefined || v === null || !Number.isFinite(v)) return null;
+  return v;
+}
+function plausible(m, v) {
+  if (m.basis !== "community") return true;
+  const span = m.max - m.min;
+  return v >= m.min - span * .05 && v <= m.max + span * .05;
+}
+// Green/red: returns good | bad | none. "none" whenever the rating wouldn't be meaningful.
+function rate(rule, v, ctx) {
+  if (!rule || v === null || v === undefined) return { state: "none", text: "No rating" };
+  if (rule.when === "running" && !(ctx.rpm > 400)) return { state: "none", text: "Engine off" };
+  if (rule.when === "warm" && !(ctx.rpm > 400 && ctx.ect >= 160)) return { state: "none", text: "Warming up" };
+  if (rule.when === "cruise" && !(ctx.stable && ctx.mph >= 40)) return { state: "none", text: "Needs steady cruise" };
+  if (rule.lo !== undefined && rule.lo !== null && v < rule.lo) return { state: "bad", text: "Low" };
+  if (rule.hi !== undefined && rule.hi !== null && v > rule.hi) return { state: "bad", text: "High" };
+  return { state: "good", text: "OK" };
+}
+// Layout grid. Items: {id,x,y,w,h}. The fixed item keeps its cell; others settle upward.
+const overlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+function clampItem(it, cols) {
+  it.w = Math.max(2, Math.min(cols, it.w)); it.h = Math.max(2, Math.min(12, it.h));
+  it.x = Math.max(0, Math.min(cols - it.w, it.x)); it.y = Math.max(0, it.y); return it;
+}
+function compact(items, cols, fixedId) {
+  const placed = [], fixed = items.find(i => i.id === fixedId);
+  if (fixed) placed.push(clampItem(fixed, cols));
+  [...items].filter(i => i !== fixed).sort((a, b) => a.y - b.y || a.x - b.x).forEach(i => {
+    clampItem(i, cols); i.y = 0;
+    while (placed.some(p => overlap(i, p))) i.y++;
+    placed.push(i);
+  });
+  return items;
+}
+function flow(sizes, cols) {
+  const placed = [];
+  return sizes.map(([w, h]) => {
+    w = Math.min(w, cols);
+    for (let y = 0; ; y++) for (let x = 0; x + w <= cols; x++) {
+      const it = { x, y, w, h };
+      if (!placed.some(p => overlap(it, p))) { placed.push(it); return it; }
+    }
+  });
+}
+function median(a) { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; }
+function driveState(mph, dMph) { if (!(mph >= 1)) return "Stopped"; if (dMph > .5) return "Accelerating"; if (dMph < -.5) return "Slowing"; return "Cruising"; }
+function tempBand(f) { return f < 160 ? "Under 160°F" : f < 200 ? "160–199°F" : f <= 220 ? "200–220°F" : "Over 220°F"; }
+function csvCell(v) {
+  const s = v === null || v === undefined ? "" : String(v);
+  return '"' + (/^[=+\-@]/.test(s) && isNaN(Number(s)) ? "'" : "") + s.replace(/"/g, '""') + '"';
+}
+// Same text interface as the adapter, so the same parsers run. Never saved to history.
+function simulatorReply(cmd, t) {
+  const hex = (n, w = 2) => Math.max(0, Math.round(n)).toString(16).toUpperCase().padStart(w, "0");
+  if (/^AT/.test(cmd)) return cmd === "ATI" ? "SIMULATOR" : "OK";
+  const w = Math.sin(t / 9000), mph = 48 + w * 26, g = mph < 20 ? 2 : mph < 32 ? 3 : mph < 45 ? 4 : mph < 58 ? 5 : 6;
+  const rpm = mph * [0, 90, 62, 46, 37, 30, 25][g] + 90 * Math.sin(t / 1500) * Math.abs(Math.sin(t / 700));
+  const n = (t % 20000) / 20000, slip = 8 + 25 * Math.abs(Math.sin(t / 2300)) + (n > .9 ? 70 : 0);
+  const m = /^01(..)$/.exec(cmd);
+  if (m && ["00","20","40","60","80","A0"].includes(m[1])) {
+    const base = parseInt(m[1], 16); let bits = BigInt(0);
+    METRICS.filter(x => x.pid && x.pid > base && x.pid <= base + 32 && x.id !== "gratio" && x.id !== "odo").forEach(x => bits |= BigInt(1) << BigInt(32 - (x.pid - base)));
+    if (base < 0xA0) bits |= BigInt(1);
+    return "41" + m[1] + bits.toString(16).toUpperCase().padStart(8, "0");
+  }
+  const map = { "010C":"410C"+hex(rpm*4,4),"010D":"410D"+hex(mph/0.621371),"0104":"4104"+hex(90+w*60),"0111":"4111"+hex(40+w*25),"0149":"4149"+hex(40+w*25),
+   "010B":"410B"+hex(45+w*25),"0110":"4110"+hex((20+w*12)*100,4),"010E":"410E"+hex(128+40),"0162":"4162"+hex(155+w*40),"0105":"4105"+hex(130),"010F":"410F"+hex(60),
+   "0146":"4146"+hex(50),"013C":"413C"+hex(11000,4),"013E":"413E"+hex(10800,4),"0142":"4142"+hex(13900,4),"0106":"4106"+hex(128+w*4),"0107":"4107"+hex(131),
+   "0108":"4108"+hex(127-w*4),"0109":"4109"+hex(130),"0144":"4144"+hex(32768,4),"015E":"415E"+hex(70+w*40,4),"012F":"412F"+hex(150),"0133":"4133"+hex(99),
+   "011F":"411F"+hex(t/1000%3600,4),"0131":"4131"+hex(800,4),"0130":"413012","0121":"41210000","0163":"4163"+hex(520,4),"0101":"4101"+"82"+"07"+"E5"+"20",
+   "221940":"621940"+hex(125+w*12),"22199A":"62199A"+hex(g),"221991":"621991"+hex(slip*8,4),"221993":"621993"+hex(22),"221994":"621994"+hex(26),"221995":"621995"+hex(28),
+   "221154":"621154"+hex(135),"221470":"621470"+hex(70+w*20),"22119F":"62119F"+hex(170),"2211A6":"6211A600","03":"4302030001710000","07":"4700","0A":"4A00","0902":"490201"+[..."SIMULATOR00000000"].map(c=>hex(c.charCodeAt(0))).join("") };
+  for (let c = 1; c <= 8; c++) { const mid = (0xA1 + c).toString(16).toUpperCase(); map["06"+mid] = "46"+mid+"0B24000000000064"+mid+"0C24"+hex(c===4?2:0,4)+"00000064"; }
+  return map[cmd] || "NO DATA";
+}
+/*PURE-END*/
+
+const $ = id => document.getElementById(id);
+const byId = Object.fromEntries(METRICS.map(m => [m.id, m]));
+const COLORS = ["#3987e5","#d95926","#199e70","#c98500","#d55181","#008300","#9085e9","#e66767"];
+function el(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const k in props) { if (k === "class") e.className = props[k]; else if (k.startsWith("on")) e[k] = props[k]; else if (k in e) e[k] = props[k]; else e.setAttribute(k, props[k]); }
+  kids.flat().forEach(c => c !== null && c !== undefined && e.append(c));
+  return e;
+}
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("obd." + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem("obd." + k, JSON.stringify(v, (key, val) => key === "_node" ? undefined : val)); } catch (e) {} }
+};
+function toast(t) { const n = $("toast"); n.textContent = t; n.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => n.hidden = true, 3500); }
+
+/* ---------- Presets: the recommended combinations ---------- */
+const W = (type, metrics, p, d, o = {}) => ({ type, metrics, p, d, ...o });
+const PRESETS = {
+ Glance: [ W("needle",["rpm"],[4,4],[4,5]), W("needle",["mph"],[4,4],[4,5]), W("gearbox",[],[4,3],[4,5]),
+   W("number",["trans"],[2,3],[3,3]), W("number",["ect"],[2,3],[3,3]), W("number",["volt"],[2,3],[3,3]), W("number",["slip"],[2,3],[3,3]), W("status",[],[4,3],[12,2]) ],
+ Transmission: [ W("gearbox",[],[4,3],[3,4]), W("needle",["trans"],[4,4],[3,4]), W("line",["slip"],[4,4],[6,4],{win:5}), W("scatter",["mph","rpm"],[4,5],[6,5]),
+   W("line",["trans"],[4,4],[6,5],{win:15}), W("share",[],[4,4],[4,4],{share:"gear",view:"bars"}), W("share",[],[4,4],[4,4],{share:"temp",view:"donut"}),
+   W("share",[],[4,4],[4,4],{share:"drive",view:"donut"}), W("number",["sh12"],[2,3],[3,3]), W("number",["sh23"],[2,3],[3,3]), W("number",["sh34"],[2,3],[3,3]), W("number",["ratio"],[2,3],[3,3]), W("history",["trans"],[4,4],[12,4],{stat:"max"}) ],
+ Engine: [ W("misfire",[],[4,4],[6,4]), W("line",["ect","oilt","trans"],[4,4],[6,4],{win:15}), W("line",["stft1","stft2","ltft1","ltft2"],[4,4],[6,4],{win:5}),
+   W("line",["rpm"],[4,3],[6,4],{win:5}), W("number",["oilp"],[2,3],[3,3]), W("number",["oilt"],[2,3],[3,3]), W("number",["knock"],[2,3],[3,3]), W("number",["timing"],[2,3],[3,3]), W("number",["load"],[2,3],[3,3]), W("number",["hp"],[2,3],[3,3]), W("number",["oill"],[2,3],[3,3]), W("number",["map"],[2,3],[3,3]) ],
+ Fuel: [ W("number",["mpg"],[2,3],[3,3]), W("needle",["fuel"],[2,3],[3,3]), W("number",["ltft1"],[2,3],[3,3]), W("number",["ltft2"],[2,3],[3,3]), W("line",["mpg"],[4,4],[6,4],{win:15}),
+   W("line",["lambda"],[4,3],[6,4],{win:5}), W("number",["maf"],[2,3],[3,3]), W("number",["frate"],[2,3],[3,3]), W("share",[],[4,4],[6,4],{share:"drive",view:"donut"}), W("history",["mpg"],[4,4],[6,4],{stat:"avg"}) ],
+ Diagnostics: [ W("status",[],[4,3],[6,3]), W("readiness",[],[4,6],[6,6]), W("codes",[],[4,6],[6,7]), W("truck",[],[4,4],[6,4]), W("misfire",[],[4,4],[6,3]) ]
+};
+function buildDash(name) {
+  const list = PRESETS[name], pw = flow(list.map(w => w.p), 4), wd = flow(list.map(w => w.d), 12);
+  return list.map((w, i) => { const { p, d, ...rest } = w; return { id: name + i + Date.now().toString(36), ...JSON.parse(JSON.stringify(rest)), pos: { 4: { ...pw[i] }, 12: { ...wd[i] } } }; });
+}
+function validDash(d) { return d && typeof d === "object" && Object.keys(PRESETS).every(k => Array.isArray(d[k])); }
+let dash = store.get("dash", null);
+if (!validDash(dash)) { dash = {}; Object.keys(PRESETS).forEach(k => dash[k] = buildDash(k)); }
+let tab = store.get("tab", "Glance"); if (!dash[tab]) tab = "Glance";
+const customs = store.get("customs", []);
+function registerCustom(c) {
+  const f = FORMULAS[c.formula]; if (!f || !/^[0-9A-F]{4}$/.test(c.did) || !/^[0-9A-F]{3}$/.test(c.header)) return;
+  const m = { id: "c" + c.header + c.did, label: String(c.name).slice(0, 40), group: "Custom", cmd: "22" + c.did, pre: "62" + c.did, headers: [c.header], unit: f.unit, tier: "med", digits: f.digits, min: f.min, max: f.max, f: f.f, basis: "community" };
+  if (!byId[m.id]) METRICS.push(m); byId[m.id] = m; mstate[m.id] = mstate[m.id] || {};
+}
+const FORMULAS = {
+ raw:{label:"A",unit:"",digits:0,min:0,max:255,f:b=>b[0]}, u16:{label:"A×256+B",unit:"",digits:0,min:0,max:65535,f:b=>u16(b[0],b[1])},
+ tempf:{label:"A−40 °C, shown °F",unit:"°F",digits:0,min:-40,max:420,f:tempF}, pct:{label:"A×100/255",unit:"%",digits:0,min:0,max:100,f:pct},
+ s8:{label:"signed (A×256+B)/8",unit:"",digits:1,min:-4096,max:4096,f:b=>s16(b[0],b[1])/8}, t40:{label:"A/40 seconds",unit:"s",digits:2,min:0,max:7,f:b=>b[0]/40}
+};
+
+/* ---------- Live state ---------- */
+let session = null, wakeLock = null, editMode = false;
+const mstate = Object.fromEntries(METRICS.map(m => [m.id, {}]));
+customs.forEach(registerCustom);
+let series = {}, stats = {}, latest = {}, shares = {}, rows = [], supported = null, monitor = null, truck = {}, codes = null, drives = [], lastTick = 0, driveId = null, driveStart = 0, prevMph = null, stableBuf = [];
+function resetLive() {
+  series = {}; stats = {}; latest = {}; rows = []; monitor = null; truck = {}; codes = null; supported = null; prevMph = null; stableBuf = [];
+  shares = { gear: {}, temp: {}, drive: {} };
+  METRICS.forEach(m => mstate[m.id] = { status: "unknown", misses: 0, last: 0, headerIdx: 0, badSince: 0 });
+}
+resetLive();
+const cols = () => innerWidth >= 760 ? 12 : 4;
+const rules = store.get("rules", {});
+function ruleOf(m) { const o = rules[m.id]; if (o && o.off) return null; return o ? { ...(m.rule || {}), ...o } : (m.rule || null); }
+function ctx() { const v = stableBuf; return { rpm: latest.rpm, mph: latest.mph, ect: latest.ect, stable: v.length >= 5 && spread(v.map(x => x.tps)) < 4 && spread(v.map(x => x.mph)) < 3 }; }
+const spread = a => Math.max(...a) - Math.min(...a);
+function ratingOf(m, v) {
+  const r = rate(ruleOf(m), v, ctx()), s = mstate[m.id] || (mstate[m.id] = {}), rule = ruleOf(m);
+  if (r.state === "bad" && rule && rule.sustainMs) {
+    if (!s.badSince) s.badSince = Date.now();
+    if (Date.now() - s.badSince < rule.sustainMs) return { state: "good", text: "OK" };
+  } else if (s) s.badSince = 0;
+  return r;
+}
+function record(id, v, t) {
+  latest[id] = v;
+  if (v === null || v === undefined) return;
+  const s = series[id] || (series[id] = { t: [], v: [] }); s.t.push(t); s.v.push(v);
+  if (s.t.length > 9000) { s.t.splice(0, 1000); s.v.splice(0, 1000); }
+  const st = stats[id] || (stats[id] = { min: v, max: v, sum: 0, n: 0 });
+  st.min = Math.min(st.min, v); st.max = Math.max(st.max, v); st.sum += v; st.n++;
+}
+const addShare = (k, c) => { shares[k][c] = (shares[k][c] || 0) + 1; };
+function tick(now) { // once per second
+  METRICS.filter(m => m.calc).forEach(m => { const v = m.calc(latest); record(m.id, v, now); mstate[m.id].status = v === null ? mstate[m.id].status : "ok"; });
+  stableBuf.push({ tps: latest.tps ?? 0, mph: latest.mph ?? 0 }); if (stableBuf.length > 8) stableBuf.shift();
+  if (latest.mph !== undefined && latest.mph !== null) { addShare("drive", driveState(latest.mph, prevMph === null ? 0 : latest.mph - prevMph)); prevMph = latest.mph; }
+  if (latest.gear !== undefined && latest.gear !== null) addShare("gear", String(latest.gear));
+  if (latest.trans !== undefined && latest.trans !== null) addShare("temp", tempBand(latest.trans));
+  const r = { utc: new Date(now).toISOString() }; METRICS.forEach(m => r[m.id] = latest[m.id]); rows.push(r); if (rows.length > 28800) rows.shift();
+}
+
+/* ---------- Adapter link ---------- */
+class SerialLink {
+  constructor(port) { this.port = port; this.buffer = ""; this.waiter = null; }
+  async open() { await this.port.open({ baudRate: 115200 }); this.writer = this.port.writable.getWriter(); this.reader = this.port.readable.getReader(); this.pump(); }
+  async pump() {
+    const dec = new TextDecoder();
+    try { for (;;) { const { value, done } = await this.reader.read(); if (done) break; this.buffer += dec.decode(value);
+      if (this.buffer.includes(">") && this.waiter) { const t = this.buffer, w = this.waiter; this.buffer = ""; this.waiter = null; w.resolve(t); } } }
+    catch (e) { if (this.waiter) this.waiter.reject(e); }
+  }
+  send(cmd, timeout = 4000) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { this.waiter = null; reject(new Error("Adapter timed out on " + cmd)); }, timeout);
+      this.waiter = { resolve: v => { clearTimeout(timer); resolve(v); }, reject: e => { clearTimeout(timer); reject(e); } };
+      this.buffer = "";
+      this.writer.write(new TextEncoder().encode(cmd + "\r")).catch(e => { clearTimeout(timer); this.waiter = null; reject(e); });
+    });
+  }
+  async close() { try { await this.reader.cancel(); this.reader.releaseLock(); } catch (e) {} try { this.writer.releaseLock(); } catch (e) {} try { await this.port.close(); } catch (e) {} }
+}
+class SimLink {
+  sim = true; async open() {} async send(cmd) { await new Promise(r => setTimeout(r, 6)); return simulatorReply(cmd, Date.now()) + "\r\r>"; } async close() {}
+}
+let queue = Promise.resolve();
+function exclusive(fn) { const run = queue.then(fn, fn); queue = run.catch(() => {}); return run; }
+async function ask(cmd) {
+  cmd = String(cmd).toUpperCase().replace(/\s+/g, "");
+  if (!isAllowedCommand(cmd)) throw new Error("Blocked by read-only allowlist: " + cmd);
+  if (!session) throw new Error("Not connected");
+  return session.link.send(cmd);
+}
+async function askH(header, cmd) {
+  return exclusive(async () => { if (session && session.header !== header) { await ask("ATSH" + header); session.header = header; } return ask(cmd); });
+}
+function visibleIds() {
+  const ids = new Set(["rpm","mph","tps","ect"]);
+  dash[tab].forEach(w => { (w.metrics || []).forEach(i => ids.add(i));
+    if (w.type === "gearbox") ["gear","slip","gratio"].forEach(i => ids.add(i));
+    if (w.type === "misfire") for (let c = 1; c <= 8; c++) ids.add("mis" + c);
+    if (w.type === "status" || w.type === "readiness") ids.add("mon");
+    if (w.type === "share") ids.add(w.share === "gear" ? "gear" : w.share === "temp" ? "trans" : "mph"); });
+  [...ids].forEach(i => { const m = byId[i]; if (m && m.need) m.need.forEach(n => ids.add(n)); });
+  return ids;
+}
+const INTERVAL = { fast: [120, 3000], med: [1000, 6000], slow: [5000, 30000] };
+function nextMetric(now) {
+  const vis = visibleIds(); let best = null, bestScore = 1;
+  for (const m of METRICS) {
+    if (!m.cmd) continue; const s = mstate[m.id];
+    if (s.status === "unsupported") continue;
+    const iv = s.status === "failed" ? 60000 : INTERVAL[m.tier][vis.has(m.id) ? 0 : 1];
+    const score = (now - s.last) / iv;
+    if (score >= bestScore && score > (best ? bestScore : 0)) { best = m; bestScore = score; }
+  }
+  return best;
+}
+async function pollOnce(m) {
+  const s = mstate[m.id], headers = m.headers || ["7DF"];
+  s.last = Date.now();
+  const raw = await askH(headers[s.headerIdx] || headers[0], m.cmd);
+  let v = decodeMetric(m, raw);
+  if (m.id === "mon" && v !== null) { const b = dataBytes(raw, "4101"); if (b && b.length >= 4) monitor = parseMonitor(b); }
+  if (v !== null && !plausible(m, v)) v = null;
+  if (v === null) {
+    s.misses++;
+    if (s.status !== "ok" && s.headerIdx < headers.length - 1) { s.headerIdx++; s.misses = 0; }
+    else if (s.misses >= 3) { s.status = "failed"; s.headerIdx = 0; s.misses = 0; }
+  } else { s.misses = 0; s.status = "ok"; }
+  record(m.id, v, Date.now());
+}
+async function runLoop(s) {
+  while (session === s) {
+    const now = Date.now();
+    if (now - lastTick >= 1000) { lastTick = now; tick(now); if (!s.link.sim && now - s.savedAt > 30000) { s.savedAt = now; saveDrive(); } }
+    const m = nextMetric(now);
+    if (m) await pollOnce(m); else await new Promise(r => setTimeout(r, 40));
+    if (!s.link.sim && editMode && latest.mph > 3) { setEdit(false); toast("Layout editing locked while moving."); }
+  }
+}
+async function start(link, label) {
+  try {
+    await link.open();
+    resetLive(); const s = { link, header: null, savedAt: Date.now() }; session = s; driveId = "d" + Date.now(); driveStart = Date.now();
+    setStatus("Initializing " + label + "…");
+    await exclusive(async () => { for (const c of ["ATZ","ATE0","ATL0","ATS0","ATH0","ATAT1","ATSP6","ATSH7DF"]) await ask(c); s.header = "7DF"; });
+    supported = new Set(); let base = 0;
+    while (base <= 0xA0) { const raw = await askH("7DF", "01" + base.toString(16).toUpperCase().padStart(2, "0")); parseSupport(raw, base).forEach(p => supported.add(p)); if (!supported.has(base + 32)) break; base += 32; }
+    if (!supported.size) throw new Error("No response from the truck. Turn the ignition on, then reconnect.");
+    METRICS.forEach(m => { if (m.pid && !supported.has(m.pid)) mstate[m.id].status = "unsupported"; });
+    setStatus("Live: " + label, "ok");
+    $("stop").disabled = false; $("connect").disabled = $("sim").disabled = true;
+    try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
+    runLoop(s).catch(e => { if (session === s) fail(e); });
+  } catch (e) { fail(e); }
+}
+async function fail(e) { setStatus(e.message || String(e), "bad"); await stop(true); }
+async function stop(keep) {
+  const s = session; session = null;
+  if (s && !s.link.sim) await saveDrive();
+  if (s) await s.link.close();
+  if (wakeLock) { try { await wakeLock.release(); } catch (e) {} wakeLock = null; }
+  $("stop").disabled = true; $("connect").disabled = !("serial" in navigator); $("sim").disabled = false;
+  if (!keep) setStatus("Not connected");
+}
+function setStatus(t, c = "") { $("status").textContent = t; $("status").className = c; }
+
+/* ---------- Drive history (on this device only) ---------- */
+function db() {
+  return new Promise((res, rej) => { if (!window.indexedDB) return rej(new Error("no IndexedDB")); const q = indexedDB.open("obd-live", 1);
+    q.onupgradeneeded = () => q.result.createObjectStore("drives", { keyPath: "id" }); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+}
+async function loadDrives() {
+  try { const d = await db(); drives = await new Promise((res, rej) => { const q = d.transaction("drives").objectStore("drives").getAll(); q.onsuccess = () => res(q.result.sort((a, b) => a.start - b.start)); q.onerror = () => rej(q.error); }); } catch (e) { drives = []; }
+}
+async function putDrives(list) {
+  const d = await db();
+  await new Promise((res, rej) => { const t = d.transaction("drives", "readwrite"); list.forEach(x => t.objectStore("drives").put(x)); t.oncomplete = res; t.onerror = () => rej(t.error); });
+}
+async function saveDrive() {
+  if (Date.now() - driveStart < 60000 || !driveId) return;
+  const summary = {}; for (const id in stats) { const s = stats[id]; if (s.n) summary[id] = { min: s.min, max: s.max, avg: s.sum / s.n, n: s.n }; }
+  try { await putDrives([{ id: driveId, start: driveStart, end: Date.now(), summary, build: BUILD_ID }]); await loadDrives(); } catch (e) {}
+}
+function usual(id) {
+  const a = drives.map(d => d.summary && d.summary[id]).filter(Boolean);
+  return a.length >= 3 ? { avg: median(a.map(x => x.avg)), max: median(a.map(x => x.max)), n: a.length } : null;
+}
+
+/* ---------- Widget renderers ---------- */
+function canvasCtx(c) {
+  const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1, w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, r.width, r.height);
+  return { g, W: r.width, H: r.height };
+}
+const fmt = (m, v) => v === null || v === undefined ? "--" : v.toFixed(m.digits);
+const TAG = { standard: "Standard", community: "Unverified", derived: "Estimate" };
+function emptyText(m) {
+  const s = mstate[m.id];
+  if (!session) return "Not connected";
+  if (s.status === "unsupported") return "Not reported by this truck";
+  if (s.status === "failed") return "No answer from this request";
+  return "Waiting for data";
+}
+const PILL = { good: "✓ ", bad: "✕ ", none: "" };
+function header(w, title, tag) {
+  return el("div", { class: "wh" }, el("div", { class: "wt", textContent: title }), tag ? el("span", { class: "tag", textContent: tag }) : null);
+}
+const R = {};
+R.number = (w, box) => {
+  const m = byId[w.metrics[0]]; if (!m) return;
+  const big = el("div", { class: "big" }), pill = el("div", { class: "pill" }), c = el("canvas"), sub = el("div", { class: "sub" });
+  box.append(header(w, m.label, TAG[m.basis]), el("div", { class: "body" }, big, pill, c, sub));
+  return () => {
+    const v = latest[m.id] ?? null, r = ratingOf(m, v), st = stats[m.id], u = usual(m.id);
+    big.textContent = fmt(m, v); big.append(el("span", { class: "unit", textContent: m.unit }));
+    pill.textContent = v === null ? emptyText(m) : ruleOf(m) ? PILL[r.state] + r.text : ""; pill.className = "pill " + r.state;
+    box.className = "w " + (r.state === "none" ? "" : r.state) + (v === null ? " off" : "");
+    const parts = st ? ["min " + st.min.toFixed(m.digits), "avg " + (st.sum / st.n).toFixed(m.digits), "max " + st.max.toFixed(m.digits)] : [];
+    if (u) parts.push("usual " + u.avg.toFixed(m.digits));
+    sub.textContent = parts.join(" · ");
+    spark(c, m);
+  };
+};
+function spark(c, m) {
+  const { g, W, H } = canvasCtx(c), s = series[m.id]; if (!s || s.v.length < 2 || H < 8) return;
+  const n = Math.min(s.v.length, 300), vs = s.v.slice(-n), lo = Math.min(...vs), hi = Math.max(...vs), rng = hi - lo || 1;
+  g.strokeStyle = COLORS[0]; g.lineWidth = 2; g.lineJoin = "round"; g.beginPath();
+  vs.forEach((v, i) => { const x = i / (n - 1) * W, y = H - 2 - (v - lo) / rng * (H - 4); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
+}
+R.needle = (w, box) => {
+  const m = byId[w.metrics[0]]; if (!m) return;
+  const c = el("canvas"), pill = el("div", { class: "pill" });
+  c.setAttribute("role", "img");
+  box.append(header(w, m.label, TAG[m.basis]), el("div", { class: "body" }, c, pill));
+  return () => {
+    const v = latest[m.id] ?? null, r = ratingOf(m, v), rule = ruleOf(m);
+    const { g, W, H } = canvasCtx(c); box.className = "w " + (r.state === "none" ? "" : r.state) + (v === null ? " off" : "");
+    pill.textContent = v === null ? emptyText(m) : ruleOf(m) ? PILL[r.state] + r.text : ""; pill.className = "pill " + r.state; pill.style.textAlign = "center";
+    c.setAttribute("aria-label", m.label + " " + fmt(m, v) + " " + m.unit + ", " + r.text);
+    const a0 = Math.PI * .8, a1 = Math.PI * 2.2, cx = W / 2, rad = Math.max(10, Math.min(W / 2, H * .62) - 10), cy = Math.min(H - 4, rad + 12);
+    const ang = x => a0 + (Math.min(m.max, Math.max(m.min, x)) - m.min) / (m.max - m.min) * (a1 - a0);
+    const arc = (x0, x1, col) => { if (x1 <= x0) return; g.strokeStyle = col; g.lineWidth = 6; g.beginPath(); g.arc(cx, cy, rad, ang(x0) + .012, ang(x1) - .012); g.stroke(); };
+    if (rule && (rule.lo !== undefined || rule.hi !== undefined)) {
+      const lo = rule.lo ?? m.min, hi = rule.hi ?? m.max;
+      arc(m.min, lo, "#d03b3b"); arc(lo, hi, "#0ca30c"); arc(hi, m.max, "#d03b3b");
+    } else arc(m.min, m.max, "#55544f");
+    g.fillStyle = "#8f8e85"; g.font = "10px system-ui"; g.textAlign = "left"; g.fillText(String(m.min), Math.max(0, cx - rad - 2), Math.min(H - 1, cy + rad * .78)); g.textAlign = "right"; g.fillText(String(m.max), Math.min(W, cx + rad + 2), Math.min(H - 1, cy + rad * .78));
+    if (v !== null) { const t = ang(v); g.strokeStyle = "#f0efec"; g.lineWidth = 2.5; g.beginPath(); g.moveTo(cx - Math.cos(t) * 8, cy - Math.sin(t) * 8); g.lineTo(cx + Math.cos(t) * (rad - 4), cy + Math.sin(t) * (rad - 4)); g.stroke(); g.fillStyle = "#f0efec"; g.beginPath(); g.arc(cx, cy, 4, 0, 7); g.fill(); }
+    g.textAlign = "center"; g.fillStyle = "#f0efec"; g.font = "700 " + Math.max(15, rad * .36) + "px system-ui"; g.fillText(fmt(m, v), cx, cy + rad * .62);
+    g.fillStyle = "#c3c2b7"; g.font = "11px system-ui"; if (cy + rad * .62 + 13 < H) g.fillText(m.unit, cx, cy + rad * .62 + 13);
+  };
+};
+function hoverable(c, out) { const h = { x: null }; c.onpointermove = e => { if (editMode) return; const r = c.getBoundingClientRect(); h.x = e.clientX - r.left; h.y = e.clientY - r.top; }; c.onpointerleave = () => h.x = null; return h; }
+R.line = (w, box) => {
+  const ms = w.metrics.map(i => byId[i]).filter(Boolean).slice(0, 4); if (!ms.length) return;
+  const win = (w.win || 5) * 60000, c = el("canvas"), read = el("div", { class: "readout" }), leg = el("div", { class: "legend" }), h = hoverable(c);
+  if (ms.length > 1) ms.forEach((m, i) => leg.append(el("span", {}, el("span", { class: "key", style: "background:" + COLORS[i] }), m.label)));
+  box.append(header(w, w.title || ms.map(m => m.label).join(ms.length > 2 ? ", " : " · ") + " · " + (w.win || 5) + " min", ms.every(m => m.basis === "standard") ? "Standard" : ms.length === 1 ? TAG[ms[0].basis] : "Mixed sources"), el("div", { class: "body" }, ms.length > 1 ? leg : null, c, read));
+  return () => {
+    const { g, W, H } = canvasCtx(c), now = Date.now(), L = 34, B = 14, T = 4, pw = W - L - 4, ph = H - B - T; if (ph < 12) return;
+    let lo = Infinity, hi = -Infinity; const sets = ms.map(m => { const s = series[m.id], a = []; if (s) for (let i = s.t.length - 1; i >= 0 && s.t[i] >= now - win; i--) a.push([s.t[i], s.v[i]]); a.reverse(); a.forEach(p => { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]); }); return a; });
+    const rule = ms.length === 1 ? ruleOf(ms[0]) : null; const lim = rule ? [rule.lo, rule.hi].filter(x => x !== undefined && x !== null) : [];
+    if (!isFinite(lo)) { g.fillStyle = "#8f8e85"; g.font = "12px system-ui"; g.textAlign = "center"; g.fillText(emptyText(ms[0]), W / 2, H / 2); read.textContent = ""; return; }
+    lim.forEach(x => { if (Math.abs(x - hi) < (hi - lo || 1) * 2 + 1 || Math.abs(x - lo) < (hi - lo || 1) * 2 + 1) { lo = Math.min(lo, x); hi = Math.max(hi, x); } });
+    const pad = (hi - lo || Math.abs(hi) * .1 || 1) * .1; lo -= pad; hi += pad;
+    const X = t => L + (t - (now - win)) / win * pw, Y = v => T + (hi - v) / (hi - lo) * ph, d = ms[0].digits;
+    g.font = "10px system-ui"; g.textBaseline = "middle"; g.textAlign = "right"; g.fillStyle = "#c3c2b7"; g.lineWidth = 1;
+    for (let i = 0; i <= 3; i++) { const v = lo + (hi - lo) * i / 3, y = Y(v); g.strokeStyle = "#2c2c2a"; g.beginPath(); g.moveTo(L, y); g.lineTo(W - 4, y); g.stroke(); g.fillText(v.toFixed(Math.max(0, hi - lo > 40 ? 0 : d)), L - 4, y); }
+    g.textAlign = "center"; g.textBaseline = "alphabetic"; g.fillText("−" + (w.win || 5) + " min", L + 18, H - 2); g.fillText("now", W - 14, H - 2);
+    lim.forEach(x => { if (x >= lo && x <= hi) { g.strokeStyle = "#d03b3b"; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(L, Y(x)); g.lineTo(W - 4, Y(x)); g.stroke(); g.setLineDash([]); } });
+    sets.forEach((a, i) => { g.strokeStyle = COLORS[i]; g.lineWidth = 2; g.lineJoin = "round"; g.beginPath(); let pen = false, pt = 0; a.forEach(p => { const gap = p[0] - pt > Math.max(15000, win / 40); if (!pen || gap) g.moveTo(X(p[0]), Y(p[1])); else g.lineTo(X(p[0]), Y(p[1])); pen = true; pt = p[0]; }); g.stroke(); });
+    if (h.x !== null && h.x >= L) { const t = now - win + (h.x - L) / pw * win; g.strokeStyle = "#c3c2b7"; g.lineWidth = 1; g.beginPath(); g.moveTo(h.x, T); g.lineTo(h.x, T + ph); g.stroke();
+      read.textContent = new Date(t).toLocaleTimeString() + "  " + ms.map((m, i) => { let best = null, bd = Infinity; sets[i].forEach(p => { const dd = Math.abs(p[0] - t); if (dd < bd) { bd = dd; best = p; } }); return best ? m.label + " " + best[1].toFixed(m.digits) + m.unit : ""; }).join("  "); }
+    else read.textContent = ms.map(m => m.label + " " + fmt(m, latest[m.id] ?? null) + " " + m.unit).join("  ");
+  };
+};
+R.scatter = (w, box) => {
+  const mx = byId[w.metrics[0]], my = byId[w.metrics[1]]; if (!mx || !my) return;
+  const c = el("canvas"), read = el("div", { class: "readout" }), h = hoverable(c);
+  box.append(header(w, my.label + " vs " + mx.label + " · straight rays are gears", "Standard"), el("div", { class: "body" }, c, read));
+  return () => {
+    const { g, W, H } = canvasCtx(c), L = 38, B = 15, T = 4, pw = W - L - 4, ph = H - B - T; if (ph < 12) return;
+    const sx = series[mx.id], sy = series[my.id]; const pts = [];
+    if (sx && sy) { const tx = sx.t, n = sy.t.length; let j = 0; for (let i = Math.max(0, n - 2500); i < n; i += 1) { const t = sy.t[i]; while (j < tx.length - 1 && tx[j + 1] <= t) j++; if (Math.abs(tx[j] - t) < 500) pts.push([sx.v[j], sy.v[i]]); } }
+    const X = v => L + (v - mx.min) / (mx.max - mx.min) * pw, Y = v => T + (my.max - v) / (my.max - my.min) * ph;
+    g.font = "10px system-ui"; g.fillStyle = "#c3c2b7"; g.lineWidth = 1;
+    for (let i = 0; i <= 3; i++) { const v = my.min + (my.max - my.min) * i / 3; g.strokeStyle = "#2c2c2a"; g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(W - 4, Y(v)); g.stroke(); g.textAlign = "right"; g.textBaseline = "middle"; g.fillText(v.toFixed(0), L - 4, Y(v)); }
+    g.textBaseline = "alphabetic"; g.textAlign = "center"; for (let i = 0; i <= 3; i++) { const v = mx.min + (mx.max - mx.min) * i / 3; g.fillText(v.toFixed(0) + (i === 3 ? " " + mx.unit : ""), Math.min(W - 16, X(v)), H - 2); }
+    g.fillStyle = COLORS[0] + "99"; pts.forEach(p => { g.beginPath(); g.arc(X(p[0]), Y(p[1]), 1.6, 0, 7); g.fill(); });
+    if (pts.length) { const p = pts[pts.length - 1]; g.fillStyle = "#f0efec"; g.beginPath(); g.arc(X(p[0]), Y(p[1]), 4, 0, 7); g.fill(); }
+    if (h.x !== null && pts.length) { let b = pts[0], bd = Infinity; pts.forEach(p => { const d = (X(p[0]) - h.x) ** 2 + (Y(p[1]) - h.y) ** 2; if (d < bd) { bd = d; b = p; } }); read.textContent = b[0].toFixed(0) + " " + mx.unit + ", " + b[1].toFixed(0) + " " + my.unit; }
+    else read.textContent = pts.length ? pts.length + " points. A scattered band at one speed can point to slip." : emptyText(my);
+  };
+};
+const SHARE = { gear: { title: "Time in each gear", src: "gear" }, temp: { title: "Time by trans temperature", src: "trans" }, drive: { title: "Time by driving state", src: "mph" } };
+function shareRows(k) {
+  let e = Object.entries(shares[k] || {});
+  if (k === "gear") e.sort((a, b) => Number(a[0]) - Number(b[0]));
+  const order = { temp: ["Under 160°F","160–199°F","200–220°F","Over 220°F"], drive: ["Stopped","Cruising","Accelerating","Slowing"] }[k];
+  if (order) e = order.filter(o => shares[k][o]).map(o => [o, shares[k][o]]);
+  const tot = e.reduce((s, x) => s + x[1], 0); return { e, tot };
+}
+R.share = (w, box) => {
+  const def = SHARE[w.share] || SHARE.drive, c = el("canvas"), leg = el("div", { class: "legend" });
+  box.append(header(w, def.title, byId[def.src].basis === "community" ? "Unverified" : "Standard"), el("div", { class: "body" }, c, leg));
+  let lastKey = "";
+  return () => {
+    let { e, tot } = shareRows(w.share); const { g, W, H } = canvasCtx(c);
+    if (!tot) { g.fillStyle = "#8f8e85"; g.font = "12px system-ui"; g.textAlign = "center"; g.fillText(emptyText(byId[def.src]), W / 2, H / 2); leg.textContent = ""; lastKey = ""; return; }
+    let view = w.view || "donut";
+    if (view === "donut" && e.length > 6) { const sorted = [...e].sort((a, b) => b[1] - a[1]); e = sorted.slice(0, 5).concat([["Other", sorted.slice(5).reduce((s, x) => s + x[1], 0)]]); }
+    const label = n => w.share === "gear" ? (n === "Other" ? n : "Gear " + n) : n;
+    if (view === "donut") { const cx = W / 2, cy = H / 2, r = Math.max(10, Math.min(W, H) / 2 - 3); let a = -Math.PI / 2; g.lineWidth = Math.max(8, r * .3);
+      e.forEach((x, i) => { const d = x[1] / tot * Math.PI * 2; g.strokeStyle = COLORS[i]; g.beginPath(); g.arc(cx, cy, r - g.lineWidth / 2, a + .02, a + Math.max(.03, d - .02)); g.stroke(); a += d; });
+      g.fillStyle = "#f0efec"; g.font = "700 13px system-ui"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(Math.round(tot / 60) + " min", cx, cy); g.textBaseline = "alphabetic"; }
+    else { const L = 44, gap = 3, bh = Math.min(16, (H - gap * e.length) / Math.max(1, e.length)); const mx = Math.max(...e.map(x => x[1]));
+      g.font = "11px system-ui"; g.textBaseline = "middle"; e.forEach((x, i) => { const y = i * (bh + gap), pw = W - L - 34; g.textAlign = "left"; g.fillStyle = "#c3c2b7"; g.fillText(label(x[0]), 0, y + bh / 2); g.fillStyle = COLORS[0]; g.fillRect(L, y + 1, x[1] / mx * pw, bh - 2); g.textAlign = "right"; g.fillStyle = "#f0efec"; g.fillText(Math.round(x[1] / tot * 100) + "%", W, y + bh / 2); }); g.textBaseline = "alphabetic"; }
+    const key = view + e.map(x => x[0] + Math.round(x[1] / tot * 100)).join();
+    if (view === "donut" && key !== lastKey) { lastKey = key; leg.textContent = ""; e.forEach((x, i) => leg.append(el("span", {}, el("span", { class: "key", style: "background:" + COLORS[i] }), label(x[0]) + " " + Math.round(x[1] / tot * 100) + "%"))); }
+    if (view !== "donut") leg.textContent = "";
+  };
+};
+R.gearbox = (w, box) => {
+  const big = el("div", { class: "gear" }), a = el("div", { class: "sub" }), pill = el("div", { class: "pill" }), b = el("div", { class: "sub" });
+  box.append(header(w, "Transmission", "Unverified"), el("div", { class: "body" }, big, pill, a, b));
+  return () => {
+    const gv = latest.gear ?? null, gr = latest.gratio ?? null, sl = latest.slip ?? null, r = ratingOf(byId.slip, sl);
+    big.textContent = gv !== null ? gv.toFixed(0) : gr !== null ? gr.toFixed(2) : "--"; big.title = "Current gear";
+    pill.textContent = sl === null ? "Slip: " + emptyText(byId.slip) : PILL[r.state] + "Slip " + sl.toFixed(0) + " rpm · " + r.text; pill.className = "pill " + r.state;
+    box.className = "w " + (r.state === "none" ? "" : r.state);
+    a.textContent = gv === null ? "Gear: " + emptyText(byId.gear) : "Current gear";
+    b.textContent = (latest.ratio ?? null) === null ? "" : latest.ratio.toFixed(1) + " engine rpm per mph";
+  };
+};
+R.misfire = (w, box) => {
+  const g = el("div", { class: "cyl" }), parts = [], read = el("div", { class: "readout" });
+  for (let c = 1; c <= 8; c++) { const i = el("i"), n = el("span"), d = el("div", {}, n, i, el("span", { textContent: String(c) })); parts.push({ i, n, m: byId["mis" + c] }); g.append(d); }
+  box.append(header(w, "Recent misfires by cylinder", "Standard"), el("div", { class: "body" }, g, read));
+  return () => {
+    const vals = parts.map(p => latest[p.m.id] ?? null), mx = Math.max(1, ...vals.map(v => v ?? 0)); let bad = false, any = false;
+    parts.forEach((p, i) => { const v = vals[i], r = ratingOf(p.m, v); any = any || v !== null; bad = bad || r.state === "bad"; p.n.textContent = v === null ? "–" : v.toFixed(0); p.i.style.height = (v === null ? 0 : Math.max(4, v / mx * 60)) + "%"; p.i.className = r.state === "none" ? "" : r.state; });
+    box.className = "w " + (any ? (bad ? "bad" : "good") : "off");
+    read.textContent = !any ? emptyText(parts[0].m) : bad ? "✕ Misfire counts present" : "✓ No recent counts";
+  };
+};
+R.status = (w, box) => {
+  const body = el("div", { class: "body" }); box.append(header(w, "Check-engine status", "Standard"), body);
+  return () => {
+    box.className = "w " + (monitor ? (monitor.mil || monitor.dtcCount ? "bad" : "good") : "off");
+    body.textContent = ""; if (!monitor) { body.append(el("div", { class: "pill", textContent: session ? "Waiting for data" : "Not connected" })); return; }
+    body.append(el("div", { class: "pill " + (monitor.mil ? "bad" : "good"), textContent: monitor.mil ? "✕ Check-engine light is on" : "✓ Check-engine light is off" }),
+      el("div", { class: "sub", textContent: monitor.dtcCount + " confirmed code" + (monitor.dtcCount === 1 ? "" : "s") + " · " + (latest.clrdist != null ? latest.clrdist.toFixed(0) + " mi since cleared" : "") + (latest.warmups != null ? " · " + latest.warmups.toFixed(0) + " warm-ups" : "") }));
+  };
+};
+R.readiness = (w, box) => {
+  const body = el("div", { class: "scroll" }); box.append(header(w, "Emissions monitors", "Standard"), el("div", { class: "body" }, body));
+  return () => { body.textContent = ""; if (!monitor) { body.append(el("div", { class: "pill", textContent: session ? "Waiting for data" : "Not connected" })); return; }
+    monitor.monitors.filter(x => x.state !== "na").forEach(x => body.append(el("div", { class: "row" }, el("span", { textContent: x.name }), el("span", { class: "pill " + (x.state === "complete" ? "good" : ""), textContent: x.state === "complete" ? "✓ Complete" : "Not finished" })))); };
+};
+R.codes = (w, box) => {
+  const list = el("div", { class: "scroll" }), btn = el("button", { textContent: "Read codes and freeze frame" });
+  btn.onclick = readCodes;
+  box.append(header(w, "Trouble codes (read-only)", "Standard"), el("div", { class: "body" }, btn, list));
+  let sig = "";
+  return () => { btn.disabled = !session; const s = JSON.stringify(codes); if (s === sig) return; sig = s; list.textContent = ""; if (!codes) return;
+    box.className = "w " + (codes.stored.length + codes.pending.length + codes.permanent.length ? "bad" : "good");
+    const add = (a, b) => list.append(el("div", { class: "row" }, el("span", { textContent: a }), el("span", { textContent: b })));
+    codes.stored.forEach(c => add(c, "Stored")); codes.pending.forEach(c => add(c, "Pending")); codes.permanent.forEach(c => add(c, "Permanent"));
+    if (!codes.stored.length && !codes.pending.length && !codes.permanent.length) list.append(el("div", { class: "pill good", textContent: "✓ No codes returned" }));
+    if (codes.freeze.length) { list.append(el("div", { class: "sub", textContent: "Freeze frame" })); codes.freeze.forEach(f => add(f[0], f[1])); } };
+};
+async function readCodes() {
+  if (!session) return;
+  try {
+    const stored = parseDtc(await askH("7DF", "03"), "43"), pending = parseDtc(await askH("7DF", "07"), "47"), permanent = parseDtc(await askH("7DF", "0A"), "4A"), freeze = [];
+    for (const id of ["rpm","mph","ect","load","stft1","ltft1"]) { const m = byId[id], pp = m.cmd.slice(2), b = dataBytes(await askH("7DF", "02" + pp + "00"), "42" + pp + "00"); if (b && b.length) { const v = m.f(b); if (v !== null && Number.isFinite(v)) freeze.push([m.label, v.toFixed(m.digits) + " " + m.unit]); } }
+    codes = { stored, pending, permanent, freeze };
+  } catch (e) { toast(e.message); }
+}
+R.truck = (w, box) => {
+  const list = el("div", { class: "scroll" }), btn = el("button", { textContent: "Read VIN and calibration" });
+  btn.onclick = async () => { if (!session) return; try { truck.vin = asciiFrom(await askH("7DF", "0902"), "4902"); truck.cal = asciiFrom(await askH("7DF", "0904"), "4904"); } catch (e) { toast(e.message); } };
+  box.append(header(w, "Truck identity", "Standard"), el("div", { class: "body" }, btn, list));
+  let sig = "";
+  return () => { btn.disabled = !session; const rows2 = [["VIN", truck.vin], ["Calibration ID", truck.cal], ["Odometer", latest.odo != null ? latest.odo.toFixed(0) + " mi" : null], ["Standard PIDs reported", supported ? String(supported.size) : null]].filter(r => r[1]); const s = JSON.stringify(rows2); if (s === sig) return; sig = s; list.textContent = "";
+    rows2.forEach(r => list.append(el("div", { class: "row" }, el("span", { textContent: r[0] }), el("span", { textContent: r[1] })))); };
+};
+R.history = (w, box) => {
+  const m = byId[w.metrics[0]]; if (!m) return; const stat = w.stat || "max";
+  const c = el("canvas"), read = el("div", { class: "readout" }), h = hoverable(c);
+  box.append(header(w, m.label + " · " + stat + " per drive", "History"), el("div", { class: "body" }, c, read));
+  return () => {
+    const { g, W, H } = canvasCtx(c), a = drives.filter(d => d.summary && d.summary[m.id]).slice(-40), L = 34, B = 4, ph = H - B - 4; if (ph < 10) return;
+    if (!a.length) { g.fillStyle = "#8f8e85"; g.font = "12px system-ui"; g.textAlign = "center"; g.fillText("Builds as you drive. Drives under 1 min aren't saved.", W / 2, H / 2); read.textContent = ""; return; }
+    const vs = a.map(d => d.summary[m.id][stat]), lo = Math.min(0, ...vs), hi = Math.max(...vs) * 1.08 || 1, bw = (W - L) / a.length, Y = v => 4 + (hi - v) / (hi - lo) * ph;
+    g.font = "10px system-ui"; g.textAlign = "right"; g.textBaseline = "middle"; g.lineWidth = 1; for (let i = 0; i <= 2; i++) { const v = lo + (hi - lo) * i / 2; g.strokeStyle = "#2c2c2a"; g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(W, Y(v)); g.stroke(); g.fillStyle = "#c3c2b7"; g.fillText(v.toFixed(0), L - 4, Y(v)); }
+    const rule = ruleOf(m); a.forEach((d, i) => { g.fillStyle = rate(rule ? { lo: rule.lo, hi: rule.hi } : null, vs[i], {}).state === "bad" ? "#d03b3b" : rule ? "#0ca30c" : COLORS[0]; g.fillRect(L + i * bw + 1, Y(vs[i]), Math.max(2, bw - 2), Y(lo) - Y(vs[i])); });
+    const i = h.x !== null && h.x >= L ? Math.min(a.length - 1, Math.floor((h.x - L) / bw)) : a.length - 1;
+    read.textContent = new Date(a[i].start).toLocaleDateString() + ": " + vs[i].toFixed(m.digits) + " " + m.unit + " · " + a.length + " drives";
+  };
+};
+
+/* ---------- Grid ---------- */
+let painters = [];
+function renderTabs() {
+  const t = $("tabs"); t.textContent = "";
+  Object.keys(dash).forEach(k => t.append(el("button", { role: "tab", textContent: k, "aria-selected": String(k === tab), onclick: () => { tab = k; store.set("tab", k); renderTabs(); renderGrid(); } })));
+}
+const posOf = w => w.pos[cols()] || (w.pos[cols()] = { ...flow([[Math.min(cols(), 4), 3]], cols())[0], y: 99 });
+function applyPos(w, node) { const p = posOf(w); node.style.gridColumn = (p.x + 1) + " / span " + p.w; node.style.gridRow = (p.y + 1) + " / span " + p.h; }
+function save() { store.set("dash", dash); }
+function renderGrid() {
+  const g = $("grid"); g.textContent = ""; g.style.setProperty("--cols", cols()); painters = [];
+  const items = dash[tab]; compactTab();
+  items.forEach(w => {
+    const node = el("div", { class: "w", "data-wid": w.id }); const fn = R[w.type] ? R[w.type](w, node) : null;
+    const cog = el("button", { class: "gear-cog", textContent: "⚙", "aria-label": "Widget settings", onclick: e => { e.stopPropagation(); openSettings(w); } });
+    const handle = el("button", { class: "gear-handle", textContent: "⤡", "aria-label": "Resize widget" });
+    const mover = el("button", { class: "move-handle", textContent: "✥", "aria-label": "Move widget" });
+    node.append(cog, handle, mover); applyPos(w, node); g.append(node); w._node = node; bindDrag(w, node, handle);
+    if (fn) painters.push(fn);
+  });
+}
+function compactTab(fixed) { compact(dash[tab].map(posWithId), cols(), fixed); }
+function posWithId(w) { const p = posOf(w); p.id = w.id; return p; }
+function bindDrag(w, node, handle) {
+  const begin = (e, mode) => {
+    if (!editMode || e.target.closest(".gear-cog") || (mode === "move" && e.target === handle)) return;
+    if (mode === "move" && e.pointerType === "touch" && !e.target.closest(".move-handle")) return; // let touch scroll the page
+    e.preventDefault(); e.stopPropagation(); try { node.setPointerCapture(e.pointerId); } catch (err) {} node.classList.add("drag");
+    const r = $("grid").getBoundingClientRect(), cw = (r.width + 8) / cols(), ch = 64, sx = e.clientX, sy = e.clientY, p0 = { ...posOf(w) };
+    node.onpointermove = ev => {
+      const dx = Math.round((ev.clientX - sx) / cw), dy = Math.round((ev.clientY - sy) / ch), p = posOf(w);
+      if (mode === "move") { p.x = p0.x + dx; p.y = p0.y + dy; } else { p.w = p0.w + dx; p.h = p0.h + dy; }
+      compactTab(w.id); dash[tab].forEach(o => o._node && applyPos(o, o._node));
+    };
+    node.onpointerup = node.onpointercancel = () => { node.onpointermove = node.onpointerup = node.onpointercancel = null; node.classList.remove("drag"); compactTab(); dash[tab].forEach(o => o._node && applyPos(o, o._node)); save(); };
+  };
+  node.addEventListener("pointerdown", e => begin(e, "move"));
+  handle.addEventListener("pointerdown", e => begin(e, "resize"));
+}
+function setEdit(on) {
+  if (on && session && !session.link.sim && latest.mph > 3) { toast("Layout editing locks while moving."); return; }
+  editMode = on; $("app").classList.toggle("edit", on); $("editBtn").classList.toggle("on", on); $("editBtn").textContent = on ? "Done" : "Edit layout"; $("addBtn").hidden = $("resetBtn").hidden = !on;
+}
+
+/* ---------- Dialogs ---------- */
+function showDlg(title, ...kids) { const d = $("dlg"); d.textContent = ""; d.append(el("h2", { textContent: title }), ...kids, el("div", { class: "bar" }, el("button", { textContent: "Close", onclick: () => d.close() }))); if (!d.open) d.showModal(); }
+const NUMERIC = () => METRICS.filter(m => m.id !== "mon");
+function metricOptions(sel) { const groups = {}; NUMERIC().forEach(m => (groups[m.group] = groups[m.group] || []).push(m)); return Object.entries(groups).map(([g, a]) => el("optgroup", { label: g }, a.map(m => el("option", { value: m.id, textContent: m.label + (m.basis === "community" ? " (unverified)" : m.basis === "derived" ? " (estimate)" : ""), selected: m.id === sel })))); }
+const TYPE_LABEL = { number: "Number with sparkline", needle: "Active needle", line: "Line graph", history: "Per-drive history" };
+function openSettings(w) {
+  const pos = posOf(w), kids = [];
+  if (TYPE_LABEL[w.type]) {
+    const t = el("select", { onchange: () => { w.type = t.value; if (w.type === "line" && !w.win) w.win = 5; if (w.type === "history" && !w.stat) w.stat = "max"; w.metrics = w.metrics.slice(0, w.type === "line" ? 4 : 1); commit(); openSettings(w); } }, Object.entries(TYPE_LABEL).map(([k, v]) => el("option", { value: k, textContent: v, selected: k === w.type })));
+    kids.push(el("label", { textContent: "Display as" }), t);
+    const s = el("select", { onchange: () => { w.metrics[0] = s.value; commit(); openSettings(w); } }, metricOptions(w.metrics[0]));
+    kids.push(el("label", { textContent: w.type === "line" ? "First reading" : "Reading" }), s);
+    if (w.type === "line") {
+      const unit = byId[w.metrics[0]].unit, same = NUMERIC().filter(m => m.unit === unit && m.id !== w.metrics[0]);
+      kids.push(el("h3", { textContent: "Overlay (same unit only, so one axis stays honest)" }), ...same.map(m => el("label", { class: "check" }, el("input", { type: "checkbox", checked: w.metrics.includes(m.id), onchange: e => { if (e.target.checked) { if (w.metrics.length >= 4) { e.target.checked = false; toast("Up to 4 lines."); return; } w.metrics.push(m.id); } else w.metrics = w.metrics.filter(i => i !== m.id); commit(); } }), m.label)));
+      const wn = el("select", { onchange: () => { w.win = Number(wn.value); commit(); } }, [1, 5, 15, 60].map(n => el("option", { value: n, textContent: n + " minutes", selected: n === w.win })));
+      kids.push(el("label", { textContent: "Time window" }), wn);
+    }
+    if (w.type === "history") { const st = el("select", { onchange: () => { w.stat = st.value; commit(); } }, ["max","avg","min"].map(n => el("option", { value: n, textContent: n, selected: n === w.stat }))); kids.push(el("label", { textContent: "Statistic" }), st); }
+    const m = byId[w.metrics[0]], rule = ruleOf(m) || {};
+    const lo = el("input", { type: "number", step: "any", value: rule.lo ?? "", "aria-label": "Red below" }), hi = el("input", { type: "number", step: "any", value: rule.hi ?? "", "aria-label": "Red above" });
+    const applyRule = () => { const o = {}; o.lo = lo.value === "" ? undefined : Number(lo.value); o.hi = hi.value === "" ? undefined : Number(hi.value); if (o.lo === undefined && o.hi === undefined) { rules[m.id] = { off: true }; } else { if (o.lo === undefined) delete o.lo; if (o.hi === undefined) delete o.hi; rules[m.id] = { lo: o.lo, hi: o.hi, when: (m.rule || {}).when, sustainMs: (m.rule || {}).sustainMs, off: false, note: "Your own limit." }; } store.set("rules", rules); commit(); };
+    lo.onchange = hi.onchange = applyRule;
+    kids.push(el("h3", { textContent: "Green and red limits for " + m.label }), el("div", { class: "fields" }, el("div", {}, el("label", { textContent: "Red below" }), lo), el("div", {}, el("label", { textContent: "Red above" }), hi)), el("p", { textContent: (ruleOf(m) && ruleOf(m).note) || "No limit set. It stays neutral because I found no defensible number." }), el("button", { textContent: "Restore default limit", onclick: () => { delete rules[m.id]; store.set("rules", rules); commit(); openSettings(w); } }));
+  }
+  if (w.type === "share") {
+    const s = el("select", { onchange: () => { w.share = s.value; commit(); } }, Object.entries(SHARE).map(([k, v]) => el("option", { value: k, textContent: v.title, selected: k === w.share })));
+    const v = el("select", { onchange: () => { w.view = v.value; commit(); } }, [["donut","Pie (donut)"],["bars","Bars"]].map(([k, l]) => el("option", { value: k, textContent: l, selected: k === (w.view || "donut") })));
+    kids.push(el("label", { textContent: "Data" }), s, el("label", { textContent: "Chart" }), v);
+  }
+  const nudge = (label, f) => el("button", { textContent: label, "aria-label": label, onclick: () => { f(posOf(w)); compactTab(w.id); commit(); } });
+  kids.push(el("h3", { textContent: "Position and size" }), el("div", { class: "bar" }, nudge("← Move", p => p.x--), nudge("Move →", p => p.x++), nudge("↑ Move", p => p.y = Math.max(0, p.y - 1)), nudge("Move ↓", p => p.y++), nudge("Narrower", p => p.w--), nudge("Wider", p => p.w++), nudge("Shorter", p => p.h--), nudge("Taller", p => p.h++)));
+  kids.push(el("div", { class: "bar" }, el("button", { textContent: "Remove widget", onclick: () => { dash[tab] = dash[tab].filter(o => o !== w); commit(); $("dlg").close(); } })));
+  showDlg("Widget settings", ...kids);
+}
+function commit() { dashNoNodes(); save(); renderGrid(); }
+function dashNoNodes() { Object.values(dash).flat().forEach(w => { if (w._node) delete w._node; }); }
+function openAdd() {
+  const t = el("select", {}, [["number","Number with sparkline"],["needle","Active needle"],["line","Line graph"],["scatter","RPM vs speed scatter"],["share","Pie/bars: share of time"],["history","Per-drive history"],["gearbox","Gear and slip"],["misfire","Misfire by cylinder"],["status","Check-engine status"],["readiness","Emissions monitors"],["codes","Trouble codes"],["truck","Truck identity"]].map(([k, v]) => el("option", { value: k, textContent: v })));
+  const m = el("select", {}, metricOptions("trans"));
+  showDlg("Add widget", el("label", { textContent: "Widget" }), t, el("label", { textContent: "Reading (when the widget uses one)" }), m, el("div", { class: "bar" }, el("button", { class: "primary", textContent: "Add", onclick: () => {
+    const type = t.value, w = { id: "u" + Date.now().toString(36), type, metrics: ["number","needle","line","history"].includes(type) ? [m.value] : type === "scatter" ? ["mph","rpm"] : [], win: 5, stat: "max", share: "drive", view: "donut", pos: {} };
+    const y = Math.max(0, ...dash[tab].map(o => { const p = posOf(o); return p.y + p.h; }));
+    w.pos[4] = { x: 0, y: 99, w: type === "number" ? 2 : 4, h: type === "number" ? 3 : 4 }; w.pos[12] = { x: 0, y: 99, w: type === "number" ? 3 : 6, h: type === "number" ? 3 : 4 };
+    dash[tab].push(w); commit(); $("dlg").close(); toast("Added at the bottom of this tab."); } })));
+}
+function openMore() {
+  const stat = el("div", { class: "scroll" });
+  const table = el("table", {}, el("thead", {}, el("tr", {}, ["Reading","Now","Min","Avg","Max","Source"].map((h, i) => el("th", { class: i && i < 5 ? "n" : "", textContent: h })))), el("tbody", {}, NUMERIC().filter(m => series[m.id] || latest[m.id] != null).map(m => { const s = stats[m.id]; return el("tr", {}, el("td", { textContent: m.label + (m.unit ? " (" + m.unit + ")" : "") }), ...[latest[m.id] ?? null, s ? s.min : null, s ? s.sum / s.n : null, s ? s.max : null].map(v => el("td", { class: "n", textContent: fmt(m, v) })), el("td", { textContent: TAG[m.basis] })); })));
+  stat.append(table);
+  const src = [
+   ["SAE J1979", "https://saemobilus.sae.org/content/j1979_201408", "The governing standard for generic OBD data. Paid, so I used a public summary for the formulas."],
+   ["OBD-II PIDs summary (Wikipedia)", "https://en.wikipedia.org/wiki/OBD-II_PIDs", "Public, not official: PID formulas, bitmasks and monitor bit layout."],
+   ["CARB 13 CCR 1968.2", "https://ww2.arb.ca.gov/sites/default/files/classic/msprog/obdprog/1968.2_feb072006.pdf", "Public regulation behind readiness, freeze frame and code reporting (2006 text)."],
+   ["GM TechLink: 6-speed overheating", "https://gm-techlink.com/?p=16905", "Official GM: 190°F warm-up reference and thermal bypass details for 6L80/6L90 trucks."],
+   ["GM bulletin 16-NA-175 (via NHTSA)", "https://static.nhtsa.gov/odi/tsbs/2016/SB-10081963-2280.pdf", "Official GM: shudder test conditions for 2016 8L90 trucks, including zero TCC slip in its locked test."],
+   ["GM/ACDelco diagnostic resources", "https://www.gmparts.com/technical-resources/diagnostic-support-resources", "Paid Service Information and GDS2. This is where official PID definitions and limits live."],
+   ["2016 Sierra Denali owner's manual", "https://contentdelivery.ext.gm.com/content/dam/cope/en_us/public/pdf_assets/active/owners_manuals_browse/2k16sierraden1stPrint.pdf", "Official GM owner information. I found no usable numeric limits in the text I could read."],
+   ["STN/OBDLink documentation", "https://www.obdsol.com/stn1110/", "Official adapter docs and ELM327 command compatibility."],
+   ["GMT Nation forum PID list", "https://gmtnation.com/forums/threads/extra-pids-from-with-obdlink-app.22218/", "Community, 2002 GM vehicle: the source of the Unverified GM requests."],
+   ["LS1Tech forum: TCC slip", "https://ls1tech.com/forums/pcm-diagnostics-tuning/981059-gm-mode22-pids.html", "Community: signed slip formula, not confirmed there."]
+  ];
+  const ex = el("div"), scanOut = el("div", { class: "scroll", style: "max-height:220px" });
+  const hdr = el("select", {}, ["7E2","7E0","7E1"].map(h => el("option", { value: h, textContent: h === "7E2" ? "7E2 (usually transmission)" : h === "7E0" ? "7E0 (usually engine)" : "7E1 (alternate)" })));
+  const scan = el("button", { textContent: "Scan 1900–19FF, parked only", onclick: async () => {
+    if (!session) return toast("Connect first."); if (!session.link.sim && latest.mph > 0) return toast("Park the truck first.");
+    scan.disabled = true; scanOut.textContent = ""; const h = hdr.value;
+    for (let d = 0x1900; d <= 0x19FF && session; d++) { const did = d.toString(16).toUpperCase(); try { const raw = await askH(h, "22" + did), b = dataBytes(raw, "62" + did); if (b) scanOut.append(foundRow(h, did, b)); } catch (e) { break; } scan.textContent = "Scanning " + did; }
+    scan.textContent = "Scan 1900–19FF, parked only"; scan.disabled = false; if (!scanOut.children.length) scanOut.textContent = "No answers on this module.";
+  } });
+  ex.append(el("p", { textContent: "Asks the truck which GM read requests it answers. It sends read requests only. Results still need checking against a known value before you trust them." }), hdr, scan, scanOut);
+  showDlg("Data and sources",
+    el("div", { class: "bar" }, el("button", { textContent: "Export session CSV", onclick: exportCsv }), el("button", { textContent: "Export history", onclick: exportHistory }), el("button", { textContent: "Import history", onclick: importHistory })),
+    el("h3", { textContent: "This session (table view of all readings)" }), stat,
+    el("h3", { textContent: "What the green and red colors mean" }),
+    el("p", { textContent: "Green and red come from the limit shown in each widget's settings. Most are starting guides, labeled as such. Readings with no defensible limit stay neutral. Tags show where data comes from: Standard is generic OBD, Unverified is a GM request from forums that this truck has not confirmed, Estimate is calculated here." }),
+    el("h3", { textContent: "Find more GM data" }), ex,
+    el("h3", { textContent: "Sources" }), ...src.map(s => el("p", {}, el("a", { href: s[1], target: "_blank", rel: "noopener noreferrer", textContent: s[0] }), ": " + s[2])));
+}
+function foundRow(h, did, b) {
+  const name = el("input", { value: "GM " + did, "aria-label": "Name" }), f = el("select", { "aria-label": "Formula" }, Object.entries(FORMULAS).map(([k, v]) => el("option", { value: k, textContent: v.label })));
+  return el("div", {}, el("div", { class: "row" }, el("span", { textContent: h + " " + did }), el("span", { textContent: b.map(x => x.toString(16).padStart(2, "0")).join(" ") })), name, f, el("button", { textContent: "Add as reading", onclick: () => { const c = { did, header: h, name: name.value, formula: f.value }; customs.push(c); store.set("customs", customs); registerCustom(c); toast("Added under Custom in the widget list."); } }));
+}
+function download(name, text, type) { const a = el("a", { href: URL.createObjectURL(new Blob([text], { type })), download: name }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
+const stampName = () => new Date().toISOString().replace(/[:.]/g, "-");
+function exportCsv() {
+  if (!rows.length) return toast("No session data yet.");
+  const cs = ["utc", ...METRICS.map(m => m.id)], text = "# build," + BUILD_ID + "\n# exported_utc," + new Date().toISOString() + "\n# simulator," + !!(session && session.link.sim) + "\n" + cs.map(csvCell).join(",") + "\n" + rows.map(r => cs.map(c => csvCell(typeof r[c] === "number" ? r[c].toFixed(3) : r[c])).join(",")).join("\n") + "\n";
+  download("sierra-obd-" + stampName() + ".csv", text, "text/csv");
+}
+function exportHistory() { download("sierra-obd-history-" + stampName() + ".json", JSON.stringify({ build: BUILD_ID, exported: new Date().toISOString(), drives }, null, 1), "application/json"); }
+function importHistory() {
+  const i = el("input", { type: "file", accept: "application/json", onchange: async () => {
+    try { const j = JSON.parse(await i.files[0].text()), clean = (j.drives || []).filter(d => d && typeof d.id === "string" && Number.isFinite(d.start) && d.summary && typeof d.summary === "object"); await putDrives(clean); await loadDrives(); toast("Imported " + clean.length + " drives."); } catch (e) { toast("Couldn't read that file."); }
+  } }); i.click();
+}
+
+/* ---------- Wiring ---------- */
+$("connect").onclick = async () => {
+  try { const port = await navigator.serial.requestPort({ filters: [{ bluetoothServiceClassId: SPP_UUID }], allowedBluetoothServiceClassIds: [SPP_UUID] }); await start(new SerialLink(port), "OBDLink LX"); }
+  catch (e) { if (e.name !== "NotFoundError") setStatus(e.message, "bad"); }
+};
+$("sim").onclick = () => start(new SimLink(), "simulator (not vehicle data)");
+$("stop").onclick = () => stop(false);
+$("editBtn").onclick = () => setEdit(!editMode);
+$("addBtn").onclick = openAdd;
+$("resetBtn").onclick = () => { dash[tab] = buildDash(tab); commit(); };
+$("moreBtn").onclick = openMore;
+let lastCols = cols();
+addEventListener("resize", () => { if (cols() !== lastCols) { lastCols = cols(); renderGrid(); } });
+document.addEventListener("visibilitychange", async () => { if (session && document.visibilityState === "visible") { try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {} } });
+setInterval(() => { painters.forEach(p => { try { p(); } catch (e) { console.error(e); } }); }, 250);
+$("stamp").textContent = "Build " + BUILD_ID + " · " + BUILD_UTC;
+if (!("serial" in navigator)) { $("unsupported").hidden = false; $("connect").disabled = true; }
+renderTabs(); renderGrid(); loadDrives();
+</script>
+</body>
+</html>
