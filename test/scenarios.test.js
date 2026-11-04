@@ -94,7 +94,7 @@ r = rep(drive("mixed", { lean: true })); assert(has(r, /grows with airflow/), "l
 r = rep(drive("mixed", { rich: true })); assert(has(r, /Rich correction/), "rich " + bad(r));
 r = rep(drive("mixed", { bank: true })); assert(has(r, /Banks disagree/), "bank " + bad(r));
 r = rep(drive("interstate", { volt: 12.0 })); assert(has(r, /Charging voltage stayed low/, "attention"), "volt");
-r = rep(drive("interstate", { volt: 12.8 })); assert(!bad(r).some(x => /voltage/i.test(x)), "GM low-voltage strategy shouldn't alarm");
+r = rep(drive("interstate", { volt: 12.8 })); { const f = r.findings.find(x => /sat near battery level/.test(x.title)); assert(f && f.level === "watch" && f.chain && f.chain.hypotheses.length === 2, "flat 12.8 V is undecidable, not normal"); assert(["Not decidable from this drive", "Fuel-economy charging mode (normal)"].includes(f.bestGuess), f.bestGuess); assert.strictEqual(f.sure.label, "Low"); }
 r = rep(drive("interstate", { transMax: 232 })); assert(has(r, /above the guide/, "watch"));
 r = rep(drive("interstate", { transMax: 255 })); assert(has(r, /very hot/, "attention"));
 r = rep(drive("interstate", { coolHigh: 245 })); assert(has(r, /Coolant ran hot/, "attention"));
@@ -151,7 +151,7 @@ assert.strictEqual(api.analyzeLoadSteps([{ name: "Blower high", stats: st(12) }]
 assert.strictEqual(api.analyzeLoadSteps([["Baseline (all off)", 14], ["Blower low", 14], ["Blower max", 14]].map(([name, v]) => ({ name, rpm: 800, stats: st(v) }))).leaning, "unknown", "alternator can hide load");
 assert.strictEqual(api.crankResult([12.6, 12.6, 12.6, 9, 11, 14].map(v => ({ id: "volt", v }))).level, "attention");
 { const d = drive("interstate"); [500, 700, 900].forEach(k => { for (let i = 0; i < 6; i++) d[k + i].volt = 11.8; }); const ev = api.voltageEvents(api.annotate(d)); assert(ev.some(e => e.kind === "drop")); r = rep(d); assert(has(r, /sharp voltage drops/, "watch"), "dips " + bad(r)); d[50].mark = "Blower noise"; r = rep(d); assert.strictEqual(r.marks[0].label, "Blower noise"); }
-{ const d = drive("mixed"); d.forEach(x => { x.pedal = x.tps; x.pedale = x.tps / 2; x.cmdtps = 40 - x.tps * 0 + Math.sin(x.t / 7000) * 30; }); const xc = api.crossChecks(d, 100000); assert.strictEqual(xc.find(c => /pedal/.test(c.name)).status, "agree"); assert.strictEqual(xc.find(c => /commanded/.test(c.name)).status, "disagree"); r = rep(d); assert(has(r, /didn't move together/, "watch")); }
+{ const d = drive("mixed"); d.forEach(x => { x.pedal = x.tps; x.pedale = x.tps / 2; x.cmdtps = 40 - x.tps * 0 + Math.sin(x.t / 7000) * 30; }); const xc = api.crossChecks(d, 100000); assert.strictEqual(xc.find(c => /pedal/.test(c.name)).status, "agree"); assert.strictEqual(xc.find(c => /commanded/.test(c.name)).status, "disagree"); r = rep(d); assert(has(r, /didn't move together/, "watch")); r = api.analyzeDrive({ rows: d, vehicle: sierra, meta: { build: "OBD-20261104-1717Z" } }); assert(!has(r, /didn't move together/) && r.notAssessed.some(n => /cross-checks/.test(n.system)), "old builds can't be cross-checked"); }
 assert(rep(drive("interstate")).crossChecks.length === 5);
 r = rep(drive("interstate"), sierra, { fpChanged: true }); assert(has(r, /fingerprint changed/, "watch"));
 { const cs = api.conditionStats(drive("interstate"), "rpm"); assert(cs.find(c => c.name === "Steady cruise").n > 100); }
@@ -174,5 +174,6 @@ assert(api.reportMarkdown(rep(drive("mixed", { leak: true })), sierra, {}).inclu
   const h = drive("interstate"); h.forEach(x => { x.grade = 5; }); r = rep(h); assert(r.notAssessed.some(n => /Gear ratio/.test(n.system)), "hills excluded from cruise");
   const v = drive("mixed"); v.forEach(x => { x.vib = x.mph >= 60 ? .9 : .3; }); r = rep(v); assert(has(r, /Vibration peaks around 60/, "watch"), "vib " + bad(r));
   const q = drive("mixed"); q.forEach(x => { x.vib = .3; }); r = rep(q); assert(has(r, /No speed-dependent vibration/, "good")); }
+r = rep(drive("interstate", { mis4: 3 })); assert(has(r, /Trace misfire count on cylinder 4/, "info"), "trace " + bad(r));
 assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 console.log("all tests passed");

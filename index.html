@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261104-1929Z">
-<meta name="build-timestamp-utc" content="2026-11-04T19:29:46Z">
+<meta name="build-id" content="OBD-20261104-1939Z">
+<meta name="build-timestamp-utc" content="2026-11-04T19:39:53Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261104-1929Z", BUILD_UTC = "2026-11-04T19:29:46Z";
+const BUILD_ID = "OBD-20261104-1939Z", BUILD_UTC = "2026-11-04T19:39:53Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -251,12 +251,12 @@ const METRICS = [
  std("egrc","Commanded EGR","Engine","2C","%","med",0,0,100,pct),
  std("egre","EGR error","Engine","2D","%","med",0,-100,100,b=>(b[0]-128)*100/128),
  std("absload","Absolute load","Engine","43","%","fast",0,0,400,b=>u16(b[0],b[1])*100/255),
- std("reltps","Relative throttle","Driving","45","%","med",0,0,100,pct),
- std("tpsb","Throttle position B","Driving","47","%","med",0,0,100,pct),
+ std("reltps","Relative throttle","Driving","45","%","fast",0,0,100,pct),
+ std("tpsb","Throttle position B","Driving","47","%","fast",0,0,100,pct),
  std("tpsc","Throttle position C","Driving","48","%","med",0,0,100,pct),
- std("pedale","Accelerator pedal E","Driving","4A","%","med",0,0,100,pct),
+ std("pedale","Accelerator pedal E","Driving","4A","%","fast",0,0,100,pct),
  std("pedalf","Accelerator pedal F","Driving","4B","%","med",0,0,100,pct),
- std("cmdtps","Commanded throttle","Driving","4C","%","med",0,0,100,pct),
+ std("cmdtps","Commanded throttle","Driving","4C","%","fast",0,0,100,pct),
  std("relpedal","Relative pedal","Driving","5A","%","med",0,0,100,pct),
  std("demtq","Driver demand torque","Engine","61","%","med",0,-125,130,b=>b[0]-125),
  std("miltime","Time with check-engine on","Diagnostics","4D","min","slow",0,0,65535,b=>u16(b[0],b[1])),
@@ -271,7 +271,7 @@ const METRICS = [
  std("so2st2","Secondary O2 short trim B2","Oxygen sensors","57","%","med",1,-100,100,trim),
  std("so2lt2","Secondary O2 long trim B2","Oxygen sensors","58","%","med",1,-100,100,trim),
  { id:"atrv",label:"Battery at OBD port",group:"Electrical",cmd:"ATRV",unit:"V",tier:"med",digits:1,min:7,max:18,basis:"adapter",raw:r=>{const q=String(r).match(/(\d+(?:\.\d+)?)\s*V/i);return q?Number(q[1]):undefined;},rule:{lo:12.5,hi:15,when:"running",note:GUIDE} },
- std("volt","Module voltage","Electrical","42","V","fast",1,10,16,b=>u16(b[0],b[1])/1000,{rule:{lo:12.5,hi:15,when:"running",note:GUIDE+" GM charging systems can intentionally run lower to save fuel."}}),
+ std("volt","Module voltage","Electrical","42","V","fast",1,10,16,b=>u16(b[0],b[1])/1000,{rule:{lo:12.3,hi:15.5,when:"running",sustainMs:5000,note:"GM charging control deliberately holds 12.5–13.1 V in fuel-economy mode and 13.9–15.5 V when charging, so neither is a fault by itself. Red only below 12.3 V or above 15.5 V for 5 seconds. Source: GM charging-system description."}}),
  std("stft1","Short trim B1","Fuel","06","%","fast",1,-30,30,trim,{rule:{lo:-15,hi:15,when:"warm",note:GUIDE}}),
  std("ltft1","Long trim B1","Fuel","07","%","med",1,-30,30,trim,{rule:{lo:-10,hi:10,when:"warm",note:GUIDE}}),
  std("stft2","Short trim B2","Fuel","08","%","fast",1,-30,30,trim,{rule:{lo:-15,hi:15,when:"warm",note:GUIDE}}),
@@ -478,7 +478,7 @@ function classify(rows) {
 function trimRegion(rows, bank, pred) {
   const s = "stft" + bank, l = "ltft" + bank, tot = [], lts = [];
   for (const r of rows) if (r._warm && r._closed && pred(r) && typeof r[s] === "number" && typeof r[l] === "number") { tot.push(r[s] + r[l]); lts.push(r[l]); }
-  return { n: tot.length, total: tot.length >= MIN_REGION ? pctl(tot, .5) : null, ltft: lts.length >= MIN_REGION ? pctl(lts, .5) : null };
+  return { n: tot.length, total: tot.length >= MIN_REGION ? pctl(tot, .5) : null, ltft: lts.length >= MIN_REGION ? pctl(lts, .5) : null, provisional: tot.length >= 8 && tot.length < MIN_REGION ? pctl(tot, .5) : null };
 }
 // Locked gearing means rpm/mph barely moves second to second, whatever the gear or grade.
 function ratioClusters(rows) {
@@ -610,7 +610,11 @@ function analyzeDrive(input) {
       if (ds.length && Math.abs(ds[0][1]) >= 10) { patterned = true; add("Fuel trims", capAfm(Math.abs(ds[0][1]) >= 18 ? "attention" : "watch"), "Banks disagree by " + rnd(Math.abs(ds[0][1])) + " points at " + ds[0][0], parts + ".", "A problem in shared air or fuel usually affects both banks, so a one-sided shift narrows the search to that bank." + afmNote, ["Injector or O2 sensor on one bank", "Exhaust or intake leak on one side"], ["Compare O2 sensor behavior between banks."], LIT.warren); } }
     if (!patterned && worst >= 10) add("Fuel trims", worst >= 20 ? "attention" : "watch", "Fuel trim beyond ±10% without a clear pattern", parts + ".", "A correction of this size is outside the usual ±10% window, but the regions tested don't isolate a cause." + afmNote, [], ["Capture idle, a held 2,500 rpm, and steady cruise when warm."], LIT.warren);
     else if (!patterned) add("Fuel trims", "good", "Fuel trims look balanced", parts + ".", "Total correction stayed within ±10% in every region with enough data.", [], [], LIT.warren);
-    for (const k of ["idle", "cruise", "load"]) if (T[1][k].total === null) need("Fuel trims", "Not enough warm " + k + " data to judge that region.");
+    for (const k of ["idle", "cruise", "load"]) if (T[1][k].total === null) {
+      const pv = bankList.map(b => T[b][k].provisional).filter(v => v !== null);
+      if (pv.length && pv.some(v => Math.abs(v) >= 10)) add("Fuel trims", "info", "Thin " + k + " data leans " + (pv[0] < 0 ? "rich" : "lean") + ": " + bankList.map(b => "bank " + b + " " + signed(T[b][k].provisional)).join(", ") + "%", "Only " + T[1][k].n + " warm " + k + " samples, under the " + MIN_REGION + " needed to rate it.", "Not rated, but worth a longer " + k + " sample next drive: a correction beyond ±10% would matter if it holds.", [], ["Hold a warm " + (k === "idle" ? "idle for two minutes" : k + " condition for a minute") + " with accessories off."], LIT.warren);
+      else need("Fuel trims", "Not enough warm " + k + " data to judge that region (" + T[1][k].n + " samples).");
+    }
   } else need("Fuel trims", "Warm closed-loop time was too brief in every region.");
 
   // Airflow: idle g/s per liter and volumetric efficiency need a known engine.
@@ -647,7 +651,8 @@ function analyzeDrive(input) {
       const tot = mx.reduce((s, x) => s + x[1], 0), single = mx.length === 1 || mx[0][1] >= tot * .7, one = mx[0][0], afmCyl = vehicle.afmCyls && vehicle.afmCyls.includes(one);
       const side = vehicle.layout === "V" && single ? (one % 2 ? 1 : 2) : null;
       const sideTrim = side && T[side].cruise.total !== null ? " Bank " + side + " holds that cylinder, with a cruise trim of " + signed(T[side].cruise.total) + "%." : "";
-      add("Combustion", revs && tot / revs * 1000 >= 5 && tot >= 20 ? "attention" : "watch", single ? "Misfires concentrated on cylinder " + one : "Misfires across " + mx.length + " cylinders", mx.map(x => "cyl " + x[0] + ": +" + rnd(x[1])).join(", ") + " new counts over about " + rnd(revs / 1000) + "k engine revolutions." + sideTrim, single ? "One cylinder standing out points toward something specific to it, not shared fuel or air." : "Spread-out misfires point more toward a shared cause like fuel, air, or ignition supply.", single ? ["Spark plug, coil, or injector on that cylinder", "Compression or valvetrain" + (afmCyl ? ", including its AFM lifter: this cylinder number is one GM commonly deactivates, though I haven't confirmed the exact set for this engine" : "")] : ["Fuel pressure or quality", "Vacuum leak", "Ignition supply voltage"], ["Note whether counts occur at idle, cruise, or under load.", single ? "Swap the coil to another cylinder and see if the count moves." : "Compare with the fuel trim findings."], LIT.j1979);
+      const trace = tot < 5 && !(revs && tot / revs * 1000 >= .5);
+      add("Combustion", revs && tot / revs * 1000 >= 5 && tot >= 20 ? "attention" : trace ? "info" : "watch", trace ? "Trace misfire count on cylinder " + one : single ? "Misfires concentrated on cylinder " + one : "Misfires across " + mx.length + " cylinders", mx.map(x => "cyl " + x[0] + ": +" + rnd(x[1])).join(", ") + " new counts over about " + rnd(revs / 1000) + "k engine revolutions." + sideTrim, single ? trace ? "A count this small over this many revolutions is within what healthy engines record. It's noted so a trend can be seen across drives." : "One cylinder standing out points toward something specific to it, not shared fuel or air." : "Spread-out misfires point more toward a shared cause like fuel, air, or ignition supply.", trace ? [] : single ? ["Spark plug, coil, or injector on that cylinder", "Compression or valvetrain" + (afmCyl ? ", including its AFM lifter: this cylinder number is one GM commonly deactivates, though I haven't confirmed the exact set for this engine" : "")] : ["Fuel pressure or quality", "Vacuum leak", "Ignition supply voltage"], trace ? ["Watch whether it grows on later drives."] : ["Note whether counts occur at idle, cruise, or under load.", single ? "Swap the coil to another cylinder and see if the count moves." : "Compare with the fuel trim findings."], LIT.j1979);
     }
   } else need("Combustion", "Misfire counters weren't recorded.");
   if (usable("knock")) { const hi = pctl(nums(rows, "knock", r => r._running), .98); stats.knock = hi; if (hi >= 6) add("Combustion", "watch", "Repeated knock retard", "98th percentile " + rnd(hi, 1) + "°." + unverified("knock"), "The computer may be pulling timing to protect the engine.", ["Lower-octane fuel", "Heat or heavy load", "Carbon buildup"], ["Check fuel grade and compare under similar conditions."]); }
@@ -661,6 +666,7 @@ function analyzeDrive(input) {
     if (lowFor >= 60 && med < 12.6) add("Electrical", "attention", "Charging voltage stayed low", "Median " + rnd(med, 1) + " V, under 12.4 V for " + rnd(lowFor) + " seconds.", "A running engine should normally hold above resting battery voltage, though GM systems can drop to save fuel.", ["Alternator, belt, or cable fault", "Failing battery"], ["Test the battery and alternator."]);
     else if (lowFor >= 60) add("Electrical", "watch", "Charging voltage dipped low for a while", "Under 12.4 V for " + rnd(lowFor) + " seconds, median " + rnd(med, 1) + " V.", "GM systems can lower voltage to save fuel, but a long stretch this low is worth comparing with other drives.", ["Fuel-saving charge strategy", "Weak battery or alternator"], ["Test the charging system if this repeats."]);
     else if (highFor >= 120) add("Electrical", "attention", "Charging voltage ran high", "Above 15.5 V for " + rnd(highFor) + " seconds.", "Sustained high voltage can damage batteries and electronics.", ["Voltage regulation fault"], ["Test the charging system."]);
+    else if (med >= 12.3 && med <= 13.2 && hi - lo <= .6) add("Electrical", "watch", "Voltage sat near battery level the whole drive: " + rnd(med, 1) + " V", "Range " + rnd(lo, 1) + "–" + rnd(hi, 1) + " V at every engine speed, " + rnd(secondsTrue(rows, r => r._running) / 60) + " minutes running.", "Two very different situations produce this reading: GM's charging control deliberately holding 12.5–13.1 V to save fuel once the battery is charged, or an alternator that isn't charging and the battery carrying everything. The data from one drive can't separate them.", ["Fuel-economy charging mode (normal)", "Alternator, belt, or control circuit not charging"], ["With the engine running, switch on headlights, rear defogger, and the blower on high. GM's charging control should raise voltage to about 13.9–14.5 V within seconds; if it drops instead, have the charging system tested.", "Note the voltage in the first 30 seconds after a start, when GM targets about 14.5 V."], "GM charging-system description");
     else add("Electrical", "good", "Charging voltage looks normal", "Typical range " + rnd(lo, 1) + "–" + rnd(hi, 1) + " V while running.", "GM systems can intentionally vary voltage, so some movement is expected.");
     const ve = voltageEvents(rows), deep = ve.filter(x => x.kind === "drop" && x.to < 12.2); stats.voltEvents = ve.length;
     const vIdle = nums(rows, "volt", x => x._idle), vCruise = nums(rows, "volt", x => x._cruise);
@@ -752,8 +758,10 @@ function analyzeDrive(input) {
       else add("Ride and driveline", "good", "No speed-dependent vibration band", rowsB.map(x => x[0] + "s: " + rnd(x[1], 2)).join(", ") + " m/s².", "Vibration didn't single out one speed band on this drive.", [], [], "Phone motion sensor"); } }
   const marksN = markSnapshots(rows); if (marksN.length && rows.some(r => typeof r.noise === "number")) { const at = marksN.map(m => { const w = rows.filter(r => Math.abs(r.t - m.t) <= 5000 && typeof r.noise === "number"); return w.length ? [m.label, pctl(nums(w, "noise"), .5), pctl(nums(w, "noisehz"), .5)] : null; }).filter(Boolean), baseN = pctl(nums(rows, "noise"), .5);
     if (at.length) add("Driving context", "info", "Cabin noise at your marks", at.map(x => x[0] + ": " + rnd(x[1]) + " dB rel" + (x[2] ? ", loudest " + rnd(x[2]) + " Hz" : "")).join("; ") + ". Drive median " + rnd(baseN) + " dB rel.", "Relative levels from the phone microphone. A pitch that changes with fan speed points at the blower; one that changes with road speed points at wheels or tires.", [], [], "Phone microphone"); }
-  const xc = crossChecks(rows, 100000), disagree = xc.filter(x => x.status === "disagree" && x.n >= 60); xc.filter(x => x.status === "agree").length && tested.push("Sensor cross-checks");
-  if (disagree.length) add("Sensor checks", "watch", "Related sensors didn't move together", disagree.map(x => x.name + " (correlation " + rnd(x.r, 2) + ")").join("; ") + ".", "Redundant or related signals should broadly agree. Disagreement can mean a sensor issue, or just slow one-second sampling.", ["Sensor or wiring fault", "Sampling timing"], ["Check whether this repeats, and compare codes."], "Physics check");
+  const crossOk = !meta.build || meta.build >= CROSS_SINCE;
+  const xc = crossOk ? crossChecks(rows, 100000) : [], disagree = xc.filter(x => x.status === "disagree" && x.n >= 120); xc.filter(x => x.status === "agree").length && tested.push("Sensor cross-checks");
+  if (!crossOk) need("Sensor cross-checks", "This drive was recorded by a build that sampled paired sensors too far apart to compare.");
+  if (disagree.length) add("Sensor checks", "watch", "Related sensors didn't move together even at steady throttle", disagree.map(x => x.name + " (correlation " + rnd(x.r, 2) + " over " + x.n + " steady samples)").join("; ") + ".", "Redundant or related signals should broadly agree when nothing is moving. One-second sampling still limits this, so treat it as a lead.", ["Sensor or wiring fault", "Sampling timing"], ["Check whether this repeats on another drive, and compare codes."], "Physics check");
   if (meta.fpChanged) add("Computer identity", "watch", "Computer software fingerprint changed since last connect", "Calibration or verification number differs from the value stored on this device.", "This usually means a dealer update, reprogramming, or module replacement. If nothing like that happened, ask why.", ["Dealer software update", "Module replacement", "Aftermarket tune"], ["Check your service records."], LIT.j1979);
   const marks = markSnapshots(rows);
   const notes = buildChains(F, stats, rows, vehicle, meta, val, trip);
@@ -911,14 +919,21 @@ function pearson(x, y) {
   return b && c ? a / Math.sqrt(b * c) : null;
 }
 const CROSS_PAIRS = [ ["pedal", "pedale", "Accelerator pedal sensors D and E"], ["tps", "cmdtps", "Actual and commanded throttle"], ["tps", "tpsb", "Throttle sensors A and B"], ["maf", "_mapflow", "Air flow and manifold-pressure estimate"], ["load", "absload", "Calculated and absolute load"] ];
+const CROSS_SINCE = "OBD-20261104-1940Z"; // earlier builds polled the second sensor too slowly to compare
 function crossChecks(rows, limit = 300) {
-  const rs = rows.slice(-limit).filter(r => r.rpm > 400);
+  const rs = rows.slice(-limit);
   return CROSS_PAIRS.map(([a, b, name]) => {
-    const x = [], y = []; rs.forEach(r => { const q = b === "_mapflow" ? (typeof r.map === "number" ? r.map * r.rpm : undefined) : r[b]; if (typeof r[a] === "number" && typeof q === "number") { x.push(r[a]); y.push(q); } });
-    if (x.length < 10) return { name, status: "absent", label: "Not reported", r: null, n: x.length };
+    const x = [], y = [];
+    for (let i = 1; i < rs.length - 1; i++) { const r = rs[i], p = rs[i - 1], n = rs[i + 1]; if (!(r.rpm > 400)) continue;
+      const q = b === "_mapflow" ? (typeof r.map === "number" ? r.map * r.rpm : undefined) : r[b];
+      if (typeof r[a] !== "number" || typeof q !== "number" || typeof p[a] !== "number" || typeof n[a] !== "number") continue;
+      // Only moments where the first signal is steady, so one-second sampling can't fake a disagreement.
+      const span = Math.max(1e-6, Math.abs(r[a]) * .1 + 1); if (Math.abs(p[a] - r[a]) > span || Math.abs(n[a] - r[a]) > span) continue;
+      x.push(r[a]); y.push(q); }
+    if (x.length < 10) return { name, status: "absent", label: "Not reported or never steady", r: null, n: x.length };
     const moved = Math.max(...x) - Math.min(...x) > Math.max(1e-6, Math.abs(avg(x)) * .15), r = pearson(x, y);
-    if (!moved || r === null || x.length < 30) return { name, status: "waiting", label: "Needs more movement", r, n: x.length };
-    return { name, status: r >= .9 ? "agree" : r >= .6 ? "loose" : "disagree", label: r >= .9 ? "They agree" : r >= .6 ? "Loose agreement" : "They disagree", r, n: x.length };
+    if (!moved || r === null || x.length < 60) return { name, status: "waiting", label: "Needs more steady samples", r, n: x.length };
+    return { name, status: r >= .85 ? "agree" : r >= .5 ? "loose" : "disagree", label: r >= .85 ? "They agree" : r >= .5 ? "Loose agreement, sampling limits apply" : "They disagree", r, n: x.length };
   });
 }
 function conditionStats(rowsIn, id) {
@@ -1020,6 +1035,14 @@ function buildChains(F, S, rows, vehicle, meta, val, trip) {
     ],
     absent: noCode(/^P07|^P08|^P09|^P27/, "transmission"), wouldSettle: "A repeat on a flat road at a fixed speed, then a shop scan tool reading of commanded versus actual converter state."
   }; }
+  const flatV = by(/sat near battery level/);
+  if (flatV) { const startRows = rows.filter((r, i) => i && rows[i - 1].rpm !== undefined && !(rows[i - 1].rpm > 400) && r.rpm > 400), afterStart = startRows.length ? nums(rows.filter(r => r.t > startRows[0].t && r.t <= startRows[0].t + 30000), "volt") : [], ve = voltageEvents(rows), vIdle = nums(rows, "volt", x => x._idle), vHigh = nums(rows, "volt", x => x.rpm >= 2000);
+    const first = nums(rows, "volt").slice(0, 30), last = nums(rows, "volt").slice(-30), decline = first.length >= 10 && last.length >= 10 ? pctl(first, .5) - pctl(last, .5) : null, mins = secondsTrue(rows, x => x._running) / 60;
+    flatV.chain = { observed: [flatV.evidence, afterStart.length >= 5 ? "First 30 s after start: median " + say(pctl(afterStart, .5), 2, " V") : "Engine start not in this recording", decline !== null ? "Change from first to last minute: " + say(-decline, 2, " V") : "", vIdle.length >= 10 && vHigh.length >= 10 ? "Idle " + say(pctl(vIdle, .5), 2, " V") + " vs above 2,000 rpm " + say(pctl(vHigh, .5), 2, " V") : ""].filter(Boolean),
+      hypotheses: [
+        hyp("Fuel-economy charging mode (normal)", [P("About 14.5 V for 30 s after a start", afterStart.length >= 5 ? pctl(afterStart, .5) >= 13.8 : null, afterStart.length >= 5 ? say(pctl(afterStart, .5), 2, " V") : "Start not recorded"), P("Voltage holds within 12.5–13.1 V without sinking over the drive", decline !== null && mins >= 15 ? decline < .15 : null, decline !== null ? (mins < 15 ? "Drive too short to show a sink" : say(-decline, 2, " V change")) : "Not measured"), P("Voltage rises to 13.9–14.5 V when headlights or the high blower come on", null, "Not tested on this drive: switch them on next time while watching the voltage")]),
+        hyp("Alternator not charging", [P("No 14.5 V start-up period", afterStart.length >= 5 ? pctl(afterStart, .5) < 13.8 : null, afterStart.length >= 5 ? say(pctl(afterStart, .5), 2, " V") : "Start not recorded"), P("Voltage sinks slowly as the battery carries the load", decline !== null && mins >= 15 ? decline >= .15 : null, decline !== null ? (mins < 15 ? "Drive too short to show a sink" : say(-decline, 2, " V change")) : "Not measured"), P("No rise with headlights or high blower", null, "Not tested on this drive"), P("Battery warning lamp on the dash", null, "Not visible to this app")])
+      ], absent: noCode(/^P056|^P062|^P0A|^B1/, "charging-system"), wouldSettle: "Headlights, rear defogger, and blower on high with the engine running: a rise to about 14 V says charging control is working; a fall says it isn't." }; }
   const lowV = by(/Charging voltage (stayed|dipped) low/), drops = by(/sharp voltage drops/);
   if (lowV || drops) { const f = lowV || drops; const marks = markSnapshots(rows), ve = voltageEvents(rows), near = ve.filter(e => marks.some(m => Math.abs(m.t - e.t) <= 15000)).length;
     f.chain = { observed: [f.evidence, "Voltage events: " + ve.length + (marks.length ? ", " + near + " within 15 s of one of your marks" : ", no marks recorded")],
@@ -1219,6 +1242,7 @@ function visibleIds() {
     if (w.type === "misfire") for (let c = 1; c <= 8; c++) ids.add("mis" + c);
     if (w.type === "status" || w.type === "readiness") ids.add("mon");
     if (w.type === "allsensors") METRICS.forEach(m => { if (m.cmd && m.tier !== "slow") ids.add(m.id); });
+    if (w.type === "crosscheck") ["pedal","pedale","tps","cmdtps","tpsb","maf","map","load","absload"].forEach(i => ids.add(i));
     if (w.type === "share") ids.add(w.share === "gear" ? "gear" : w.share === "temp" ? "trans" : "mph"); });
   [...ids].forEach(i => { const m = byId[i]; if (m && m.need) m.need.forEach(n => ids.add(n)); if (m && m.parent) ids.add(m.parent); });
   return ids;
@@ -1348,7 +1372,7 @@ async function deleteDrive(id) {
   await new Promise((res, rej) => { const t = d.transaction(["drives", "chunks"], "readwrite"); t.objectStore("drives").delete(id); keys.forEach(k => t.objectStore("chunks").delete(k)); t.oncomplete = res; t.onerror = () => rej(t.error); });
   await loadDrives();
 }
-const sessionMeta = () => ({ id: driveId, start: driveStart, codes, monitor, mode06, supported: supported ? [...supported] : [], fpChanged: !!truck.fpChanged, ecus: truck.ecus || [] });
+const sessionMeta = () => ({ id: driveId, start: driveStart, build: BUILD_ID, codes, monitor, mode06, supported: supported ? [...supported] : [], fpChanged: !!truck.fpChanged, ecus: truck.ecus || [] });
 let saving = false;
 async function saveDrive(final) {
   if (!driveId || saving) return;
@@ -1359,7 +1383,7 @@ async function saveDrive(final) {
   try {
     const summary = {}; for (const id in stats) { const s = stats[id]; if (s.n) summary[id] = { min: s.min, max: s.max, avg: s.sum / s.n, n: s.n }; }
     const end = rows.length, fresh = rows.slice(flushed, end), chunks = fresh.length ? [{ id: driveId + ":" + chunkSeq, drive: driveId, seq: chunkSeq, rows: fresh }] : [];
-    const rec = { ...sessionMeta(), vehicle: vid, end: Date.now(), summary, build: BUILD_ID };
+    const rec = { ...sessionMeta(), vehicle: vid, end: Date.now(), summary };
     if (final) { const rv = analyzeDrive({ rows, meta: rec, vehicle: vehicles[vid], history: drives }); rec.review = { stats: rv.stats, verdict: rv.verdict, kind: rv.trip.kind }; }
     await putDrives([rec], chunks); flushed = end; if (fresh.length) chunkSeq++;
     if (!final) store.set("active", { id: driveId, vid, start: driveStart, last: Date.now(), seq: chunkSeq });
