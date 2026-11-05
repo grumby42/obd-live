@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261105-0656Z">
-<meta name="build-timestamp-utc" content="2026-11-05T06:56:46Z">
+<meta name="build-id" content="OBD-20261105-0657Z">
+<meta name="build-timestamp-utc" content="2026-11-05T06:57:14Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261105-0656Z", BUILD_UTC = "2026-11-05T06:56:46Z";
+const BUILD_ID = "OBD-20261105-0657Z", BUILD_UTC = "2026-11-05T06:57:14Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -2271,7 +2271,7 @@ async function openCaseFile() {
     host.append(el("h3", { textContent: "Misfire history by cylinder (counter C, per drive)" }));
     host.append(el("table", {}, el("thead", {}, el("tr", {}, el("th", { textContent: "Cyl" }), el("th", { textContent: "Bank" }), ...drives.filter(d => d.review).map(d => el("th", { class: "n", textContent: new Date(d.start).toLocaleDateString(undefined, { month: "numeric", day: "numeric" }) })))), el("tbody", {}, cf.mis.map(m => el("tr", {}, el("td", { textContent: String(m.c) }), el("td", { textContent: m.bank === null ? "?" : String(m.bank) }), ...m.hist.map(v => el("td", { class: "n", textContent: v === null ? "–" : String(v) })))))));
     host.append(el("h3", { textContent: "Trends across drives" }));
-    host.append(el("table", {}, el("thead", {}, el("tr", {}, ["Measure", "Drives", "Low", "Median", "High", "Drift"].map((h, i) => el("th", { class: i ? "n" : "", textContent: h })))), el("tbody", {}, cf.trends.map(t => el("tr", {}, el("td", { textContent: t.label + (t.unit ? " (" + t.unit + ")" : "") }), el("td", { class: "n", textContent: String(t.n) }), el("td", { class: "n", textContent: t.n > 1 ? t.lo.toFixed(t.d) : t.pts[0].v.toFixed(2) }), el("td", { class: "n", textContent: t.n > 1 ? t.med.toFixed(t.d) : "" }), el("td", { class: "n", textContent: t.n > 1 ? t.hi.toFixed(t.d) : "" }), el("td", { class: "n", textContent: t.drift === null ? "" : (t.drift > 0 ? "+" : "") + t.drift.toFixed(t.d) })))))));
+    host.append(el("table", {}, el("thead", {}, el("tr", {}, ["Measure", "Drives", "Low", "Median", "High", "Drift"].map((h, i) => el("th", { class: i ? "n" : "", textContent: h })))), el("tbody", {}, cf.trends.map(t => el("tr", {}, el("td", { textContent: t.label + (t.unit ? " (" + t.unit + ")" : "") }), el("td", { class: "n", textContent: String(t.n) }), el("td", { class: "n", textContent: t.n > 1 ? t.lo.toFixed(t.d) : t.pts[0].v.toFixed(2) }), el("td", { class: "n", textContent: t.n > 1 ? t.med.toFixed(t.d) : "" }), el("td", { class: "n", textContent: t.n > 1 ? t.hi.toFixed(t.d) : "" }), el("td", { class: "n", textContent: t.drift === null ? "" : (t.drift > 0 ? "+" : "") + t.drift.toFixed(t.d) }))))));
     host.append(el("p", { class: "sub", style: "white-space:normal", textContent: "Drift compares the later half of drives with the earlier half. Measures only count on drives where they could be rated, so highway and city drives contribute different rows." }));
   }
   showDlg("Case file: " + vehicles[vid].name, el("p", { textContent: "Every saved drive for this vehicle, pooled. Theses are judged on consistency across drives, not on any one drive." }), host, el("div", { class: "bar" }, el("button", { textContent: "Back to drive review", onclick: () => openReview() })));
