@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261105-0706Z">
-<meta name="build-timestamp-utc" content="2026-11-05T07:06:05Z">
+<meta name="build-id" content="OBD-20261105-0709Z">
+<meta name="build-timestamp-utc" content="2026-11-05T07:09:07Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261105-0706Z", BUILD_UTC = "2026-11-05T07:06:05Z";
+const BUILD_ID = "OBD-20261105-0709Z", BUILD_UTC = "2026-11-05T07:09:07Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1246,6 +1246,8 @@ function buildDash(name) {
 let vehicles = store.get("vehicles", null);
 if (!vehicles || typeof vehicles !== "object") vehicles = {};
 for (const k in DEFAULT_VEHICLES) { const saved = vehicles[k] || {}; vehicles[k] = { ...DEFAULT_VEHICLES[k], ...saved }; if (!saved.trans) vehicles[k].trans = DEFAULT_VEHICLES[k].trans; }
+// Profiles saved by earlier builds may have a detected engine but no bank map; fill it from the engine choice.
+for (const k in vehicles) { const v = vehicles[k], ch = (ENGINE_CHOICES[k] || []).find(c => v.engine && c.label === v.engine.label); if (ch && !v.bank1Cyls) { v.bank1Cyls = ch.bank1Cyls; v.bankNote = ch.bankNote; v.layout = v.layout || ch.layout; } }
 let vid = store.get("vid", "sierra"); if (!vehicles[vid]) vid = "sierra";
 const vkey = k => "v." + vid + "." + k;
 function saveVehicles() { store.set("vehicles", vehicles); }
