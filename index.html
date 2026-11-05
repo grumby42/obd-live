@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261105-0657Z">
-<meta name="build-timestamp-utc" content="2026-11-05T06:57:14Z">
+<meta name="build-id" content="OBD-20261105-0706Z">
+<meta name="build-timestamp-utc" content="2026-11-05T07:06:05Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261105-0657Z", BUILD_UTC = "2026-11-05T06:57:14Z";
+const BUILD_ID = "OBD-20261105-0706Z", BUILD_UTC = "2026-11-05T07:06:05Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1230,7 +1230,7 @@ const PRESETS = {
    W("line",["trans"],[4,4],[6,5],{win:15}), W("share",[],[4,4],[4,4],{share:"gear",view:"bars"}), W("share",[],[4,4],[4,4],{share:"temp",view:"donut"}),
    W("share",[],[4,4],[4,4],{share:"drive",view:"donut"}), W("number",["sh12"],[2,3],[3,3]), W("number",["sh23"],[2,3],[3,3]), W("number",["sh34"],[2,3],[3,3]), W("number",["ratio"],[2,3],[3,3]), W("history",["trans"],[4,4],[12,4],{stat:"max"}) ],
  Electrical: [ W("elab",[],[4,3],[4,3]), W("needle",["volt"],[2,4],[4,4]), W("number",["atrv"],[2,4],[4,4]), W("line",["volt","atrv"],[4,4],[12,4],{win:15}), W("history",["volt"],[4,4],[12,4],{stat:"min"}) ],
- "System map": [ W("sysmap",[],[4,11],[12,10]) ],
+ "System map": [ W("sysmap",[],[4,12],[12,10]) ],
  Phone: [ W("phone",[],[4,3],[4,3]), W("number",["speedo"],[2,3],[4,3]), W("number",["grade"],[2,3],[4,3]), W("line",["mph","gmph"],[4,4],[6,4],{win:5}), W("line",["vib"],[4,4],[6,4],{win:5}), W("line",["noise"],[4,4],[6,4],{win:5}), W("scatter",["mph","vib"],[4,5],[6,5]) ],
  Engine: [ W("misfire",[],[4,4],[6,4]), W("line",["ect","oilt","trans"],[4,4],[6,4],{win:15}), W("line",["stft1","stft2","ltft1","ltft2"],[4,4],[6,4],{win:5}),
    W("line",["rpm"],[4,3],[6,4],{win:5}), W("number",["oilp"],[2,3],[3,3]), W("number",["oilt"],[2,3],[3,3]), W("number",["knock"],[2,3],[3,3]), W("number",["timing"],[2,3],[3,3]), W("number",["load"],[2,3],[3,3]), W("number",["hp"],[2,3],[3,3]), W("number",["oill"],[2,3],[3,3]), W("number",["map"],[2,3],[3,3]) ],
@@ -1767,37 +1767,36 @@ function rampColor(frac) { const f = Math.max(0, Math.min(1, frac)); const lo = 
 function nodeColor(m, v) { if (v === null || v === undefined) return "#2a2a28"; const r = ratingOf(m, v); if (r.state === "bad") return "#d03b3b"; if (r.state === "good") return "#0ca30c"; return rampColor((v - m.min) / ((m.max - m.min) || 1)); }
 R.sysmap = (w, box) => {
   const veh = vehicles[vid], cyl = (veh.engine && veh.engine.cyl) || 8, V = veh.layout === "V" || (!veh.layout && cyl >= 6), bank1 = veh.bank1Cyls || (V ? null : Array.from({ length: cyl }, (_, i) => i + 1));
-  const svg = sv("svg", { viewBox: "0 0 820 560", width: "100%", style: "flex:1;min-height:0;font-family:system-ui;font-size:11px" }), note = el("div", { class: "sub", style: "white-space:normal" });
-  const wrap = el("div", { style: "flex:1;min-height:0;overflow:auto" }); wrap.append(svg); box.append(header(w, "System map: " + veh.name, "Schematic"), el("div", { class: "body" }, wrap, note));
-  const size = () => { const narrow = box.getBoundingClientRect().width < 700; svg.style.width = narrow ? "820px" : "100%"; svg.style.height = narrow ? "560px" : "100%"; svg.style.flex = narrow ? "none" : "1"; }; size(); addEventListener("resize", size);
-  const nodes = {};
-  const path = (d, col) => svg.append(sv("path", { d, fill: "none", stroke: col, "stroke-width": 3, "marker-end": "url(#arr)", opacity: .7 }));
-  const defs = sv("defs", {}, sv("marker", { id: "arr", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: "auto-start-reverse" }, sv("path", { d: "M0,0 L10,5 L0,10 z", fill: "#8f8e85" }))); svg.append(defs);
-  const node = (id, x, y, wdt, label, opts = {}) => { const g = sv("g", { style: "cursor:pointer" }); const rect = sv("rect", { x: x - wdt / 2, y: y - 16, width: wdt, height: 32, rx: 7, fill: "#2a2a28", stroke: "#383835" }); const t1 = sv("text", { x, y: y - 3, "text-anchor": "middle", fill: "#f0efec", "font-weight": 600 }, label); const t2 = sv("text", { x, y: y + 11, "text-anchor": "middle", fill: "#c3c2b7" }, "--"); g.append(rect, t1, t2); g.onclick = () => { if (opts.drill !== false) openDrill(id); }; svg.append(g); nodes[id] = { rect, t1, t2, m: byId[id], x, y }; return g; };
-  const lbl = (x, y, t, col = "#8f8e85") => svg.append(sv("text", { x, y, fill: col, "font-size": 12, "font-weight": 600 }, t));
-  // Air path (top row)
-  lbl(20, 40, "AIR"); path("M70,70 H740", "#3987e5");
-  node("maf", 120, 70, 110, "Air flow"); node("iat", 240, 70, 100, "Intake air °F"); node("tps", 360, 70, 100, "Throttle"); node("map", 480, 70, 110, "Manifold kPa"); node("baro", 600, 70, 100, "Barometric"); node("purge", 720, 70, 90, "Purge");
-  // Fuel path (second row)
-  lbl(20, 125, "FUEL"); path("M70,155 H560", "#d95926");
-  node("fuel", 120, 155, 100, "Tank level"); node("fuelp", 240, 155, 110, "Low-side psi"); node("railg", 370, 155, 120, "DI rail kPa"); node("ethanol", 500, 155, 100, "Ethanol %");
-  node("ltft1", 640, 140, 150, "Bank 1 long trim"); node("ltft2", 640, 172, 150, "Bank 2 long trim");
-  // Cylinders
-  lbl(20, 225, "CYLINDERS" + (V ? " (two banks)" : " (one bank)"));
-  const cols = V ? Math.ceil(cyl / 2) : cyl, cw = Math.min(90, 640 / cols), x0 = 410 - (cols * cw) / 2 + cw / 2;
-  const banks = V && bank1 ? [bank1, Array.from({ length: cyl }, (_, i) => i + 1).filter(c => !bank1.includes(c))] : V ? [null, null] : [Array.from({ length: cyl }, (_, i) => i + 1)];
-  banks.forEach((list, bi) => { const y = V ? 255 + bi * 48 : 265; lbl(20, y + 4, V ? "Bank " + (bi + 1) : "", "#c3c2b7");
-    const ids = list || Array.from({ length: Math.ceil(cyl / 2) }, (_, i) => bi === 0 ? 2 * i + 1 : 2 * i + 2).filter(c => c <= cyl);
-    ids.forEach((c, i) => { const id = "mis" + c, g = sv("g", { style: "cursor:pointer" }), rect = sv("rect", { x: x0 + i * cw - cw / 2 + 4, y: y - 18, width: cw - 8, height: 36, rx: 6, fill: "#2a2a28", stroke: "#383835" }); g.append(rect, sv("text", { x: x0 + i * cw, y: y - 3, "text-anchor": "middle", fill: "#f0efec", "font-weight": 700 }, String(c)), sv("text", { x: x0 + i * cw, y: y + 11, "text-anchor": "middle", fill: "#c3c2b7" }, "--")); if (veh.afmCyls && veh.afmCyls.includes(c)) g.append(sv("circle", { cx: x0 + i * cw + cw / 2 - 10, cy: y - 12, r: 3, fill: "#c98500" })); g.onclick = () => openDrill(id); svg.append(g); nodes[id] = { rect, t2: g.children[2], m: byId[id], cyl: true }; }); });
-  if (V && !bank1) lbl(20, 350, "Cylinder-to-bank assignment unknown for this engine, so cylinders are placed by number only.", "#c98500");
-  // Exhaust
-  lbl(20, 385, "EXHAUST"); path("M70,415 H760", "#9085e9"); if (V) path("M70,460 H760", "#9085e9");
-  node("o2v1", 150, 415, 120, "B1 front O2 V"); node("cat1", 330, 415, 130, "Catalyst B1 °F"); node("o2v2", 510, 415, 120, "B1 rear O2 V"); node("stft1", 680, 415, 120, "B1 short trim");
-  if (V) { node("o2v5", 150, 460, 120, "B2 front O2 V"); node("cat2", 330, 460, 130, "Catalyst B2 °F"); node("o2v6", 510, 460, 120, "B2 rear O2 V"); node("stft2", 680, 460, 120, "B2 short trim"); }
-  // Loops (bottom)
-  lbl(20, 505, "LOOPS"); node("ect", 110, 530, 110, "Coolant °F"); node("oilt", 230, 530, 100, "Oil °F"); node("oilp", 340, 530, 100, "Oil psi"); node("trans", 460, 530, 110, "Trans fluid °F"); node("gear", 570, 530, 80, "Gear"); node("slip", 670, 530, 100, "TCC slip rpm"); node("volt", 770, 530, 80, "Volts");
-  note.textContent = (box.getBoundingClientRect().width < 700 ? "Scroll sideways or pinch to zoom. " : "") + "Order of sensors is exact; positions are schematic. Color: dim = low, bright = high within each gauge's range; green and red follow that gauge's limit. Amber dot = cylinder-deactivation cylinder. Tap any box to drill in. " + (veh.bankNote || "");
-  return () => { for (const id in nodes) { const n = nodes[id], m = n.m; if (!m) continue; const v = latest[id] ?? null, st = mstate[id] || {}; const col = nodeColor(m, v), bright = col.startsWith("rgb") && Number(col.match(/\d+/g)[2]) > 170; n.rect.setAttribute("fill", col); n.rect.setAttribute("stroke", v === null ? "#383835" : "#8f8e85"); n.t2.setAttribute("fill", bright ? "#0b0b0b" : "#f0efec"); if (n.t1) n.t1.setAttribute("fill", bright ? "#0b0b0b" : "#f0efec"); n.t2.textContent = v === null ? (st.status === "unsupported" || st.status === "failed" ? "n/a" : "--") : fmt(m, v) + (n.cyl ? "" : " " + m.unit); } };
+  const wrap = el("div", { style: "flex:1;min-height:0;overflow:auto" }), note = el("div", { class: "sub", style: "white-space:normal" });
+  box.append(header(w, "System map: " + veh.name, "Schematic"), el("div", { class: "body" }, wrap, note));
+  let nodes = {}, lastMode = null, svg = null;
+  const build = () => {
+    const bw = box.getBoundingClientRect().width; if (!bw) return; const narrow = bw < 640, mode = narrow ? "portrait" : "wide"; if (mode === lastMode) return; lastMode = mode;
+    nodes = {}; wrap.textContent = ""; const perRow = narrow ? 2 : 6, NW = narrow ? 150 : 120, GAP = narrow ? 14 : 12, ROW = 44, W = narrow ? perRow * (NW + GAP) + 24 : 820;
+    svg = sv("svg", { style: "display:block;width:100%;font-family:system-ui;font-size:11px" }); wrap.append(svg);
+    svg.append(sv("defs", {}, sv("marker", { id: "arr", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: "auto-start-reverse" }, sv("path", { d: "M0,0 L10,5 L0,10 z", fill: "#8f8e85" }))));
+    let y = 14; const lbl = (t, col = "#8f8e85") => { svg.append(sv("text", { x: 12, y: y + 10, fill: col, "font-size": 12, "font-weight": 600 }, t)); y += 22; };
+    const node = (id, x, cy, label, opts = {}) => { const g = sv("g", { style: "cursor:pointer" }), rect = sv("rect", { x: x - NW / 2, y: cy - 16, width: NW, height: 32, rx: 7, fill: "#2a2a28", stroke: "#383835" }), t1 = sv("text", { x, y: cy - 3, "text-anchor": "middle", fill: "#f0efec", "font-weight": 600 }, label), t2 = sv("text", { x, y: cy + 11, "text-anchor": "middle", fill: "#c3c2b7" }, "--"); g.append(rect, t1, t2); g.onclick = () => openDrill(id); svg.append(g); nodes[id] = { rect, t1, t2, m: byId[id], cyl: !!opts.cyl }; return { x, y: cy }; };
+    const flow = (list, col) => { // list of [id,label]; placed in rows, connected in order
+      const pts = []; list.forEach((it, i) => { const r = Math.floor(i / perRow), c = i % perRow, x = 24 + NW / 2 + c * (NW + GAP), cy = y + 16 + r * ROW; pts.push([x, cy, it]); });
+      if (pts.length > 1) { let d = ""; pts.forEach((p, i) => { d += (i ? " L" : "M") + p[0] + "," + p[1]; }); svg.append(sv("path", { d, fill: "none", stroke: col, "stroke-width": 3, opacity: .45, "marker-end": "url(#arr)" })); }
+      pts.forEach(p => node(p[2][0], p[0], p[1], p[2][1])); y += 16 + Math.ceil(list.length / perRow) * ROW + 6; };
+    lbl("AIR"); flow([["maf","Air flow"],["iat","Intake air °F"],["tps","Throttle"],["map","Manifold kPa"],["baro","Barometric"],["purge","Purge"]], "#3987e5");
+    lbl("FUEL"); flow([["fuel","Tank level"],["fuelp","Low-side psi"],["railg","DI rail kPa"],["ethanol","Ethanol %"],["ltft1","Bank 1 long trim"],["ltft2","Bank 2 long trim"]], "#d95926");
+    lbl("CYLINDERS" + (V ? " (two banks)" : " (one bank)"));
+    const banks = V && bank1 ? [bank1, Array.from({ length: cyl }, (_, i) => i + 1).filter(c => !bank1.includes(c))] : V ? [null, null] : [Array.from({ length: cyl }, (_, i) => i + 1)];
+    const cw = Math.min(90, (W - 48) / Math.max(4, Math.ceil(cyl / (V ? 2 : 1))));
+    banks.forEach((list, bi) => { const ids = list || Array.from({ length: Math.ceil(cyl / 2) }, (_, i) => bi === 0 ? 2 * i + 1 : 2 * i + 2).filter(c => c <= cyl); if (V) svg.append(sv("text", { x: 12, y: y + 22, fill: "#c3c2b7", "font-size": 12, "font-weight": 600 }, "Bank " + (bi + 1)));
+      ids.forEach((c, i) => { const x = (V ? 70 : 30) + i * cw + cw / 2, cy = y + 18, id = "mis" + c, g = sv("g", { style: "cursor:pointer" }), rect = sv("rect", { x: x - cw / 2 + 4, y: cy - 18, width: cw - 8, height: 36, rx: 6, fill: "#2a2a28", stroke: "#383835" }), t2 = sv("text", { x, y: cy + 11, "text-anchor": "middle", fill: "#c3c2b7" }, "--"); g.append(rect, sv("text", { x, y: cy - 3, "text-anchor": "middle", fill: "#f0efec", "font-weight": 700 }, String(c)), t2); if (veh.afmCyls && veh.afmCyls.includes(c)) g.append(sv("circle", { cx: x + cw / 2 - 10, cy: cy - 12, r: 3, fill: "#c98500" })); g.onclick = () => openDrill(id); svg.append(g); nodes[id] = { rect, t2, m: byId[id], cyl: true }; }); y += 46; });
+    if (V && !bank1) { svg.append(sv("text", { x: 12, y: y + 8, fill: "#c98500" }, "Cylinder-to-bank assignment unknown; cylinders are placed by number only.")); y += 18; }
+    y += 6; lbl("EXHAUST"); flow([["o2v1","B1 front O2 V"],["cat1","Catalyst B1 °F"],["o2v2","B1 rear O2 V"],["stft1","B1 short trim"]], "#9085e9");
+    if (V) flow([["o2v5","B2 front O2 V"],["cat2","Catalyst B2 °F"],["o2v6","B2 rear O2 V"],["stft2","B2 short trim"]], "#9085e9");
+    lbl("LOOPS"); flow([["ect","Coolant °F"],["oilt","Oil °F"],["oilp","Oil psi"],["trans","Trans fluid °F"],["gear","Gear"],["slip","TCC slip rpm"],["volt","Volts"]], "#55544f");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + (y + 8)); svg.style.height = narrow ? "auto" : "100%"; svg.style.flex = narrow ? "none" : "1";
+    note.textContent = "Order of sensors is exact; positions are schematic. Color: dim = low, bright = high within each gauge's range; green and red follow that gauge's limit. Amber dot = cylinder-deactivation cylinder. Tap any box to drill in. " + (veh.bankNote || "");
+  };
+  build(); const onResize = () => build(); addEventListener("resize", onResize); addEventListener("orientationchange", onResize);
+  return () => { if (!box.isConnected) { removeEventListener("resize", onResize); removeEventListener("orientationchange", onResize); return; } build(); for (const id in nodes) { const n = nodes[id], m = n.m; if (!m) continue; const v = latest[id] ?? null, st = mstate[id] || {}; const col = nodeColor(m, v), bright = col.startsWith("rgb") && Number(col.match(/\d+/g)[2]) > 170; n.rect.setAttribute("fill", col); n.rect.setAttribute("stroke", v === null ? "#383835" : "#8f8e85"); n.t2.setAttribute("fill", bright ? "#0b0b0b" : "#f0efec"); if (n.t1) n.t1.setAttribute("fill", bright ? "#0b0b0b" : "#f0efec"); n.t2.textContent = v === null ? (st.status === "unsupported" || st.status === "failed" ? "n/a" : "--") : fmt(m, v) + (n.cyl ? "" : " " + m.unit); } };
 };
 R.phone = (w, box) => {
   const st = el("div", { class: "sub", style: "white-space:normal" }); box.append(header(w, "Phone sensors", "Phone"), el("div", { class: "body" }, st, el("button", { class: "primary", textContent: "Phone sensor settings", onclick: openPhone })));
