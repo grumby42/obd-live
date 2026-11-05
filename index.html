@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261105-0019Z">
-<meta name="build-timestamp-utc" content="2026-11-05T00:19:26Z">
+<meta name="build-id" content="OBD-20261105-0644Z">
+<meta name="build-timestamp-utc" content="2026-11-05T06:44:18Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261105-0019Z", BUILD_UTC = "2026-11-05T00:19:26Z";
+const BUILD_ID = "OBD-20261105-0644Z", BUILD_UTC = "2026-11-05T06:44:18Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -581,8 +581,9 @@ function analyzeDrive(input) {
     stats.highLoadShare = trip.runningSeconds ? trip.highLoadSeconds / trip.runningSeconds : 0; const ambA = nums(rows, "amb"); if (ambA.length) stats.amb = pctl(ambA, .5);
     if (peak > 235) add("Cooling", "attention", "Coolant ran hot", "99th percentile " + rnd(peak) + "°F.", "That's hot enough to compare against the dash gauge and any warning.", ["Heavy load or heat", "Low coolant, thermostat, fan, or water pump"], ["Check coolant level with the engine cold.", "Note whether it happened at idle or at speed."]);
     else if (peak > 225) add("Cooling", "watch", "Coolant ran warm", "99th percentile " + rnd(peak) + "°F.", "This may be normal under heavy load, but it deserves comparison with your other drives.", ["Towing, grades, or hot weather"], ["Watch whether this repeats without heavy load."]);
-    else if (peak >= 170) add("Cooling", "good", "Coolant stayed in a sensible range", "Peak " + rnd(peak) + "°F" + (plateau !== null ? ", steady-cruise " + rnd(plateau) + "°F." : "."), "No sign of overheating on this drive.");
-    if (plateau !== null && plateau < 175 && trip.cruiseSeconds >= 300) add("Cooling", "watch", "Coolant stayed low during sustained cruise", "Settled at about " + rnd(plateau) + "°F over the last " + rnd(plateauVals.length / 60, 1) + " cruising minutes.", "An engine that won't reach normal temperature at cruise can point to a thermostat opening early.", ["Thermostat stuck partly open", "Very cold outside air"], ["Compare with the dash gauge and repeat on a warmer day."]);
+    else if (peak >= 170 && !(plateau !== null && plateau < 185 && trip.cruiseSeconds >= 300)) add("Cooling", "good", "Coolant stayed in a sensible range", "Peak " + rnd(peak) + "°F" + (plateau !== null ? ", steady-cruise " + rnd(plateau) + "°F." : "."), "No sign of overheating on this drive.");
+    const idleWarm = nums(rows, "ect", r => r._idle && r._warm), idleMed = idleWarm.length >= 30 ? pctl(idleWarm, .5) : null; if (idleMed !== null) stats.ectIdle = idleMed;
+    if (plateau !== null && plateau < 185 && trip.cruiseSeconds >= 300) add("Cooling", "watch", "Coolant regulated below the thermostat specification at cruise", "Settled at about " + rnd(plateau) + "°F over the last " + rnd(plateauVals.length / 60, 1) + " cruising minutes" + (idleMed !== null ? ", " + rnd(idleMed) + "°F at warm idle" : "") + ". GM's specification for a 3.6L V6 of this family (2010 Traverse) is a thermostat that begins to open at 194°F; other engines differ.", "A reading that holds steady well below the thermostat's opening point means either the thermostat opens early or the temperature sensor reads low. Which one decides whether anything needs doing.", ["Thermostat opening early or stuck partly open", "Coolant temperature sensor reading low", "Normal for this engine if its thermostat is rated lower"], ["Point an infrared thermometer at the thermostat housing or upper radiator hose when the app shows the plateau. Metal near the app's number means the thermostat; metal near 195°F means the sensor."], "GM thermostat specification, 3.6L V6 (2010 Traverse)");
   } else need("Cooling", "Coolant temperature wasn't recorded.");
 
   // Fuel trims: never judge from one point (Warren); compare operating regions and banks.
@@ -709,7 +710,7 @@ function analyzeDrive(input) {
       else if (med > 50) add("Transmission", "info", "Moderate torque converter slip at cruise", "Median " + rnd(med) + " rpm." + unverified("slip"), "This can be normal controlled slip, especially in fuel-saving operation, so the trend across drives matters most.", [], ["Compare with later drives at the same speed."]);
       else add("Transmission", "good", "Torque converter slip was low at cruise", "Median " + rnd(med) + " rpm, 95th percentile " + rnd(hi) + " rpm." + unverified("slip"), "The converter appears close to locked during steady driving."); }
   }
-  if (usable("gear") && val.gear === "ok") { let ch = 0, prev = null, hwyMiles = 0; rows.forEach(r => { if (r.mph >= 50 && r._steady) { hwyMiles += r.mph * r._dt / 3600; if (prev !== null && r.gear !== prev) ch++; prev = r.gear; } else prev = null; }); stats.hunting = hwyMiles ? ch / hwyMiles : null; if (hwyMiles >= 5 && ch / hwyMiles > 1) add("Transmission", "watch", "Frequent shifts at steady highway speed", rnd(ch) + " gear changes over " + rnd(hwyMiles, 1) + " steady miles.", "Busy shifting adds heat and may be noticeable as hunting.", ["Hills or wind", "Tow-mode or calibration behavior"], ["Compare on a flat stretch."]); }
+  if (usable("gear") && val.gear === "ok") { let ch = 0, prev = null, hwyMiles = 0; let prevRatio = null; rows.forEach(r => { if (r.mph >= 50 && r._steady) { hwyMiles += r.mph * r._dt / 3600; if (prev !== null && r.gear !== prev && prevRatio && r._ratio && Math.abs(r._ratio / prevRatio - 1) >= .08) ch++; prev = r.gear; prevRatio = r._ratio; } else { prev = null; prevRatio = null; } }); stats.hunting = hwyMiles ? ch / hwyMiles : null; if (hwyMiles >= 5 && ch / hwyMiles > 1) add("Transmission", "watch", "Frequent shifts at steady highway speed", rnd(ch) + " gear changes over " + rnd(hwyMiles, 1) + " steady miles.", "Only gear changes confirmed by a matching jump in rpm per mph are counted. Busy shifting adds heat and may be noticeable as hunting.", ["Hills or wind", "Tow-mode or calibration behavior"], ["Compare on a flat stretch."]); }
   if (trip.highLoadSeconds < 5) need("Transmission under load", "This drive had almost no hard acceleration, so slip under load wasn't tested.");
 
   // Catalyst, O2
@@ -745,7 +746,7 @@ function analyzeDrive(input) {
   if (F.some(f => /Lean correction is largest at idle/.test(f.title)) && misBad) links.push("An idle-biased lean pattern with misfires makes an air leak near a cylinder worth checking early.");
   if (F.some(f => f.system === "Transmission" && /rpm flare|ratio|Engine speed wasn't|converter slip/i.test(f.title) && f.level !== "good") && F.some(f => f.system === "Transmission" && /temperature|fluid/i.test(f.title) && f.level !== "good" && f.level !== "info")) links.push("Slip-type signs and elevated transmission temperature point in the same direction, because slip creates heat.");
   if (lowV && misBad) links.push("Low system voltage can weaken ignition, so resolve the charging finding before chasing misfires.");
-  if (anyBad("Cooling") && (F.some(f => f.system === "Transmission" && f.level !== "good" && f.level !== "info"))) links.push("Coolant and transmission heat rising together suggests load or cooling capacity. The transmission cooler also depends on engine cooling.");
+  if (F.some(f => /Coolant ran/.test(f.title)) && F.some(f => f.system === "Transmission" && /fluid/i.test(f.title) && f.level !== "good" && f.level !== "info")) links.push("Coolant and transmission heat rising together suggests load or cooling capacity. The transmission cooler also depends on engine cooling.");
   links.forEach(t => add("Connecting the findings", "info", "How these findings may connect", t, "This is a hypothesis to test, not a diagnosis.", [], [], "Cross-signal reasoning"));
 
   // Phone sensors, when present
@@ -1063,9 +1064,15 @@ function buildChains(F, S, rows, vehicle, meta, val, trip) {
   if (hot) hot.chain = { observed: [hot.evidence, S.highLoadShare !== undefined ? "High-load share " + say(S.highLoadShare * 100, 0, "%") : "", S.transPeak !== undefined ? "Transmission peak " + say(S.transPeak, 0, "°F") : ""].filter(Boolean),
     hypotheses: [hyp("Heavy load or hot conditions", [P("The peak happened during sustained load or speed", S.hotUnderLoad !== undefined ? S.hotUnderLoad : null, ""), P("Transmission heat rose too", S.transPeak !== undefined ? S.transPeak > 200 : null, "")]), hyp("Cooling capacity: coolant level, fan, thermostat, water pump", [P("Peak at idle or low speed, where airflow is least", S.hotUnderLoad !== undefined ? !S.hotUnderLoad : null, "")])],
     absent: noCode(/^P0217|^P0128|^P048|^P068/, "overheat, thermostat, or fan"), wouldSettle: "Check coolant level cold, then watch whether the fans run when hot at idle." };
-  if (cold) cold.chain = { observed: [cold.evidence, S.warm160 !== undefined ? "Warm-up to 160°F took " + say(S.warm160, 1) + " min" : "Warm-up time not measured", S.amb !== undefined ? "Ambient " + say(S.amb, 0, "°F") : "Ambient not reported"],
-    hypotheses: [hyp("Thermostat opening early or stuck open", [P("Never settles near normal at cruise", true, "This is the observation being explained.", { trigger: true }), P("Warm-up is slow", S.warm160 !== undefined ? S.warm160 > 10 : null, "")]), hyp("Very cold outside air", [P("Ambient below freezing", S.amb !== undefined ? S.amb < 32 : null, S.amb !== undefined ? say(S.amb, 0, "°F") : "Ambient not reported")])],
-    absent: noCode(/^P0128/, "thermostat"), wouldSettle: "Compare with the dash gauge on a mild day, and feel whether the upper radiator hose warms before the engine reaches temperature." };
+  const cold2 = by(/regulated below the thermostat/);
+  if (cold || cold2) { const f = cold || cold2, gap = S.ectIdle !== undefined && S.ectPlateau !== undefined ? S.ectIdle - S.ectPlateau : null, oilGap = S.oilPeak !== undefined && S.ectPlateau !== undefined ? S.oilPeak - S.ectPlateau : null;
+    f.chain = { observed: [f.evidence, gap !== null ? "Warm idle minus cruise: " + say(gap, 0, "°F") : "Not enough warm idle to compare with cruise", oilGap !== null ? "Oil peak ran " + say(oilGap, 0, "°F") + " above the coolant plateau" : "Oil temperature not available", S.amb !== undefined ? "Ambient " + say(S.amb, 0, "°F") : "Ambient not reported", S.warm160 !== undefined ? "Warm-up to 160°F took " + say(S.warm160, 1) + " min" : "Start not recorded or engine already warm"],
+      hypotheses: [
+        hyp("Thermostat stuck partly open", [P("Temperature drifts with airflow: lower at highway speed, higher in traffic", gap !== null ? gap >= 8 : null, gap !== null ? say(gap, 0, "°F") + " difference" : "Not measurable"), P("Warm-up is slow", S.warm160 !== undefined ? S.warm160 > 10 : null, S.warm160 !== undefined ? say(S.warm160, 1) + " min" : "Not measured")]),
+        hyp("Thermostat regulating, but at a lower set point than specified", [P("Temperature holds nearly the same at idle and at highway speed", gap !== null ? Math.abs(gap) < 8 : null, gap !== null ? say(gap, 0, "°F") + " difference" : "Not measurable"), P("Warm-up is normal", S.warm160 !== undefined ? S.warm160 <= 10 : null, S.warm160 !== undefined ? say(S.warm160, 1) + " min" : "Not measured")]),
+        hyp("Coolant sensor reading low", [P("Temperature holds nearly the same at idle and at highway speed", gap !== null ? Math.abs(gap) < 8 : null, gap !== null ? say(gap, 0, "°F") + " difference" : "Not measurable", { shared: true }), P("Oil runs well above coolant, since the oil is reporting the true heat", oilGap !== null ? oilGap >= 15 : null, oilGap !== null ? say(oilGap, 0, "°F") : "Not measured"), P("Metal at the thermostat housing reads near specification while the app reads low", null, "Needs an infrared thermometer")])
+      ],
+      absent: noCode(/^P0128/, "thermostat"), wouldSettle: "An infrared thermometer on the thermostat housing or upper hose at the plateau: near the app's reading means the thermostat, near 195°F means the sensor." }; }
   // Conflicts between findings, and evidence that was expected but absent.
   const notes = [];
   if (leanIdle && misSingle) notes.push("A lean-at-idle pattern and a single-cylinder misfire fit one cause: an air leak near that cylinder. They also fit two unrelated causes. The leak is the cheaper check, so start there.");

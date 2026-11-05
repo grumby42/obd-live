@@ -98,7 +98,7 @@ r = rep(drive("interstate", { volt: 12.8 })); { const f = r.findings.find(x => /
 r = rep(drive("interstate", { transMax: 232 })); assert(has(r, /above the guide/, "watch"));
 r = rep(drive("interstate", { transMax: 255 })); assert(has(r, /very hot/, "attention"));
 r = rep(drive("interstate", { coolHigh: 245 })); assert(has(r, /Coolant ran hot/, "attention"));
-r = rep(drive("interstate", { coolHigh: 170, transMax: 150 })); assert(has(r, /Coolant stayed low/), "thermostat " + bad(r));
+r = rep(drive("interstate", { coolHigh: 170, transMax: 150 })); assert(has(r, /regulated below the thermostat/), "thermostat " + bad(r)); assert(!has(r, /sensible range/), "no contradictory good finding"); { const f = r.findings.find(q => /regulated below/.test(q.title)); assert(f.chain && f.chain.hypotheses.length === 3); }
 r = rep(drive("interstate", { slip: 70 })); assert(has(r, /Moderate torque converter slip/, "info"), "slip mod " + bad(r));
 r = rep(drive("interstate", { slip: 180 })); assert(has(r, /High torque converter slip/, "watch"), "slip high unconfirmed");
 r = rep(drive("interstate", { slip: 180, scatter: true })); assert(has(r, /High torque converter slip/, "watch"), "slip capped " + bad(r)); assert(has(r, /wasn't locked/), "ratio scatter");
@@ -111,7 +111,8 @@ assert.strictEqual(api.parseMode06Full("46A10B2400320000000000".slice(0, 20), 0x
 r = rep(drive("interstate"), sierra, { mode06: [{ mid: 0xA5, name: "Misfire cylinder 4", tid: 12, val: 9, min: 0, max: 1, pass: false }] }); assert(!has(r, /self-test/), "misfire MID neither pass nor fail");
 const missing = drive("interstate"); missing.slice(100, 110).forEach(x => delete x.rpm); r = rep(missing); assert(!has(r, /MAP and barometric/), "missing rpm isn't engine off");
 const lows = drive("interstate"); lows.slice(200, 400).forEach(x => x.volt = 11.9); r = rep(lows); assert(has(r, /dipped low/, "watch"), "median mustn't hide low voltage");
-r = rep(drive("interstate", { coolHigh: 205 })); assert(!has(r, /Coolant stayed low/), "warm-up mustn't read as thermostat");
+r = rep(drive("interstate", { coolHigh: 205 })); assert(!has(r, /regulated below/), "warm-up mustn't read as thermostat");
+{ const d = drive("interstate"); d.forEach((x, i) => { if (x.mph >= 55 && i % 7 === 0) x.gear = 5; }); r = rep(d); assert(!has(r, /Frequent shifts/), "gear flicker without a ratio change isn't hunting"); }
 r = rep(drive("interstate", { gearBad: true })); assert.strictEqual(r.validation.gear, "suspect"); assert(has(r, /Ignored a questionable GM reading: gear/));
 r = rep(drive("interstate", { slipFlat: true })); assert.strictEqual(r.validation.slip, "suspect"); assert(!has(r, /torque converter slip/i));
 r = rep(drive("interstate", { noBank2: true, cyl: 4 }), four); assert(!has(r, /Banks disagree/)); assert.deepStrictEqual(bad(r), [], "4cyl " + bad(r));
