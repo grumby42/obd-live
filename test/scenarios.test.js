@@ -2,7 +2,7 @@
 const fs = require("fs"), assert = require("assert");
 const html = fs.readFileSync("index.html", "utf8");
 const src = html.split("/*PURE-START*/")[1].split("/*PURE-END*/")[0];
-const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom};")();
+const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom};")();
 const m = id => api.METRICS.find(x => x.id === id);
 
 // ---- Safety allowlist
@@ -182,5 +182,9 @@ r = rep(drive("interstate", { mis4: 3 })); assert(has(r, /Trace misfire count on
 // Prosecution
 r = rep(drive("mixed", { bank: true, mis4: 40 })); assert(r.theses && r.theses.length === 8); { const inj = r.theses.find(x => /injector leaks/.test(x.name)); assert(inj.evidence.length === 4 && inj.status); const ign = r.theses.find(x => /Ignition/.test(x.name)); assert(ign.evidence.some(e => e.verdict === "for")); }
 r = rep(drive("interstate")); assert(r.theses.every(x => ["Supported","Weakened","Leaning cleared","Not cleared"].includes(x.status))); assert(api.reportMarkdown(r, sierra, {}).includes("Assume guilty"));
+// Case file
+{ const mk = (i, s, mis) => ({ id: "c" + i, start: 1.7e12 + i * 864e5, review: { kind: "Mixed", stats: s }, summary: Object.fromEntries(Object.entries(mis).map(([k, v]) => [k, { max: v }])), codes: i === 1 ? { stored: ["P0300"], pending: [], permanent: [] } : null });
+  const cf = api.caseFile([mk(0, { trim1cruise: -8, trim2cruise: -3, ectPlateau: 174, knock: 4 }, { mis3: 0, mis5: 1 }), mk(1, { trim1cruise: -9, trim2cruise: -3, ectPlateau: 174, knock: 5 }, { mis3: 1, mis5: 2, mis6: 1 }), mk(2, { trim1cruise: -8.6, trim2cruise: -3.5, ectPlateau: 175, knock: 4.8 }, { mis3: 1, mis5: 2, mis6: 1 })], sierra.engine ? { engine: { cyl: 6 }, bank1Cyls: [1, 3, 5] } : {}, "");
+  assert.strictEqual(cf.drives, 3); assert(cf.codesSeen.some(c => c.code === "P0300")); const inj = cf.pooled.find(t => /bank 1/.test(t.name)); assert(inj.evidence.some(e => /P0300/.test(e.text) && e.verdict === "against")); const shared = cf.pooled.find(t => /shared cause/.test(t.name)); assert.strictEqual(shared.status, "Supported", shared.status); assert(cf.mis.find(m => m.c === 5).grew); assert(cf.trends.find(t => t.k === "trim1cruise").n === 3); }
 assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 console.log("all tests passed");

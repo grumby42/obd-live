@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261105-0652Z">
-<meta name="build-timestamp-utc" content="2026-11-05T06:52:41Z">
+<meta name="build-id" content="OBD-20261105-0656Z">
+<meta name="build-timestamp-utc" content="2026-11-05T06:56:46Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261105-0652Z", BUILD_UTC = "2026-11-05T06:52:41Z";
+const BUILD_ID = "OBD-20261105-0656Z", BUILD_UTC = "2026-11-05T06:56:46Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1150,6 +1150,47 @@ function prosecute(rows, meta, vehicle, S, history) {
   theses.forEach(t => { const f = t.evidence.filter(e => e.verdict === "for").length, a = t.evidence.filter(e => e.verdict === "against").length, o = t.evidence.filter(e => e.verdict === "open").length; t.status = f >= 2 && f > a ? "Supported" : a >= 2 && f === 0 ? "Weakened" : a > f ? "Leaning cleared" : "Not cleared"; t.counts = { f, a, o }; });
   return theses;
 }
+/* ---------- Case file: every saved drive, pooled ---------- */
+const CASE_METRICS = [["trim1cruise","Bank 1 cruise trim","%",1],["trim2cruise","Bank 2 cruise trim","%",1],["trim1idle","Bank 1 idle trim","%",1],["trim2idle","Bank 2 idle trim","%",1],["ectPlateau","Coolant at cruise","°F",0],["ectPeak","Coolant peak","°F",0],["oilPeak","Oil peak","°F",0],["transCruise","Trans fluid at cruise","°F",0],["slipCruise","Converter slip at cruise","rpm",0],["knock","Knock retard (98th pct)","°",1],["voltMed","Running voltage","V",1],["idleMafPerL","Idle airflow per liter","g/s/L",2],["speedo","Speed vs GPS","%",1],["ratioClean","Cruise ratio stability","",2],["mpg","Estimated mpg","",1]];
+function caseFile(drives, vehicle, currentCodes) {
+  const ds = drives.filter(d => d.review && d.review.stats).sort((a, b) => a.start - b.start);
+  const trends = CASE_METRICS.map(([k, label, unit, d]) => { const pts = ds.map(x => ({ t: x.start, v: x.review.stats[k], kind: x.review.kind })).filter(p => typeof p.v === "number"); if (pts.length < 2) return { k, label, unit, n: pts.length, pts, drift: null };
+    const first = avg(pts.slice(0, Math.ceil(pts.length / 2)).map(p => p.v)), last = avg(pts.slice(-Math.ceil(pts.length / 2)).map(p => p.v)); return { k, label, unit, n: pts.length, pts, med: pctl(pts.map(p => p.v), .5), lo: Math.min(...pts.map(p => p.v)), hi: Math.max(...pts.map(p => p.v)), drift: last - first, d }; });
+  const cyl = (vehicle.engine && vehicle.engine.cyl) || 8, bank1 = vehicle.bank1Cyls || null;
+  const mis = []; for (let c = 1; c <= cyl; c++) { const hist = ds.map(x => x.summary && x.summary["mis" + c] ? x.summary["mis" + c].max : null); mis.push({ c, bank: bank1 ? (bank1.includes(c) ? 1 : 2) : null, hist, latest: hist.filter(v => v !== null).slice(-1)[0] ?? null, grew: hist.filter(v => v !== null).some((v, i, a) => i && v > a[i - 1]) }); }
+  const codesSeen = []; ds.forEach(x => { const c = x.codes; if (c) [...(c.stored || []), ...(c.pending || []), ...(c.permanent || [])].forEach(code => codesSeen.push({ code, t: x.start })); });
+  const splitVals = ds.map(x => x.review.stats).map(s => (s.trim1cruise ?? s.trim1idle) - (s.trim2cruise ?? s.trim2idle)).filter(v => Number.isFinite(v));
+  const bothNeg = ds.map(x => x.review.stats).filter(s => (s.trim1cruise ?? s.trim1idle) !== undefined && (s.trim2cruise ?? s.trim2idle) !== undefined).map(s => (s.trim1cruise ?? s.trim1idle) < -3 && (s.trim2cruise ?? s.trim2idle) < -2);
+  const plateaus = ds.map(x => x.review.stats.ectPlateau).filter(v => typeof v === "number"), knocks = ds.map(x => x.review.stats.knock).filter(v => typeof v === "number"), slips = ds.map(x => x.review.stats.slipCruise).filter(v => typeof v === "number");
+  const misB1 = mis.filter(m => m.bank === 1).reduce((s, m) => s + (m.latest || 0), 0), misB2 = mis.filter(m => m.bank === 2).reduce((s, m) => s + (m.latest || 0), 0), misCyls = mis.filter(m => (m.latest || 0) > 0).length;
+  const random = codesSeen.some(x => /^P0300/.test(x.code)) || !!(currentCodes && /P0300/.test(currentCodes));
+  const E = (text, verdict) => ({ text, verdict });
+  const pooled = [
+    { name: "Extra fuel reaching bank 1 (injector or vapor on that side)", evidence: [
+      E("Bank 1 more negative than bank 2 on " + splitVals.filter(v => v <= -4).length + " of " + splitVals.length + " drives", splitVals.length ? (splitVals.filter(v => v <= -4).length >= Math.max(2, splitVals.length * .7) ? "for" : "against") : "open"),
+      E("Misfire history by bank: bank 1 " + (bank1 ? misB1 : "?") + ", bank 2 " + (bank1 ? misB2 : "?"), bank1 ? (misB1 > misB2 ? "for" : "against") : "open"),
+      E(random ? "A random-misfire code (P0300) was set rather than a cylinder code, which a single injector rarely produces" : "No random-misfire code on record", random ? "against" : "open")
+    ], settle: "Injector balance test at a shop." },
+    { name: "A shared cause: fuel, air, or ignition supply common to all cylinders", evidence: [
+      E(random ? "P0300 names no cylinder, which fits a shared cause" : "No P0300 on record", random ? "for" : "open"),
+      E("Misfire history spread across " + misCyls + " cylinders" + (bank1 ? " and both banks" : ""), misCyls >= 3 && misB1 && misB2 ? "for" : misCyls ? "against" : "open"),
+      E("Both banks negative on " + bothNeg.filter(Boolean).length + " of " + bothNeg.length + " drives", bothNeg.length ? (bothNeg.filter(Boolean).length >= bothNeg.length * .7 ? "for" : "against") : "open"),
+      E("Knock retard present on " + knocks.filter(k => k >= 2).length + " of " + knocks.length + " drives", knocks.length ? (knocks.filter(k => k >= 2).length >= knocks.length * .7 ? "for" : "against") : "open")
+    ], settle: "One tank of 91 octane, then a fuel pressure check, then plug condition." },
+    { name: "Coolant sensor reads low, so base fueling runs rich everywhere", evidence: [
+      E("Coolant plateau below 185°F on " + plateaus.filter(p => p < 185).length + " of " + plateaus.length + " drives with a plateau", plateaus.length ? (plateaus.filter(p => p < 185).length === plateaus.length ? "for" : "against") : "open"),
+      E("Both banks negative on " + bothNeg.filter(Boolean).length + " of " + bothNeg.length + " drives", bothNeg.length ? (bothNeg.filter(Boolean).length >= bothNeg.length * .7 ? "for" : "against") : "open"),
+      E("Infrared thermometer check", "open")
+    ], settle: "Infrared thermometer at the thermostat housing when the app shows the plateau." },
+    { name: "Converter shudder being counted as misfire", evidence: [
+      E("Cruise slip median across drives: " + (slips.length ? rnd(pctl(slips, .5)) + " rpm" : "n/a"), slips.length ? (pctl(slips, .5) > 60 ? "for" : "against") : "open"),
+      E("Misfire counters grew during a drive on " + mis.filter(m => m.grew).length + " cylinders", mis.some(m => m.grew) ? "for" : "against"),
+      E("Marks of felt shudder near misfire growth", "open")
+    ], settle: "Mark any felt shudder; see whether counters move with it." }
+  ];
+  pooled.forEach(t => { const f = t.evidence.filter(e => e.verdict === "for").length, a = t.evidence.filter(e => e.verdict === "against").length; t.status = f >= 2 && f > a ? "Supported" : a >= 2 && f === 0 ? "Weakened" : a > f ? "Leaning cleared" : "Not cleared"; });
+  return { drives: ds.length, span: ds.length ? [ds[0].start, ds[ds.length - 1].start] : null, trends: trends.filter(t => t.n), mis, codesSeen, pooled };
+}
 
 function matchVehicle(vin, vehicles) {
   if (!vin || vin.length !== 17) return null;
@@ -1465,6 +1506,7 @@ async function saveDrive(final) {
     const summary = {}; for (const id in stats) { const s = stats[id]; if (s.n) summary[id] = { min: s.min, max: s.max, avg: s.sum / s.n, n: s.n }; }
     const end = rows.length, fresh = rows.slice(flushed, end), chunks = fresh.length ? [{ id: driveId + ":" + chunkSeq, drive: driveId, seq: chunkSeq, rows: fresh }] : [];
     const rec = { ...sessionMeta(), vehicle: vid, end: Date.now(), summary };
+    rec.codes = codes;
     if (final) { const rv = analyzeDrive({ rows, meta: rec, vehicle: vehicles[vid], history: drives }); rec.review = { stats: rv.stats, verdict: rv.verdict, kind: rv.trip.kind }; }
     await putDrives([rec], chunks); flushed = end; if (fresh.length) chunkSeq++;
     if (!final) store.set("active", { id: driveId, vid, start: driveStart, last: Date.now(), seq: chunkSeq });
@@ -2018,7 +2060,7 @@ async function openReview(pickId) {
   if (rows.length) sel.append(el("option", { value: "__live", textContent: "Current session" + (session && session.link.sim ? " (simulator)" : "") }));
   [...drives].reverse().forEach(d => sel.append(el("option", { value: d.id, textContent: new Date(d.start).toLocaleString() + (d.review ? " · " + d.review.kind : "") })));
   if (typeof pickId === "string") sel.value = pickId;
-  const del = el("button", { textContent: "Delete this drive" });
+  const del = el("button", { textContent: "Delete this drive" }), cfBtn = el("button", { textContent: "Case file: all drives", onclick: () => openCaseFile() });
   const show = async () => {
     host.textContent = "Analyzing…"; del.hidden = sel.value === "__live" || !sel.value; del.textContent = "Delete this drive"; del.dataset.arm = "";
     if (!sel.value) { host.textContent = "No drives yet. Connect, drive for at least a minute, then disconnect."; return; }
@@ -2030,7 +2072,7 @@ async function openReview(pickId) {
   };
   del.onclick = async () => { if (del.dataset.arm !== "1") { del.dataset.arm = "1"; del.textContent = "Tap again to delete"; return; } const id = sel.value; await deleteDrive(id); openReview(); };
   sel.onchange = show; $("dlg").classList.add("wide");
-  showDlg("Drive review: " + vehicles[vid].name, el("p", { textContent: "An automated review using generic OBD data, vehicle self-tests, your own history, and published diagnostic methods. It points you where to look; it can't confirm a diagnosis." }), el("div", { class: "bar" }, sel, del), host);
+  showDlg("Drive review: " + vehicles[vid].name, el("p", { textContent: "An automated review using generic OBD data, vehicle self-tests, your own history, and published diagnostic methods. It points you where to look; it can't confirm a diagnosis." }), el("div", { class: "bar" }, sel, del, cfBtn), host);
   show();
 }
 /* ---------- Copy to, custom screens, Everything ---------- */
@@ -2218,6 +2260,21 @@ function openLab() {
     el("h3", { textContent: "Starting test" }), el("p", { textContent: "Parked, with the ignition on and the engine off. The adapter samples quickly, so a brief lowest point can still be missed." }), crank, crankBox,
     el("h3", { textContent: "Checks data can't do" }), el("p", { textContent: "Listen at each speed with the fan on. A scrape, rattle, or leaves point to debris or the fan wheel, while a squeal or rumble that changes with speed points to the bearing. If it only works on the highest speed, the resistor or control module is a classic suspect. A clamp meter on the blower circuit gives real current, which this adapter can't measure." }));
   showDlg("Electrical Lab: " + vehicles[vid].name, el("p", { textContent: "These tests use voltage as a stand-in for electrical load. They can suggest a direction, but can't measure current or confirm a failed part." }), run);
+}
+async function openCaseFile() {
+  await loadDrives(); const cf = caseFile(drives, vehicles[vid], codes ? JSON.stringify(codes) : ""), host = el("div"); $("dlg").classList.add("wide");
+  if (!cf.drives) { host.append(el("p", { textContent: "No reviewed drives saved yet. Drives are reviewed automatically when you disconnect." })); }
+  else {
+    host.append(el("p", { textContent: cf.drives + " reviewed drives from " + new Date(cf.span[0]).toLocaleDateString() + " to " + new Date(cf.span[1]).toLocaleDateString() + ". Codes seen: " + (cf.codesSeen.length ? cf.codesSeen.map(c => c.code).join(", ") : "none while connected") + "." }));
+    host.append(el("h3", { textContent: "Pooled theses" }));
+    cf.pooled.forEach(t => host.append(el("details", { class: "f", open: t.status === "Supported" }, el("summary", {}, el("span", { class: "lv " + (t.status === "Supported" ? "attention" : t.status === "Weakened" ? "good" : "watch"), textContent: t.status === "Supported" ? "✕" : t.status === "Weakened" ? "✓" : "?" }), t.name + ": " + t.status), el("ul", {}, t.evidence.map(e => el("li", { textContent: ({ for: "FOR: ", against: "AGAINST: ", open: "OPEN: " })[e.verdict] + e.text }))), el("p", { textContent: "To settle: " + t.settle }))));
+    host.append(el("h3", { textContent: "Misfire history by cylinder (counter C, per drive)" }));
+    host.append(el("table", {}, el("thead", {}, el("tr", {}, el("th", { textContent: "Cyl" }), el("th", { textContent: "Bank" }), ...drives.filter(d => d.review).map(d => el("th", { class: "n", textContent: new Date(d.start).toLocaleDateString(undefined, { month: "numeric", day: "numeric" }) })))), el("tbody", {}, cf.mis.map(m => el("tr", {}, el("td", { textContent: String(m.c) }), el("td", { textContent: m.bank === null ? "?" : String(m.bank) }), ...m.hist.map(v => el("td", { class: "n", textContent: v === null ? "–" : String(v) })))))));
+    host.append(el("h3", { textContent: "Trends across drives" }));
+    host.append(el("table", {}, el("thead", {}, el("tr", {}, ["Measure", "Drives", "Low", "Median", "High", "Drift"].map((h, i) => el("th", { class: i ? "n" : "", textContent: h })))), el("tbody", {}, cf.trends.map(t => el("tr", {}, el("td", { textContent: t.label + (t.unit ? " (" + t.unit + ")" : "") }), el("td", { class: "n", textContent: String(t.n) }), el("td", { class: "n", textContent: t.n > 1 ? t.lo.toFixed(t.d) : t.pts[0].v.toFixed(2) }), el("td", { class: "n", textContent: t.n > 1 ? t.med.toFixed(t.d) : "" }), el("td", { class: "n", textContent: t.n > 1 ? t.hi.toFixed(t.d) : "" }), el("td", { class: "n", textContent: t.drift === null ? "" : (t.drift > 0 ? "+" : "") + t.drift.toFixed(t.d) })))))));
+    host.append(el("p", { class: "sub", style: "white-space:normal", textContent: "Drift compares the later half of drives with the earlier half. Measures only count on drives where they could be rated, so highway and city drives contribute different rows." }));
+  }
+  showDlg("Case file: " + vehicles[vid].name, el("p", { textContent: "Every saved drive for this vehicle, pooled. Theses are judged on consistency across drives, not on any one drive." }), host, el("div", { class: "bar" }, el("button", { textContent: "Back to drive review", onclick: () => openReview() })));
 }
 function renderVehicleSelect() { const v = $("vehicle"); v.textContent = ""; Object.values(vehicles).forEach(x => v.append(el("option", { value: x.id, textContent: x.name, selected: x.id === vid }))); }
 function openVehicle() {
