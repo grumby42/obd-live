@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261104-2003Z">
-<meta name="build-timestamp-utc" content="2026-11-04T20:03:17Z">
+<meta name="build-id" content="OBD-20261105-0019Z">
+<meta name="build-timestamp-utc" content="2026-11-05T00:19:26Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261104-2003Z", BUILD_UTC = "2026-11-04T20:03:17Z";
+const BUILD_ID = "OBD-20261105-0019Z", BUILD_UTC = "2026-11-05T00:19:26Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -300,7 +300,7 @@ const METRICS = [
  gm("oill","Oil life","Engine","119F","%","slow",0,0,100,pct,{rule:{lo:15,note:GUIDE}}),
  gm("knock","Knock retard","Engine","11A6","°","med",1,0,30,b=>b[0]*0.0878906),
  ...[1,2,3,4,5,6,7,8].map(n => { const mid = (0xA1 + n).toString(16).toUpperCase();
-   return { id:"mis"+n, label:"Cyl "+n+" misfires", group:"Misfire", cmd:"06"+mid, unit:"count", tier:"slow", digits:0, min:0, max:50, basis:"standard", mid, raw:r=>parseMode06(r,mid)[0x0C], rule:{hi:0,note:"Recent-count test result from the OBD misfire monitor. Any count is worth watching; occasional counts can be normal."} }; }),
+   return { id:"mis"+n, label:"Cyl "+n+" misfires (counter C)", group:"Misfire", cmd:"06"+mid, unit:"count", tier:"slow", digits:0, min:0, max:50, basis:"standard", mid, raw:r=>parseMode06(r,mid)[0x0C], kids:[{ id:"misb"+n, label:"Cyl "+n+" misfires (counter B)", unit:"count", digits:0, min:0, max:50, raw:r=>parseMode06(r,mid)[0x0B] }], rule:{hi:0,note:"Misfire monitor counters. SAE defines one counter for the current or last drive cycle and one for the last ten cycles; published sources disagree on which is $0B and which is $0C, so both are logged and the review rates growth within a drive."} }; }),
  { id:"ratio",label:"Engine rpm per mph",group:"Transmission",unit:"rpm/mph",digits:1,min:0,max:200,basis:"derived",need:["rpm","mph"],calc:v=>v.mph>5&&v.rpm>0?v.rpm/v.mph:null },
  { id:"fflow",label:"Estimated fuel flow",group:"Fuel",unit:"gal/h",digits:2,min:0,max:40,basis:"derived",need:["maf"],calc:v=>v.maf>0?v.maf/(14.7*(v.lambda>0?v.lambda:1))*3600/(6.17*454):null },
  { id:"alt",label:"Estimated altitude",group:"Driving",unit:"ft",digits:0,min:-500,max:12000,basis:"derived",need:["baro"],calc:v=>v.baro>0?(1-Math.pow(v.baro/101.325,0.1903))*145366:null },
@@ -638,6 +638,8 @@ function analyzeDrive(input) {
 
   // Combustion
   const misKeys = Object.keys(rows.reduce((o, r) => { Object.keys(r).forEach(k => { if (/^mis\d+$/.test(k)) o[k] = 1; }); return o; }, {})).filter(k => !cyl || Number(k.slice(3)) <= cyl);
+  // Counter B ($0B) is logged alongside counter C; growth in either within a drive counts.
+  rows.forEach(r => { Object.keys(r).forEach(k => { const m = k.match(/^misb(\d+)$/); if (m && typeof r[k] === "number") { const c = "mis" + m[1]; if (typeof r[c] !== "number" || r[k] > r[c]) r[c] = Math.max(r[k], typeof r[c] === "number" ? r[c] : 0); } }); });
   if (misKeys.length) {
     tested.push("Misfire counts");
     const growth = k => { const v = nums(rows, k); let g = 0; for (let i = 1; i < v.length; i++) if (v[i] > v[i - 1]) g += v[i] - v[i - 1]; return g; };
@@ -712,7 +714,8 @@ function analyzeDrive(input) {
 
   // Catalyst, O2
   const catPk = Math.max(pctl(nums(rows, "cat1"), .99) ?? -1, pctl(nums(rows, "cat2"), .99) ?? -1);
-  if (catPk > 0 && catPk >= 1650) add("Emissions", "watch", "Calculated catalyst temperature ran high", rnd(catPk) + "°F peak. This value is usually modeled, not measured.", "Misfires and rich running can overheat a catalyst.", ["Heavy load", "Misfire or rich running"], ["Check this against the misfire and fuel findings."]);
+  const richOrMis = F.some(f => (f.system === "Combustion" && f.level !== "good" && f.level !== "info") || /Rich correction/.test(f.title));
+  if (catPk > 0 && catPk >= 1650) add("Emissions", richOrMis ? "watch" : "info", "Calculated catalyst temperature ran high" + (richOrMis ? "" : " under load"), rnd(catPk) + "°F peak. This value is usually modeled, not measured.", "Misfires and rich running can overheat a catalyst.", ["Heavy load", "Misfire or rich running"], ["Check this against the misfire and fuel findings."]);
   const rearCruise = nums(rows, "o2v2", r => r._cruise && r._warm);
   if (rearCruise.length >= 60) { tested.push("Rear O2 sensor at cruise"); const m = pctl(rearCruise, .5); stats.rearO2 = m; if (m < .15 || m > .95) add("Emissions", "watch", "Rear O2 sensor sat at an extreme at cruise", "Median " + rnd(m, 2) + " V.", "After warm-up, a rear sensor usually settles in a steadier mid-to-high range. An extreme reading can indicate a sensor issue or a mixture bias.", ["O2 sensor or wiring", "Exhaust leak", "Mixture bias"], ["Compare with fuel trims and the catalyst self-test."]); }
   if (coldStart) { const firstClosed = rows.find(r => r.fuelstat === 2); if (firstClosed) { const m = (firstClosed.t - rows[0].t) / 60000; stats.closedLoopMin = m; if (m > 6 && trip.runningSeconds > 420) add("Fuel control", "watch", "Slow to enter closed-loop fuel control", rnd(m, 1) + " minutes from start.", "Cold weather lengthens this, but a long delay can point to sensor heating or coolant temperature.", ["Very cold weather", "O2 sensor heater or thermostat"], ["Compare with warmer days."], LIT.guide); } }
@@ -924,7 +927,8 @@ function pearson(x, y) {
   for (let i = 0; i < n; i++) { a += (x[i] - mx) * (y[i] - my); b += (x[i] - mx) ** 2; c += (y[i] - my) ** 2; }
   return b && c ? a / Math.sqrt(b * c) : null;
 }
-const CROSS_PAIRS = [ ["pedal", "pedale", "Accelerator pedal sensors D and E"], ["tps", "cmdtps", "Actual and commanded throttle"], ["tps", "tpsb", "Throttle sensors A and B"], ["maf", "_mapflow", "Air flow and manifold-pressure estimate"], ["load", "absload", "Calculated and absolute load"] ];
+// Calculated and absolute load are defined differently and don't track linearly, so they aren't paired.
+const CROSS_PAIRS = [ ["pedal", "pedale", "Accelerator pedal sensors D and E"], ["tps", "cmdtps", "Actual and commanded throttle"], ["tps", "tpsb", "Throttle sensors A and B"], ["maf", "_mapflow", "Air flow and manifold-pressure estimate"] ];
 const CROSS_SINCE = "OBD-20261104-1939Z"; // earlier builds polled the second sensor too slowly to compare
 function crossChecks(rows, limit = 300) {
   const rs = rows.slice(-limit);
@@ -1278,7 +1282,7 @@ async function pollOnce(m) {
     return;
   }
   let v = decodeMetric(m, raw);
-  if (m.kids) m.kids.forEach(k => { const cs = mstate[k.id]; if (v === null) { record(k.id, null, Date.now()); return; } const b = dataBytes(raw, m.pre), kv = b && b.length ? k.f(b) : null; record(k.id, kv !== null && Number.isFinite(kv) ? kv : null, Date.now()); if (cs) cs.status = "ok"; });
+  if (m.kids) m.kids.forEach(k => { const cs = mstate[k.id]; if (v === null) { record(k.id, null, Date.now()); return; } let kv; if (k.raw) kv = k.raw(raw); else { const b = dataBytes(raw, m.pre); kv = b && b.length ? k.f(b) : null; } record(k.id, kv !== null && kv !== undefined && Number.isFinite(kv) ? kv : null, Date.now()); if (cs) cs.status = "ok"; });
   if (m.id === "mon" && v !== null) { const b = dataBytes(raw, "4101"); if (b && b.length >= 4) monitor = parseMonitor(b); }
   if (v !== null && !plausible(m, v)) v = null;
   if (v === null) {
@@ -1329,7 +1333,7 @@ async function identifyVehicle() {
     else if (!guess && vin && vin.length === 17 && !session.link.sim) toast("VIN not matched to a profile. Check that " + vehicles[vid].name + " is correct.");
     if (vin && vin.length === 17 && !session.link.sim) { vehicles[vid].vin = vin; saveVehicles(); }
     try { truck.cal = asciiFrom(await askH("7DF", "0904"), "4904"); const cb = dataBytes(await askH("7DF", "0906"), "4906"); truck.cvn = cb ? cb.map(x => x.toString(16).padStart(2, "0")).join("") : null;
-      const fp = JSON.stringify([truck.cal, truck.cvn]), was = store.get(vkey("fp"), null); if ((truck.cal || truck.cvn) && !session.link.sim) { if (was && was !== fp) truck.fpChanged = true; store.set(vkey("fp"), fp); } } catch (e) {}
+      const was = store.get(vkey("fp2"), null), now = { cal: truck.cal || null, cvn: truck.cvn || null }; if ((now.cal || now.cvn) && !session.link.sim) { if (was && ["cal", "cvn"].some(k => was[k] && now[k] && was[k] !== now[k])) truck.fpChanged = true; store.set(vkey("fp2"), { cal: now.cal || (was && was.cal) || null, cvn: now.cvn || (was && was.cvn) || null }); } } catch (e) {}
     if (!vehicles[vid].engine && ENGINE_CHOICES[vid]) {
       const b = dataBytes(await askH("7DF", "0113"), "4113");
       if (b && b.length) { const v6 = (b[0] & 0xF0) !== 0, pick = ENGINE_CHOICES[vid].find(e => (e.cyl === 6) === v6); vehicles[vid].engine = { label: pick.label, L: pick.L, cyl: pick.cyl, detected: true }; vehicles[vid].layout = pick.layout; vehicles[vid].bank1Cyls = pick.bank1Cyls; vehicles[vid].bankNote = pick.bankNote; saveVehicles(); toast("Engine looks like " + pick.label + " from its O2 sensor layout. Check this in Vehicle settings."); }
