@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261105-0644Z">
-<meta name="build-timestamp-utc" content="2026-11-05T06:44:18Z">
+<meta name="build-id" content="OBD-20261105-0652Z">
+<meta name="build-timestamp-utc" content="2026-11-05T06:52:41Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261105-0644Z", BUILD_UTC = "2026-11-05T06:44:18Z";
+const BUILD_ID = "OBD-20261105-0652Z", BUILD_UTC = "2026-11-05T06:52:41Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -781,7 +781,8 @@ function analyzeDrive(input) {
   F.sort((a, b) => order[a.level] - order[b.level]);
   F.forEach(f => { f.sure = howSure(f); if (!f.chain) { f.bestGuess = f.causes[0] || null; f.alsoPossible = f.causes.slice(1); }
     if (f.chain) { const best = f.chain.hypotheses.find(h => h.name === f.bestGuess); const lines = best ? best.hits : 0; { f.sure = lines >= 3 ? { label: "Medium-high", why: lines + " independent observations fit the best explanation, and " + f.ruledOut.length + " alternative" + (f.ruledOut.length === 1 ? " was" : "s were") + " weakened." } : lines === 2 ? { label: "Medium", why: "Two observations fit; others weren't testable on this drive." } : { label: "Low", why: "Only one observation supports it, so alternatives remain open." }; } } });
-  return { marks, crossChecks: xc, systems: systemCard(F, tested), tuneup: tuneUpView(F, trip), trip, findings: F, notAssessed: na, tested, channels: channels.size, sampleRate: rate, validation: val, stats, verdict: { level, headline, detail } };
+  const theses = prosecute(rows, meta, vehicle, stats, history);
+  return { theses, marks, crossChecks: xc, systems: systemCard(F, tested), tuneup: tuneUpView(F, trip), trip, findings: F, notAssessed: na, tested, channels: channels.size, sampleRate: rate, validation: val, stats, verdict: { level, headline, detail } };
 }
 function reportMarkdown(rep, vehicle, meta) {
   const t = rep.trip, L = [];
@@ -791,6 +792,7 @@ function reportMarkdown(rep, vehicle, meta) {
   if (rep.tuneup) { L.push("## Tune-up view", ""); rep.tuneup.forEach(t => L.push("- **" + t.name + ":** " + t.label + ". " + t.detail)); L.push(""); }
   ["attention", "watch", "good", "info"].forEach(l => { const a = rep.findings.filter(f => f.level === l); if (!a.length) return; L.push("## " + { attention: "Needs attention", watch: "Watch", good: "Looks good", info: "Context" }[l], ""); a.forEach(f => { L.push("### " + f.system + ": " + f.title, f.evidence, "", f.meaning); if (f.chain) { L.push("", "Observed:"); f.chain.observed.forEach(o => L.push("- " + o)); f.chain.hypotheses.forEach(h => { L.push("", h.name + " — " + h.verdict + ":"); h.predictions.forEach(p => L.push("- " + (p.seen === null ? "untested" : p.seen ? "seen" : "not seen") + ": " + p.claim + (p.detail ? " (" + p.detail + ")" : ""))); }); if (f.chain.absent.length) L.push("", "Expected but absent: " + f.chain.absent.join(" ")); L.push("", "What would settle it: " + f.chain.wouldSettle); }
       if (f.bestGuess) L.push("", "Best guess: " + f.bestGuess + (f.alsoPossible.length ? ". Also possible: " + f.alsoPossible.join("; ") : "") + ". How sure: " + f.sure.label + "."); if (f.next.length) L.push("", "Next: " + f.next.join(" ")); L.push("", "_Basis: " + f.basis + "_", ""); }); });
+  if (rep.theses) { L.push("## Assume guilty: theses to clear", ""); rep.theses.forEach(t => { L.push("### " + t.name + " — " + t.status, t.why, ""); t.evidence.forEach(e => L.push("- " + ({ for: "FOR", against: "AGAINST", open: "OPEN" })[e.verdict] + ": " + e.text)); L.push("", "To settle: " + t.settle, ""); }); }
   if (rep.marks && rep.marks.length) { L.push("## Your marks", ""); rep.marks.forEach(m => L.push("- " + new Date(m.t).toISOString() + ": " + m.label + " (" + rnd(m.mph) + " mph, " + rnd(m.rpm) + " rpm, " + rnd(m.volt, 1) + " V)")); L.push(""); }
   if (rep.notAssessed.length) { L.push("## Not tested on this drive", ""); rep.notAssessed.forEach(n => L.push("- " + n.system + ": " + n.why)); L.push(""); }
   L.push("Automated review based on recorded data. It suggests where to look and doesn't replace a hands-on diagnosis.");
@@ -1086,6 +1088,67 @@ function buildChains(F, S, rows, vehicle, meta, val, trip) {
   if (meta.monitor && meta.monitor.mil && codes !== null && !codes.length) notes.push("The check-engine light is reported on, but no codes were returned. The code read may have failed, or the code lives in a module this request doesn't reach.");
   const oilLow = by(/Low oil pressure reading/); if (oilLow && codes !== null && !hasCode(/^P052/)) notes.push("A low oil pressure reading with no oil-pressure code makes the unverified request itself the first suspect, though the computer's own oil-pressure test may not have run.");
   return notes;
+}
+/* ---------- Prosecution: assume guilty until the evidence clears it ---------- */
+function corrOf(rows, a, b, pred) { const x = [], y = []; rows.forEach(r => { if (typeof r[a] === "number" && typeof r[b] === "number" && (!pred || pred(r))) { x.push(r[a]); y.push(r[b]); } }); return { r: pearson(x, y), n: x.length }; }
+function prosecute(rows, meta, vehicle, S, history) {
+  const bank1 = vehicle.bank1Cyls || null, cyl = (vehicle.engine && vehicle.engine.cyl) || null;
+  const codes = meta.codes ? [...(meta.codes.stored || []), ...(meta.codes.pending || []), ...(meta.codes.permanent || [])] : null, has = rx => codes !== null && codes.some(c => rx.test(c));
+  const m06 = (meta.mode06 || []).filter(x => x.pass !== null), m06by = rx => m06.filter(x => rx.test(x.name));
+  const misHist = {}; for (let c = 1; c <= (cyl || 8); c++) { const a = nums(rows, "mis" + c); if (a.length) misHist[c] = Math.max(...a); }
+  const misBank = b => bank1 ? Object.entries(misHist).filter(([c]) => (bank1.includes(Number(c)) ? 1 : 2) === b).reduce((s, [, v]) => s + v, 0) : null;
+  const t1 = S.trim1cruise ?? S.trim1idle, t2 = S.trim2cruise ?? S.trim2idle, split = t1 !== undefined && t2 !== undefined ? t1 - t2 : null;
+  const rear = (() => { const a = nums(rows, "o2v2", r => r._cruise), b = nums(rows, "o2v6", r => r._cruise); return a.length >= 30 && b.length >= 30 ? pctl(a, .5) - pctl(b, .5) : null; })();
+  const purge = corrOf(rows, "purge", "stft1", r => r._warm && r._closed && r.purge > 0), purge2 = corrOf(rows, "purge", "stft2", r => r._warm && r._closed && r.purge > 0);
+  const vvt = m06by(/VVT/), vvtMax = vvt.length ? Math.max(...vvt.map(x => x.max > x.min ? (x.val - x.min) / (x.max - x.min) : 0)) : null;
+  const pastTrims = history.filter(d => d.review && d.review.stats).map(d => d.review.stats).filter(s => s.trim1cruise !== undefined && s.trim2cruise !== undefined);
+  const persistent = pastTrims.length >= 2 ? pastTrims.every(s => s.trim1cruise - s.trim2cruise <= -4) : null;
+  const E = (text, verdict) => ({ text, verdict }); // verdict: "against" clears, "for" convicts, "open" untested
+  const theses = [];
+  theses.push({ name: "A bank 1 injector leaks slightly", why: "Would make bank 1 run rich, and a dribbling injector can misfire its own cylinder at idle or after a hot soak.", evidence: [
+    E("Bank 1 trim " + (t1 !== undefined ? say(t1, 1, "%") : "n/a") + " vs bank 2 " + (t2 !== undefined ? say(t2, 1, "%") : "n/a"), split !== null ? (split <= -4 ? "for" : "against") : "open"),
+    E("Same bank split on earlier drives: " + (persistent === null ? "fewer than two comparable drives" : persistent ? "yes" : "no"), persistent === null ? "open" : persistent ? "for" : "against"),
+    E("Misfire history on bank 1 cylinders: " + (bank1 ? misBank(1) + " vs bank 2: " + misBank(2) : "bank map unknown"), bank1 ? (misBank(1) > misBank(2) ? "for" : "against") : "open"),
+    E("Rich correction strongest at idle (a leak matters most at low flow): idle " + (S.trim1idle !== undefined ? say(S.trim1idle, 1, "%") : "n/a") + " vs cruise " + (S.trim1cruise !== undefined ? say(S.trim1cruise, 1, "%") : "n/a"), S.trim1idle !== undefined && S.trim1cruise !== undefined ? (S.trim1idle < S.trim1cruise - 2 ? "for" : "against") : "open")
+  ], settle: "An injector balance test at a shop, or swapping two bank 1 injectors and watching whether the trim offset follows." });
+  theses.push({ name: "The bank 1 front oxygen sensor is skewed", why: "A sensor that reads rich makes the computer pull fuel, running that bank lean and prone to light-load misfires.", evidence: [
+    E("Bank 1 trim more negative than bank 2", split !== null ? (split <= -4 ? "for" : "against") : "open"),
+    E("Rear sensors disagree at cruise (a lean bank 1 shows at its rear sensor): B1S2 minus B2S2 = " + (rear !== null ? say(rear, 2, " V") : "n/a"), rear !== null ? (rear <= -.15 ? "for" : "against") : "open"),
+    E("Bank 1 front sensor self-tests: " + (m06by(/B1S1/).length ? (m06by(/B1S1/).every(x => x.pass) ? "all pass" : "a failure") : "not read"), m06by(/B1S1/).length ? (m06by(/B1S1/).every(x => x.pass) ? "against" : "for") : "open")
+  ], settle: "Swap the two front oxygen sensors between banks; if the trim offset follows the sensor, that's the cause." });
+  theses.push({ name: "The coolant sensor reads low and the computer over-fuels", why: "A low temperature reading makes base fueling richer; the oxygen sensors then pull it back, which shows as negative long-term trims on both banks.", evidence: [
+    E("Both banks carry negative long-term trim", t1 !== undefined && t2 !== undefined ? (t1 < -3 && t2 < -2 ? "for" : "against") : "open"),
+    E("Coolant plateau below thermostat spec: " + (S.ectPlateau !== undefined ? say(S.ectPlateau, 0, "°F") : "n/a"), S.ectPlateau !== undefined ? (S.ectPlateau < 185 ? "for" : "against") : "open"),
+    E("Oil runs well above coolant: " + (S.oilPeak !== undefined && S.ectPlateau !== undefined ? say(S.oilPeak - S.ectPlateau, 0, "°F") : "n/a"), S.oilPeak !== undefined && S.ectPlateau !== undefined ? (S.oilPeak - S.ectPlateau >= 15 ? "for" : "against") : "open"),
+    E("Infrared thermometer at the thermostat housing vs the app's reading", "open")
+  ], settle: "The infrared check. If the metal reads near 195°F while the app reads 174°F, the sensor is the suspect." });
+  theses.push({ name: "Purge vapor is enriching the mixture", why: "A purge valve that flows too much dumps fuel vapor into the intake, pushing trims negative while it's open.", evidence: [
+    E("Short-term trim moves negative as purge duty rises (bank 1 correlation " + (purge.r !== null ? rnd(purge.r, 2) : "n/a") + ", bank 2 " + (purge2.r !== null ? rnd(purge2.r, 2) : "n/a") + ")", purge.r !== null && purge.n >= 60 ? (purge.r <= -.3 ? "for" : "against") : "open"),
+    E("Both banks affected equally", split !== null ? (Math.abs(split) < 4 ? "for" : "against") : "open"),
+    E("EVAP self-tests: " + (m06by(/EVAP/).length ? (m06by(/EVAP/).every(x => x.pass) ? "all pass" : "a failure") : "not read"), m06by(/EVAP/).length ? (m06by(/EVAP/).every(x => x.pass) ? "against" : "for") : "open")
+  ], settle: "Pinch the purge line at warm idle: if both banks' trims move toward zero within a minute, the purge valve is flowing." });
+  theses.push({ name: "Ignition is weak on one cylinder (plug or coil)", why: "Shows as misfire counts that rise under load, on one cylinder, with that bank's trim near normal.", evidence: [
+    E("Misfire counts under load this drive: " + ((S.misByCond && S.misByCond.load) || 0), S.misByCond ? (S.misByCond.load > 0 ? "for" : "against") : "open"),
+    E("One cylinder dominates the history: " + (Object.keys(misHist).length ? Object.entries(misHist).map(([c, v]) => c + ":" + v).join(" ") : "none"), Object.keys(misHist).length ? ((() => { const v = Object.values(misHist), mx = Math.max(...v), tot = v.reduce((s, x) => s + x, 0); return tot && mx >= tot * .7 ? "for" : "against"; })()) : "open"),
+    E("A misfire code with a cylinder number is stored", codes === null ? "open" : has(/^P030[1-9]/) ? "for" : "against")
+  ], settle: "Swap the suspect coil to another cylinder and see whether the count moves. Plug age against the owner's manual interval decides the rest." });
+  theses.push({ name: "Cam timing or chain wear", why: "Known for earlier GM 3.6L versions. Shows as cam-crank correlation codes and VVT self-tests drifting toward their limits.", evidence: [
+    E("Cam-crank correlation codes (P0008, P0016–P0019)", codes === null ? "open" : has(/^P0008|^P001[6-9]/) ? "for" : "against"),
+    E("VVT self-tests: " + (vvt.length ? vvt.length + " results, worst at " + rnd((vvtMax || 0) * 100) + "% of the way to the limit" : "not read"), vvt.length ? (vvtMax >= .6 ? "for" : "against") : "open"),
+    E("Misfires at cold start, when chain slack is largest: " + ((S.misByCond && S.misByCond.idle) || 0) + " at idle this drive", S.misByCond ? (S.misByCond.idle > 2 ? "for" : "against") : "open")
+  ], settle: "A shop scan of cam-to-crank actual positions at idle, which this app can't read without a verified request." });
+  theses.push({ name: "Fuel octane or carbon is causing knock", why: "Knock retard that persists under moderate load points to fuel grade, carbon buildup, or heat.", evidence: [
+    E("Knock retard present under load: 98th percentile " + (S.knock !== undefined ? say(S.knock, 1, "°") : "n/a") + " (unverified GM request)", S.knock !== undefined ? (S.knock >= 2 ? "for" : "against") : "open"),
+    E("Ethanol content normal for E10: " + (nums(rows, "ethanol").length ? say(pctl(nums(rows, "ethanol"), .5), 1, "%") : "n/a"), nums(rows, "ethanol").length ? (pctl(nums(rows, "ethanol"), .5) <= 15 ? "against" : "for") : "open"),
+    E("Intake air unusually hot: " + (nums(rows, "iat").length ? say(pctl(nums(rows, "iat"), .95), 0, "°F") : "n/a"), nums(rows, "iat").length ? (pctl(nums(rows, "iat"), .95) >= 120 ? "for" : "against") : "open")
+  ], settle: "One tank of 91 octane: if retard drops on the same route, it's fuel; if not, carbon or a sensor." });
+  theses.push({ name: "Torque converter shudder is being read as misfire", why: "A shuddering converter at light throttle can disturb crankshaft speed enough to look like a misfire to the computer.", evidence: [
+    E("Misfire counts land at cruise rather than idle or load: cruise " + ((S.misByCond && S.misByCond.cruise) || 0) + ", idle " + ((S.misByCond && S.misByCond.idle) || 0) + ", load " + ((S.misByCond && S.misByCond.load) || 0), S.misByCond ? (S.misByCond.cruise > S.misByCond.idle + S.misByCond.load ? "for" : "against") : "open"),
+    E("Converter slip at cruise: median " + (S.slipCruise !== undefined ? say(S.slipCruise, 0, " rpm") : "n/a") + " (unverified GM request)", S.slipCruise !== undefined ? (S.slipCruise > 60 ? "for" : "against") : "open"),
+    E("Rpm flares at steady speed: " + (S.flares !== undefined ? S.flares : "n/a"), S.flares !== undefined ? (S.flares >= 2 ? "for" : "against") : "open")
+  ], settle: "Mark the moment you feel any shudder; if misfire counts rise within seconds of the marks and the gear is locked, this thesis gains." });
+  theses.forEach(t => { const f = t.evidence.filter(e => e.verdict === "for").length, a = t.evidence.filter(e => e.verdict === "against").length, o = t.evidence.filter(e => e.verdict === "open").length; t.status = f >= 2 && f > a ? "Supported" : a >= 2 && f === 0 ? "Weakened" : a > f ? "Leaning cleared" : "Not cleared"; t.counts = { f, a, o }; });
+  return theses;
 }
 
 function matchVehicle(vin, vehicles) {
@@ -1938,6 +2001,8 @@ function renderReport(host, rep, veh, meta, rs) {
   ["attention","watch","good","info"].forEach(l => { const a = rep.findings.filter(f => f.level === l); if (!a.length) return; host.append(el("h3", { textContent: names[l] + " (" + a.length + ")" }));
     a.forEach(f => { const d = el("details", { class: "f", open: l === "attention" || l === "watch" }, el("summary", {}, el("span", { class: "lv " + l, textContent: ico[l] }), f.system + ": " + f.title), el("p", { textContent: f.evidence }), el("p", { textContent: f.meaning }), f.chain ? el("details", { class: "f", open: l === "attention" }, el("summary", { textContent: "Reasoning chain" }), el("p", { textContent: "Observed:" }), el("ul", {}, f.chain.observed.map(o => el("li", { textContent: o }))), ...f.chain.hypotheses.map(h => el("div", {}, el("p", {}, el("b", { textContent: h.name + ": " }), h.verdict + (h.testable ? " (" + h.hits + " of " + h.testable + " predictions seen)" : "")), el("ul", {}, h.predictions.map(p => el("li", { textContent: (p.seen === null ? "Untested: " : p.seen ? "Seen: " : "Not seen: ") + p.claim + (p.detail ? " — " + p.detail : "") }))))), f.chain.absent.length ? el("p", { textContent: "Expected but absent: " + f.chain.absent.join(" ") }) : null, el("p", { textContent: "What would settle it: " + f.chain.wouldSettle })) : null,
     f.bestGuess ? el("p", {}, el("b", { textContent: "Best guess: " }), f.bestGuess + ".") : null, f.ruledOut && f.ruledOut.length ? el("p", { textContent: "Weakened by the data: " + f.ruledOut.join("; ") + "." }) : null, f.alsoPossible && f.alsoPossible.length ? el("p", { textContent: "Also possible: " + f.alsoPossible.join("; ") + "." }) : null, f.sure ? el("p", { textContent: "How sure: " + f.sure.label + ". " + f.sure.why }) : null, f.next.length ? el("p", { textContent: "Next: " + f.next.join(" ") }) : null, el("small", { textContent: "Basis: " + f.basis })); host.append(d); }); });
+  if (rep.theses) { host.append(el("h3", { textContent: "Assume guilty: theses to clear" }), el("p", { textContent: "Each thesis starts as not cleared. Evidence lines are marked FOR, AGAINST, or OPEN from this drive and your history. Supported needs two independent lines for it; Weakened needs two against and none for." }));
+    rep.theses.forEach(t => host.append(el("details", { class: "f", open: t.status === "Supported" }, el("summary", {}, el("span", { class: "lv " + (t.status === "Supported" ? "attention" : t.status === "Weakened" ? "good" : "watch"), textContent: t.status === "Supported" ? "✕" : t.status === "Weakened" ? "✓" : "?" }), t.name + ": " + t.status), el("p", { textContent: t.why }), el("ul", {}, t.evidence.map(e => el("li", { textContent: ({ for: "FOR: ", against: "AGAINST: ", open: "OPEN: " })[e.verdict] + e.text }))), el("p", { textContent: "To settle: " + t.settle })))); }
   if (rep.marks && rep.marks.length) { host.append(el("h3", { textContent: "Your marks" })); rep.marks.forEach(m => host.append(el("div", { class: "row" }, el("span", { textContent: new Date(m.t).toLocaleTimeString() + " · " + m.label }), el("span", { textContent: [m.mph != null ? Math.round(m.mph) + " mph" : "", m.rpm != null ? Math.round(m.rpm) + " rpm" : "", m.volt != null ? m.volt.toFixed(1) + " V" : ""].filter(Boolean).join(", ") })))); }
   if (rep.notAssessed.length) { host.append(el("h3", { textContent: "Not tested on this drive" })); rep.notAssessed.forEach(n => host.append(el("div", { class: "row" }, el("span", { textContent: n.system }), el("span", { textContent: n.why })))); }
   host.append(el("h3", { textContent: "Learn the terms" })); GLOSSARY.forEach(g => host.append(el("details", { class: "f" }, el("summary", { textContent: g[0] }), el("p", { textContent: g[1] }))));

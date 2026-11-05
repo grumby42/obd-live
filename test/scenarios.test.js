@@ -179,5 +179,8 @@ assert(api.reportMarkdown(rep(drive("mixed", { leak: true })), sierra, {}).inclu
 r = rep(drive("interstate", { mis4: 3 })); assert(has(r, /Trace misfire count on cylinder 4/, "info"), "trace " + bad(r));
 { const rows = []; const t0 = 1.7e12; for (let i = 0; i < 20; i++) rows.push({ t: t0 + i * 1000, rpm: 0, volt: 12.5, mph: 0, ect: 200 }); for (let i = 20; i < 200; i++) rows.push({ t: t0 + i * 1000, rpm: 700, mph: 0, ect: 200, tps: 12, volt: i < 60 ? 14.5 : 12.6 }); for (let i = 200; i < 260; i++) rows.push({ t: t0 + i * 1000, rpm: 750, mph: 0, ect: 200, tps: 12, volt: 14.1 });
   const st = api.healthSteps(rows, { codes: true }), on = id => st.find(s => s.id === id).done; assert(on("koeo") && on("start") && on("idle") && on("loads") && on("codes"), JSON.stringify(st.map(s => [s.id, s.done]))); assert(!on("c60") && !on("decel")); assert.strictEqual(api.healthCoverage(st).done, 6); assert(on("warm")); assert.strictEqual(st.length, 12); assert(st.every(s => s.why)); }
+// Prosecution
+r = rep(drive("mixed", { bank: true, mis4: 40 })); assert(r.theses && r.theses.length === 8); { const inj = r.theses.find(x => /injector leaks/.test(x.name)); assert(inj.evidence.length === 4 && inj.status); const ign = r.theses.find(x => /Ignition/.test(x.name)); assert(ign.evidence.some(e => e.verdict === "for")); }
+r = rep(drive("interstate")); assert(r.theses.every(x => ["Supported","Weakened","Leaning cleared","Not cleared"].includes(x.status))); assert(api.reportMarkdown(r, sierra, {}).includes("Assume guilty"));
 assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 console.log("all tests passed");
