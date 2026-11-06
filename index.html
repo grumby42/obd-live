@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261106-1559Z">
-<meta name="build-timestamp-utc" content="2026-11-06T15:59:08Z">
+<meta name="build-id" content="OBD-20261106-1608Z">
+<meta name="build-timestamp-utc" content="2026-11-06T16:08:33Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261106-1559Z", BUILD_UTC = "2026-11-06T15:59:08Z";
+const BUILD_ID = "OBD-20261106-1608Z", BUILD_UTC = "2026-11-06T16:08:33Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1212,6 +1212,32 @@ function valvetrainTrend(drives) {
   const out = []; drives.filter(d => d.mode06 && d.mode06.length).forEach(d => { const v = d.mode06.filter(x => /VVT/.test(x.name) && x.pass !== null); if (!v.length) return; out.push({ t: d.start, worst: Math.max(...v.map(x => x.max > x.min ? (x.val - x.min) / (x.max - x.min) : 0)), n: v.length, fails: v.filter(x => x.pass === false).length }); });
   return out.sort((a, b) => a.t - b.t);
 }
+/* ---------- Repairs: before/after, reset baselines, and what to watch ---------- */
+const REPAIR_TAGS = {
+  lifters: { label: "Lifters / AFM", watch: ["Misfire counts in the start-up window on the serviced cylinders", "Misfires during light-load cruise where cylinder deactivation is active", "Knock retard and oil pressure trend"], stats: ["startMis", "misTotal", "knock", "oilIdle"] },
+  transmission: { label: "Transmission", watch: ["Converter slip at cruise, with its baseline reset", "Fluid temperature at cruise and peak", "Shift behavior: flares and confirmed shift counts during the relearn period", "Any transmission code"], stats: ["slipCruise", "slipCruiseP95", "transCruise", "transPeak", "flares", "hunting", "ratioClean"] },
+  radiator: { label: "Radiator", watch: ["Coolant plateau at cruise and peak in traffic", "Warm-up time", "Transmission fluid temperature if the cooler is in the radiator"], stats: ["ectPlateau", "ectPeak", "warm160", "transCruise"] },
+  waterpump: { label: "Water pump", watch: ["Coolant peak at idle and low speed", "Coolant steadiness across speeds"], stats: ["ectPeak", "ectPlateau", "ectIdle"] },
+  thermostat: { label: "Thermostat", watch: ["Coolant plateau versus specification", "Warm-up time"], stats: ["ectPlateau", "warm160"] },
+  plugs: { label: "Spark plugs / wires / coils", watch: ["Misfire counts under load", "Knock retard", "Start-up window counts"], stats: ["misTotal", "knock", "startMis"] },
+  injectors: { label: "Injectors", watch: ["Fuel trims per bank", "Misfire counts by cylinder"], stats: ["trim1cruise", "trim2cruise", "trim1idle", "trim2idle", "misTotal"] },
+  o2: { label: "Oxygen sensor", watch: ["Fuel trims per bank", "Rear sensor agreement at cruise"], stats: ["trim1cruise", "trim2cruise", "rearO2"] },
+  battery: { label: "Battery / alternator", watch: ["Start-up voltage and cranking minimum", "Running voltage by mode"], stats: ["voltMed", "voltEvents"] },
+  ectsensor: { label: "Coolant sensor", watch: ["Coolant plateau", "Both banks' fuel trims"], stats: ["ectPlateau", "trim1cruise", "trim2cruise"] },
+  other: { label: "Other", watch: ["Everything on the total health card"], stats: [] }
+};
+function repairSplit(drives, repairs) {
+  const rs = (repairs || []).filter(r => Number.isFinite(r.t)).sort((a, b) => a.t - b.t), last = rs.length ? rs[rs.length - 1] : null;
+  return { last, before: last ? drives.filter(d => d.start < last.t) : [], after: last ? drives.filter(d => d.start >= last.t) : drives };
+}
+function repairCompare(drives, repair) {
+  const before = drives.filter(d => d.start < repair.t && d.review && d.review.stats), after = drives.filter(d => d.start >= repair.t && d.review && d.review.stats);
+  const keys = new Set(); (repair.tags || []).forEach(t => (REPAIR_TAGS[t] || REPAIR_TAGS.other).stats.forEach(k => keys.add(k)));
+  CASE_METRICS.forEach(([k]) => keys.add(k));
+  const rows = [...keys].map(k => { const b = before.map(d => d.review.stats[k]).filter(v => typeof v === "number"), a = after.map(d => d.review.stats[k]).filter(v => typeof v === "number"); const meta = CASE_METRICS.find(x => x[0] === k); return { k, label: meta ? meta[1] : k, unit: meta ? meta[2] : "", d: meta ? meta[3] : 1, nb: b.length, na: a.length, before: b.length ? pctl(b, .5) : null, after: a.length ? pctl(a, .5) : null, tagged: (repair.tags || []).some(t => (REPAIR_TAGS[t] || REPAIR_TAGS.other).stats.includes(k)) }; }).filter(r => r.nb || r.na);
+  return { before: before.length, after: after.length, rows: rows.sort((x, y) => (y.tagged ? 1 : 0) - (x.tagged ? 1 : 0)) };
+}
+function watchList(repairs) { const out = []; (repairs || []).forEach(r => (r.tags || []).forEach(t => { const d = REPAIR_TAGS[t] || REPAIR_TAGS.other; d.watch.forEach(w => { if (!out.some(o => o.text === w)) out.push({ text: w, repair: d.label }); }); })); return out; }
 
 function matchVehicle(vin, vehicles) {
   if (!vin || vin.length !== 17) return null;
