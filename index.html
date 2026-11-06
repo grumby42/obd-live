@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261106-2016Z">
-<meta name="build-timestamp-utc" content="2026-11-06T20:16:02Z">
+<meta name="build-id" content="OBD-20261106-2044Z">
+<meta name="build-timestamp-utc" content="2026-11-06T20:44:58Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261106-2016Z", BUILD_UTC = "2026-11-06T20:16:02Z";
+const BUILD_ID = "OBD-20261106-2044Z", BUILD_UTC = "2026-11-06T20:44:58Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1592,7 +1592,7 @@ function nextMetric(now) {
     const focused = now < focusUntil && FOCUS_IDS.has(m.id);
     const iv = s.status === "failed" ? 60000 : focused ? 1000 : INTERVAL[m.tier][vis.has(m.id) ? 0 : 1];
     // Fast metrics are never "caught up", so without a cap they starve the slow ones to a sample every few minutes.
-    const score = Math.min((now - s.last) / iv, m.tier === "slow" || focused ? 99 : 2);
+    const raw = (now - s.last) / iv, score = (m.tier === "slow" || focused ? Math.min(raw, 99) : Math.min(raw, 2)) + raw * 1e-6; // ties broken by who has waited longest
     if (score >= bestScore && score > (best ? bestScore : 0)) { best = m; bestScore = score; }
   }
   return best;
