@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261106-2044Z">
-<meta name="build-timestamp-utc" content="2026-11-06T20:44:58Z">
+<meta name="build-id" content="OBD-20261106-2046Z">
+<meta name="build-timestamp-utc" content="2026-11-06T20:46:06Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261106-2044Z", BUILD_UTC = "2026-11-06T20:44:58Z";
+const BUILD_ID = "OBD-20261106-2046Z", BUILD_UTC = "2026-11-06T20:46:06Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -459,15 +459,17 @@ function inferGears(rows, vehicle) {
   for (let K = Math.log(12); K <= Math.log(150); K += .005) { const c = cost(K); if (c < bestC) { bestC = c; bestK = K; } }
   for (let K = Math.log(12); K <= Math.log(150); K += .005) { if (Math.abs(K - bestK) > .12) second = Math.min(second, cost(K)); }
   const assign = (ratio, tol) => { let g = null, d = 9; lk.forEach((v, i) => { const e = Math.abs(Math.log(ratio) - v - bestK); if (e < d) { d = e; g = i + 1; } }); return d <= tol ? g : null; };
-  const counts = {}; fit.forEach(v => { const g = assign(Math.exp(v), .05); if (g) counts[g] = (counts[g] || 0) + 1; });
-  const populated = Object.keys(counts).filter(g => counts[g] >= 15).length, residual = bestC / fit.length;
+  const counts = {}; let inl = 0, inlErr = 0; fit.forEach(v => { const g = assign(Math.exp(v), .06); if (g) { counts[g] = (counts[g] || 0) + 1; inl++; let d = 9; for (const x of lk) d = Math.min(d, Math.abs(v - x - bestK)); inlErr += d; } });
+  // Samples with the converter unlocked (low gears in town) sit between bands; they are excluded from the residual but must not dominate.
+  const populated = Object.keys(counts).filter(g => counts[g] >= 15).length, residual = inl ? inlErr / inl : 1, inlierShare = inl / fit.length;
   if (populated < 2) return { ok: false, why: "only one gear band seen, so the ratio set can't be anchored" };
-  if (residual > .035) return { ok: false, why: "steady rpm-per-mph bands don't fit the published ratio set (" + (residual * 100).toFixed(1) + "% residual)" };
-  if (second < bestC * 1.25) return { ok: false, why: "two different anchors fit the bands almost equally well" };
+  if (inlierShare < .5 || inl < 30) return { ok: false, why: "only " + Math.round(inlierShare * 100) + "% of steady samples sit on a ratio band" };
+  if (residual > .03) return { ok: false, why: "steady rpm-per-mph bands don't fit the published ratio set (" + (residual * 100).toFixed(1) + "% residual)" };
+  if (second < bestC * 1.2) return { ok: false, why: "two different anchors fit the bands almost equally well" };
   rows.forEach(r => { if (r._ratio && r.mph > 8) { const g = assign(r._ratio, r.mph > 15 ? .05 : .10); if (g) { r.gear = g; r._gearInferred = true; } } });
   // Carry a gear across short unassigned stretches (shift transients) so consecutive-row shift detection can see the change.
   let last = null, lastT = 0; rows.forEach(r => { if (Number.isInteger(r.gear)) { last = r.gear; lastT = r.t; } else if (last !== null && r.mph > 8 && r.t - lastT <= 4000) { r.gear = last; r._gearInferred = true; } else if (r.mph <= 2) last = null; });
-  return { ok: true, K: Math.exp(bestK), counts, residual, samples: fit.length };
+  return { ok: true, K: Math.exp(bestK), counts, residual, inlierShare, samples: fit.length };
 }
 // A community GM request only counts as trustworthy if the truck's own physics agree with it.
 function validateSignals(rows, meta, vehicle = {}) {
