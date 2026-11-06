@@ -3,7 +3,7 @@ const fs = require("fs"), assert = require("assert");
 const html = fs.readFileSync("index.html", "utf8");
 const src = html.split("/*PURE-START*/")[1].split("/*PURE-END*/")[0];
 new Function(html.split("<script>")[1].split("</script>")[0]); // whole page script must parse
-const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom};")();
+const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,rpmEvents,eventWindows,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom};")();
 const m = id => api.METRICS.find(x => x.id === id);
 
 // ---- Safety allowlist
@@ -208,5 +208,13 @@ r = rep(drive("interstate")); assert(r.theses.every(x => ["Supported","Weakened"
 // Slip verified by the stalled-at-stop physics check; gear tolerant of one noisy inversion
 { const d = drive("city"); d.forEach(x => { if (x.mph < 1) { x.gear = 1; x.slip = x.rpm - 20; } }); r = rep(d); assert.strictEqual(r.validation.slip, "ok", "stalled stop should verify slip"); }
 assert.strictEqual(api.matchVehicle("1G4000000600000000".slice(0, 17), { lucerne: { match: { wmi: ["1G4"], year: "6" } } }), "lucerne");
+// Rpm events
+{ const d = drive("interstate"); // inject: a downshift (ratio up, slip low), an unlock (slip high, ratio same), an unexplained rise (ratio up, slip low, speed flat, no throttle)
+  const put = (k, f) => { for (let i = 0; i < 6; i++) f(d[k + i], i); };
+  put(600, (x, i) => { x.rpm = x.mph * 26 * (1 + .4 * Math.min(1, i / 2)); x.gear = i >= 2 ? 5 : 6; x.slip = 10; });
+  put(900, (x, i) => { x.rpm = x.mph * 26 + (i >= 2 ? 700 : 0); x.slip = i >= 2 ? 650 : 10; x.gear = 6; x.tps = 19 + (i >= 2 ? 8 : 0); });
+  put(1200, (x, i) => { x.rpm = x.mph * 26 * (1 + .35 * Math.min(1, i / 2)); x.slip = 10; x.gear = 6; x.tps = 19; });
+  const ev = api.rpmEvents(api.annotate(d)); const kinds = ev.map(e => e.kind); assert(kinds.includes("downshift") && kinds.includes("converter unlock") && kinds.includes("unexplained rise"), JSON.stringify(ev));
+  r = rep(d); assert(has(r, /high-rpm moment/), "events finding " + bad(r)); assert(api.eventWindows(d, ev, [], 10).length >= 21); }
 assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 console.log("all tests passed");

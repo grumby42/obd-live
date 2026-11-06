@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261106-1823Z">
-<meta name="build-timestamp-utc" content="2026-11-06T18:23:22Z">
+<meta name="build-id" content="OBD-20261106-1837Z">
+<meta name="build-timestamp-utc" content="2026-11-06T18:37:05Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261106-1823Z", BUILD_UTC = "2026-11-06T18:23:22Z";
+const BUILD_ID = "OBD-20261106-1837Z", BUILD_UTC = "2026-11-06T18:37:05Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -717,6 +717,9 @@ function analyzeDrive(input) {
     if (clusters.clean < .75) add("Transmission", "watch", "Engine speed wasn't locked closely to road speed at steady cruise", rnd(clusters.clean * 100) + "% of " + clusters.n + " cruise samples sat on a stable ratio.", "This standard-data check doesn't rely on GM requests. Scatter can mean torque converter slip, but hills and frequent shifts also cause it.", ["Normal controlled converter slip or grade changes", "Slipping clutch or converter"], ["Repeat on a flat road at a constant speed and open the rpm-vs-speed scatter."]);
     else add("Transmission", "good", "Engine speed tracked road speed steadily at cruise", rnd(clusters.clean * 100) + "% of " + clusters.n + " cruise samples sat on a stable ratio.", "The ratio was stable, not necessarily locked: steady converter slip would look the same. It doesn't suggest erratic slipping at these speeds, and it can't test full-throttle slip or an intermittent fault.");
   } else need("Gear ratio stability", "Needs at least a minute of steady driving above 40 mph.");
+  const ev = rpmEvents(rows, vehicle), evCount = k => ev.filter(e => e.kind === k).length; stats.rpmEvents = { total: ev.length, downshift: evCount("downshift"), unlock: evCount("converter unlock"), accel: evCount("acceleration"), unexplained: evCount("unexplained rise"), other: evCount("other") };
+  if (ev.length) { const u = evCount("unexplained rise"), summary = ["downshift","converter unlock","acceleration","unexplained rise","other"].map(k => evCount(k) + " " + k).filter(x => !/^0 /.test(x)).join(", ");
+    add("Transmission", u >= 3 ? "watch" : "info", ev.length + " high-rpm moment" + (ev.length > 1 ? "s" : "") + " while moving: " + summary, ev.slice(0, 6).map(e => e.rpm + " rpm at " + e.mph + " mph" + (Number.isInteger(e.gear) ? " in " + e.gear + (e.gear === 1 ? "st" : e.gear === 2 ? "nd" : e.gear === 3 ? "rd" : "th") : "") + ": " + e.kind + ". " + e.why).join(" "), "Each moment the engine passed 2,400 rpm on the move is sorted by what the speed, the gear ratio, and the converter did at the same time. A downshift or an unlock is the transmission choosing; a rise with everything else flat is the one to worry about.", u ? ["Clutch or converter slip", "A shift that didn't complete"] : [], u ? ["Mark the moment next time it happens; the app then pairs the feel with the data."] : [], "Measured from this drive"); }
   const fl = flares(rows, val.gear === "ok"); stats.flares = fl.length;
   if (fl.length >= 2 || (fl.length === 1 && trip.miles < 5)) add("Transmission", "watch", fl.length + " possible rpm flare" + (fl.length > 1 ? "s" : ""), fl.slice(0, 5).map(x => "+" + rnd(x.rise) + " rpm at " + rnd(x.mph) + " mph").join(", ") + ".", "Engine speed rose and fell back without a matching speed or throttle change, which is what slipping can look like. Normal converter unlock and relock or a quick downshift can look the same in one-second data.", ["Clutch or converter slip", "Downshift on a grade", "Clearing wheel spin"], ["Note where these occurred and whether you felt them.", "Share the CSV with your transmission shop."]);
   if (usable("slip") && val.slip !== "suspect") {
@@ -801,8 +804,8 @@ function analyzeDrive(input) {
   F.forEach(f => { f.sure = howSure(f); if (!f.chain) { f.bestGuess = f.causes[0] || null; f.alsoPossible = f.causes.slice(1); }
     if (!f.chain && f.system === "Combustion" && f.bestGuess) f.sure = { label: "Low", why: "The counts are the vehicle's own; the cause is a list of common explanations, not a tested one." };
     if (f.chain) { const best = f.chain.hypotheses.find(h => h.name === f.bestGuess); const lines = best ? best.hits : 0; { f.sure = lines >= 3 ? { label: "Medium-high", why: lines + " independent observations fit the best explanation, and " + f.ruledOut.length + " alternative" + (f.ruledOut.length === 1 ? " was" : "s were") + " weakened." } : lines === 2 ? { label: "Medium", why: "Two observations fit; others weren't testable on this drive." } : { label: "Low", why: "Only one observation supports it, so alternatives remain open." }; } } });
-  const theses = prosecute(rows, meta, vehicle, stats, history);
-  return { theses, marks, crossChecks: xc, systems: systemCard(F, tested), tuneup: tuneUpView(F, trip), trip, findings: F, notAssessed: na, tested, channels: channels.size, sampleRate: rate, validation: val, stats, verdict: { level, headline, detail } };
+  const theses = prosecute(rows, meta, vehicle, stats, history), events = ev;
+  return { events, theses, marks, crossChecks: xc, systems: systemCard(F, tested), tuneup: tuneUpView(F, trip), trip, findings: F, notAssessed: na, tested, channels: channels.size, sampleRate: rate, validation: val, stats, verdict: { level, headline, detail } };
 }
 function reportMarkdown(rep, vehicle, meta) {
   const t = rep.trip, L = [];
@@ -1250,6 +1253,32 @@ function repairCompare(drives, repair) {
   return { before: before.length, after: after.length, rows: rows.sort((x, y) => (y.tagged ? 1 : 0) - (x.tagged ? 1 : 0)) };
 }
 function watchList(repairs) { const out = []; (repairs || []).forEach(r => (r.tags || []).forEach(t => { const d = REPAIR_TAGS[t] || REPAIR_TAGS.other; d.watch.forEach(w => { if (!out.some(o => o.text === w)) out.push({ text: w, repair: d.label }); }); })); return out; }
+/* ---------- Engine-speed events: why did the rpm go up? ---------- */
+function rpmEvents(rows, vehicle) {
+  const out = [], n = rows.length;
+  for (let i = 4; i < n; i++) {
+    const r = rows[i]; if (!(r.rpm >= 2400) || !(r.mph >= 5)) continue;
+    let peak = true; for (let j = Math.max(0, i - 3); j <= Math.min(n - 1, i + 3); j++) if (rows[j].rpm > r.rpm) { peak = false; break; }
+    if (!peak || (out.length && r.t - out[out.length - 1].t < 8000)) continue;
+    const a = rows.slice(Math.max(0, i - 6), i).filter(x => x.t >= r.t - 6000 && typeof x.rpm === "number" && typeof x.mph === "number"); if (a.length < 3) continue;
+    const before = a[0], dMph = r.mph - before.mph, dTps = typeof r.tps === "number" && typeof before.tps === "number" ? r.tps - before.tps : null;
+    const ratioB = before.mph > 5 ? before.rpm / before.mph : null, ratioN = r.rpm / r.mph, ratioRise = ratioB ? ratioN / ratioB - 1 : null;
+    const slip = typeof r.slip === "number" ? r.slip : null, gearB = before.gear, gearN = r.gear, gearDown = Number.isInteger(gearB) && Number.isInteger(gearN) ? gearN < gearB : null;
+    let kind, why;
+    if (dMph >= 4 && (ratioRise === null || ratioRise < .12)) { kind = "acceleration"; why = "Speed rose " + rnd(dMph) + " mph with it, in the same gear."; }
+    else if ((gearDown === true || (gearDown === null && ratioRise !== null && ratioRise >= .15)) && (slip === null || Math.abs(slip) < 120)) { kind = "downshift"; why = "Rpm per mph rose " + (ratioRise !== null ? rnd(ratioRise * 100) + "%" : "") + (gearDown ? " and the gear reading dropped" : "") + (slip !== null ? ", converter locked (slip " + rnd(slip) + " rpm)" : "") + (dTps !== null && dTps >= 5 ? ", on throttle" : "") + "."; }
+    else if (slip !== null && Math.abs(slip) >= 120 && (gearDown === false || gearDown === null) && Math.abs(dMph) < 4) { kind = "converter unlock"; why = "Slip " + rnd(slip) + " rpm with the gear unchanged and speed flat" + (dTps !== null && dTps >= 3 ? ", on throttle" : "") + "."; }
+    else if (ratioRise !== null && ratioRise >= .08 && Math.abs(dMph) < 3 && (dTps === null || dTps < 3)) { kind = "unexplained rise"; why = "Rpm per mph rose " + rnd(ratioRise * 100) + "% with speed and throttle flat" + (slip !== null ? ", slip " + rnd(slip) + " rpm" : ", slip not available") + "."; }
+    else { kind = "other"; why = "Speed " + (dMph >= 0 ? "+" : "") + rnd(dMph) + " mph, rpm per mph " + (ratioRise !== null ? (ratioRise >= 0 ? "+" : "") + rnd(ratioRise * 100) + "%" : "n/a") + (slip !== null ? ", slip " + rnd(slip) : "") + "."; }
+    out.push({ t: r.t, rpm: Math.round(r.rpm), mph: Math.round(r.mph), gear: gearN, slip, kind, why });
+  }
+  return out;
+}
+function eventWindows(rows, events, marks, secs = 10) {
+  const centers = [...events.map(e => e.t), ...marks.map(m => m.t)].sort((a, b) => a - b), keep = new Set();
+  centers.slice(0, 60).forEach(t => rows.forEach((r, i) => { if (Math.abs(r.t - t) <= secs * 1000) keep.add(i); }));
+  return [...keep].sort((a, b) => a - b).map(i => rows[i]);
+}
 
 function matchVehicle(vin, vehicles) {
   if (!vin || vin.length !== 17) return null;
@@ -2120,7 +2149,7 @@ function renderReport(host, rep, veh, meta, rs) {
   host.append(el("div", { class: "bar", style: "margin-top:12px" },
     el("button", { textContent: "Download report", onclick: () => download(vid + "-review-" + tag + ".md", reportMarkdown(rep, veh, meta), "text/markdown") }),
     el("button", { textContent: "Download data CSV", onclick: () => download(vid + "-drive-" + tag + ".csv", rowsCsv(rs, false), "text/csv") }),
-    el("button", { textContent: "Package for Claude review", onclick: () => { const thin = rs.filter((r, i) => i % 5 === 0); download(vid + "-claude-packet-" + tag + ".json", JSON.stringify({ build: BUILD_ID, generated: new Date().toISOString(), vehicle: { name: veh.name, engine: veh.engine, afm: veh.afm, trans: veh.trans, notes: veh.notes, repairs: veh.repairs || [] }, meta: { start: meta.start, end: meta.end, codes: meta.codes, monitor: meta.monitor, mode06: meta.mode06, supported: meta.supported }, report: rep, rowsEvery5s: stripRows(thin) }), "application/json"); } })));
+    el("button", { textContent: "Package for Claude review", onclick: () => { const thin = rs.filter((r, i) => i % 5 === 0); download(vid + "-claude-packet-" + tag + ".json", JSON.stringify({ build: BUILD_ID, generated: new Date().toISOString(), vehicle: { name: veh.name, engine: veh.engine, afm: veh.afm, trans: veh.trans, notes: veh.notes, repairs: veh.repairs || [] }, meta: { start: meta.start, end: meta.end, codes: meta.codes, monitor: meta.monitor, mode06: meta.mode06, supported: meta.supported }, report: rep, rowsEvery5s: stripRows(thin), eventWindows1Hz: stripRows(eventWindows(rs, rep.events || [], rep.marks || [])) }), "application/json"); } })));
 }
 async function openReview(pickId) {
   await loadDrives();
