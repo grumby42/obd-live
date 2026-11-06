@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261106-1608Z">
-<meta name="build-timestamp-utc" content="2026-11-06T16:08:33Z">
+<meta name="build-id" content="OBD-20261106-1609Z">
+<meta name="build-timestamp-utc" content="2026-11-06T16:09:53Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261106-1608Z", BUILD_UTC = "2026-11-06T16:08:33Z";
+const BUILD_ID = "OBD-20261106-1609Z", BUILD_UTC = "2026-11-06T16:09:53Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -726,7 +726,8 @@ function analyzeDrive(input) {
   const richOrMis = F.some(f => (f.system === "Combustion" && f.level !== "good" && f.level !== "info") || /Rich correction/.test(f.title));
   if (catPk > 0 && catPk >= 1650) add("Emissions", richOrMis ? "watch" : "info", "Calculated catalyst temperature ran high" + (richOrMis ? "" : " under load"), rnd(catPk) + "°F peak. This value is usually modeled, not measured.", "Misfires and rich running can overheat a catalyst.", ["Heavy load", "Misfire or rich running"], ["Check this against the misfire and fuel findings."]);
   const rearCruise = nums(rows, "o2v2", r => r._cruise && r._warm);
-  if (rearCruise.length >= 60) { tested.push("Rear O2 sensor at cruise"); const m = pctl(rearCruise, .5); stats.rearO2 = m; if (m < .15 || m > .95) add("Emissions", "watch", "Rear O2 sensor sat at an extreme at cruise", "Median " + rnd(m, 2) + " V.", "After warm-up, a rear sensor usually settles in a steadier mid-to-high range. An extreme reading can indicate a sensor issue or a mixture bias.", ["O2 sensor or wiring", "Exhaust leak", "Mixture bias"], ["Compare with fuel trims and the catalyst self-test."]); }
+  { const r2 = nums(rows, "o2v2", r => r._cruise), r6 = nums(rows, "o2v6", r => r._cruise); if (r2.length >= 30 && r6.length >= 30) stats.rearO2 = pctl(r2, .5) - pctl(r6, .5); }
+  if (rearCruise.length >= 60) { tested.push("Rear O2 sensor at cruise"); const m = pctl(rearCruise, .5); if (m < .15 || m > .95) add("Emissions", "watch", "Rear O2 sensor sat at an extreme at cruise", "Median " + rnd(m, 2) + " V.", "After warm-up, a rear sensor usually settles in a steadier mid-to-high range. An extreme reading can indicate a sensor issue or a mixture bias.", ["O2 sensor or wiring", "Exhaust leak", "Mixture bias"], ["Compare with fuel trims and the catalyst self-test."]); }
   if (coldStart) { const firstClosed = rows.find(r => r.fuelstat === 2); if (firstClosed) { const m = (firstClosed.t - rows[0].t) / 60000; stats.closedLoopMin = m; if (m > 6 && trip.runningSeconds > 420) add("Fuel control", "watch", "Slow to enter closed-loop fuel control", rnd(m, 1) + " minutes from start.", "Cold weather lengthens this, but a long delay can point to sensor heating or coolant temperature.", ["Very cold weather", "O2 sensor heater or thermostat"], ["Compare with warmer days."], LIT.guide); } }
 
   // Efficiency
@@ -738,14 +739,15 @@ function analyzeDrive(input) {
   const harsh = rows.filter(r => r._acc >= 6).length; if (harsh >= 3) add("Driving context", "info", harsh + " hard acceleration samples", "Above about 6 mph per second.", "Keep this in mind when reading heat, load, and slip results.", [], [], "Measured from this drive");
 
   // Baseline: only compare like with like, on this vehicle.
-  const peers = history.filter(d => d.review && d.review.stats && d.review.stats.kind === trip.kind && d.id !== meta.id);
+  const split = repairSplit(history, vehicle.repairs), peers = split.after.filter(d => d.review && d.review.stats && d.review.stats.kind === trip.kind && d.id !== meta.id);
+  if (split.last && split.before.length && meta.start && meta.start >= split.last.t) add("Compared with your baseline", "info", "Baseline restarted at the " + new Date(split.last.t).toLocaleDateString() + " repair", (split.last.note || (split.last.tags || []).map(t => (REPAIR_TAGS[t] || REPAIR_TAGS.other).label).join(", ")) + ". " + split.before.length + " earlier drive" + (split.before.length === 1 ? "" : "s") + " are kept for before-and-after comparison in the Case file but not used as the baseline.", "A repair changes what normal looks like, so earlier drives would judge the new parts against the old ones.", [], [], "Repair log");
   if (peers.length >= 3) {
     tested.push("Comparison with " + peers.length + " similar drives");
     const compare = [["transPeak", "Peak transmission temperature", "°F", 15, 0], ["transCruise", "Cruise transmission temperature", "°F", 12, 0], ["ectPlateau", "Cruise coolant temperature", "°F", 10, 0], ["trim1idle", "Bank 1 idle fuel trim", "%", 6, 1], ["trim1cruise", "Bank 1 cruise fuel trim", "%", 6, 1], ["trim2idle", "Bank 2 idle fuel trim", "%", 6, 1], ["trim2cruise", "Bank 2 cruise fuel trim", "%", 6, 1], ["slipCruise", "Cruise converter slip", " rpm", 30, 0], ["voltMed", "Running voltage", " V", .5, 1], ["idleMafPerL", "Idle airflow per liter", "", .25, 2], ["mpg", "Estimated MPG", " mpg", 3, 1], ["ratioClean", "Cruise ratio stability", "", .12, 2]];
     let changed = 0;
     compare.forEach(([k, label, unit, thr, d]) => { const past = peers.map(p => p.review.stats[k]).filter(v => typeof v === "number"), now = stats[k]; if (past.length < 3 || typeof now !== "number") return; const med = pctl(past, .5); if (Math.abs(now - med) >= thr) { changed++; add("Compared with your baseline", "watch", label + " changed from your normal", rnd(now, d) + unit + " now vs a median of " + rnd(med, d) + unit + " across " + past.length + " " + trip.kind.toLowerCase() + " drives.", "A change on the same kind of drive is often more meaningful than any fixed limit, but weather and load can explain it.", [], ["See whether the change repeats on the next similar drive."], "Your own history"); } });
     if (!changed) add("Compared with your baseline", "good", "In line with your similar drives", "No tracked measure moved past its change threshold across " + peers.length + " " + trip.kind.toLowerCase() + " drives.", "Stability across drives is a useful sign, within what these measures can see.", [], [], "Your own history");
-  } else need("Baseline comparison", "Needs at least 3 saved " + trip.kind.toLowerCase() + " drives on this vehicle (" + peers.length + " so far).");
+  } else need("Baseline comparison", "Needs at least 3 saved " + trip.kind.toLowerCase() + " drives on this vehicle" + (split.last ? " since the last repair" : "") + " (" + peers.length + " so far).");
 
   // Cross-system reasoning
   const lev = (s, l) => F.some(f => f.system === s && f.level === l), anyBad = s => lev(s, "attention") || lev(s, "watch"), misBad = F.some(f => f.system === "Combustion" && /Misfire/.test(f.title) && (f.level === "attention" || f.level === "watch")), lowV = F.some(f => /Charging voltage (stayed|dipped) low/.test(f.title));
@@ -1197,8 +1199,8 @@ function caseFile(drives, vehicle, currentCodes) {
     ], settle: "Mark any felt shudder; see whether counters move with it." }
   ];
   pooled.forEach(t => { const f = t.evidence.filter(e => e.verdict === "for").length, a = t.evidence.filter(e => e.verdict === "against").length; t.status = f >= 2 && f > a ? "Supported" : a >= 2 && f === 0 ? "Weakened" : a > f ? "Leaning cleared" : "Not cleared"; });
-  const vvt = valvetrainTrend(ds);
-  return { vvt, drives: ds.length, span: ds.length ? [ds[0].start, ds[ds.length - 1].start] : null, trends: trends.filter(t => t.n), mis, codesSeen, pooled };
+  const vvt = valvetrainTrend(ds), repairs = (vehicle.repairs || []).filter(r => Number.isFinite(r.t)).sort((a, b) => a.t - b.t).map(r => ({ ...r, compare: repairCompare(ds, r) })), watch = watchList(vehicle.repairs);
+  return { repairs, watch, vvt, drives: ds.length, span: ds.length ? [ds[0].start, ds[ds.length - 1].start] : null, trends: trends.filter(t => t.n), mis, codesSeen, pooled };
 }
 /* ---------- Core engine: cold-start window and valvetrain self-test trend ---------- */
 function coldStartWindow(rows) {
@@ -1792,7 +1794,7 @@ R.truck = (w, box) => {
 function sessionReport() { return analyzeDrive({ rows, meta: sessionMeta(), vehicle: vehicles[vid], history: drives }); }
 R.healthcheck = (w, box) => {
   const list = el("div", { class: "scroll" }), btn = el("button", { class: "primary", textContent: "See total health", onclick: () => openReview() });
-  box.append(header(w, "Guided health check", ""), el("div", { class: "body" }, el("div", { class: "sub", style: "white-space:normal", textContent: "Steps tick themselves off from the data. Do them in any order, and only when safe. Don't touch the phone while moving." }), list, btn));
+  box.append(header(w, "Guided health check", ""), el("div", { class: "body" }, el("div", { class: "sub", style: "white-space:normal", textContent: "Steps tick themselves off from the data. Do them in any order, and only when safe. Don't touch the phone while moving." + ((vehicles[vid].repairs || []).length ? " Recent repair logged: connect before each cold start so the start-up window is captured." : "") }), list, btn));
   let n = 0, sig = "";
   return () => { if (n++ % 8) return; const st = healthSteps(rows, { codes: !!(codes && codes.readAt && codes.readAt > driveStart + 60000) }), s = JSON.stringify(st.map(x => x.done)); if (s === sig) return; sig = s; list.textContent = "";
     list.append(el("div", { class: "sub", textContent: healthCoverage(st).label }));
@@ -2100,7 +2102,7 @@ function renderReport(host, rep, veh, meta, rs) {
   host.append(el("div", { class: "bar", style: "margin-top:12px" },
     el("button", { textContent: "Download report", onclick: () => download(vid + "-review-" + tag + ".md", reportMarkdown(rep, veh, meta), "text/markdown") }),
     el("button", { textContent: "Download data CSV", onclick: () => download(vid + "-drive-" + tag + ".csv", rowsCsv(rs, false), "text/csv") }),
-    el("button", { textContent: "Package for Claude review", onclick: () => { const thin = rs.filter((r, i) => i % 5 === 0); download(vid + "-claude-packet-" + tag + ".json", JSON.stringify({ build: BUILD_ID, generated: new Date().toISOString(), vehicle: { name: veh.name, engine: veh.engine, afm: veh.afm, trans: veh.trans, notes: veh.notes }, meta: { start: meta.start, end: meta.end, codes: meta.codes, monitor: meta.monitor, mode06: meta.mode06, supported: meta.supported }, report: rep, rowsEvery5s: stripRows(thin) }), "application/json"); } })));
+    el("button", { textContent: "Package for Claude review", onclick: () => { const thin = rs.filter((r, i) => i % 5 === 0); download(vid + "-claude-packet-" + tag + ".json", JSON.stringify({ build: BUILD_ID, generated: new Date().toISOString(), vehicle: { name: veh.name, engine: veh.engine, afm: veh.afm, trans: veh.trans, notes: veh.notes, repairs: veh.repairs || [] }, meta: { start: meta.start, end: meta.end, codes: meta.codes, monitor: meta.monitor, mode06: meta.mode06, supported: meta.supported }, report: rep, rowsEvery5s: stripRows(thin) }), "application/json"); } })));
 }
 async function openReview(pickId) {
   await loadDrives();
@@ -2314,6 +2316,9 @@ async function openCaseFile() {
   if (!cf.drives) { host.append(el("p", { textContent: "No reviewed drives saved yet. Drives are reviewed automatically when you disconnect." })); }
   else {
     host.append(el("p", { textContent: cf.drives + " reviewed drives from " + new Date(cf.span[0]).toLocaleDateString() + " to " + new Date(cf.span[1]).toLocaleDateString() + ". Codes seen: " + (cf.codesSeen.length ? cf.codesSeen.map(c => c.code).join(", ") : "none while connected") + "." }));
+    if (cf.watch && cf.watch.length) { host.append(el("h3", { textContent: "Post-repair watch list" })); cf.watch.forEach(w => host.append(el("div", { class: "row" }, el("span", { textContent: w.text }), el("span", { textContent: w.repair })))); }
+    (cf.repairs || []).forEach(rp => { host.append(el("h3", { textContent: "Before and after: " + new Date(rp.t).toLocaleDateString() + (rp.note ? " · " + rp.note : "") }), el("p", { class: "sub", style: "white-space:normal", textContent: rp.compare.before + " drives before, " + rp.compare.after + " after. Medians; rows tied to this repair come first. Drives of different kinds mix here, so compare like with like when you can." }));
+      host.append(el("table", {}, el("thead", {}, el("tr", {}, ["Measure", "Before", "After", "Change"].map((h, i) => el("th", { class: i ? "n" : "", textContent: h })))), el("tbody", {}, rp.compare.rows.map(x => el("tr", {}, el("td", { textContent: (x.tagged ? "★ " : "") + x.label + (x.unit ? " (" + x.unit + ")" : "") }), el("td", { class: "n", textContent: x.before === null ? "–" : x.before.toFixed(x.d) + " (" + x.nb + ")" }), el("td", { class: "n", textContent: x.after === null ? "–" : x.after.toFixed(x.d) + " (" + x.na + ")" }), el("td", { class: "n", textContent: x.before !== null && x.after !== null ? ((x.after - x.before) > 0 ? "+" : "") + (x.after - x.before).toFixed(x.d) : "" })))))); });
     host.append(el("h3", { textContent: "Pooled theses" }));
     cf.pooled.forEach(t => host.append(el("details", { class: "f", open: t.status === "Supported" }, el("summary", {}, el("span", { class: "lv " + (t.status === "Supported" ? "attention" : t.status === "Weakened" ? "good" : "watch"), textContent: t.status === "Supported" ? "✕" : t.status === "Weakened" ? "✓" : "?" }), t.name + ": " + t.status), el("ul", {}, t.evidence.map(e => el("li", { textContent: ({ for: "FOR: ", against: "AGAINST: ", open: "OPEN: " })[e.verdict] + e.text }))), el("p", { textContent: "To settle: " + t.settle }))));
     host.append(el("h3", { textContent: "Misfire history by cylinder (counter C, per drive)" }));
@@ -2338,6 +2343,11 @@ function openVehicle() {
   const tr = el("input", { value: v.trans || "", placeholder: "MYC, M5U, 6T45, 6T70…", "aria-label": "Transmission", onchange: () => { v.trans = tr.value.slice(0, 40); saveVehicles(); } });
   const notes = el("textarea", { value: v.notes || "", rows: 4, style: "width:100%;background:var(--bg);color:var(--text);border:1px solid var(--axis);border-radius:8px;padding:8px;font:inherit", "aria-label": "Known issues", onchange: () => { v.notes = notes.value.slice(0, 1000); saveVehicles(); } });
   kids.push(el("label", { textContent: "Transmission (code from glove box label or manual)" }), tr, el("label", { textContent: "Known issues and recent repairs (stays on this device; included only if you package a drive)" }), notes);
+  kids.push(el("h3", { textContent: "Repair log" }), el("p", { textContent: "Each repair stamps drives as before or after, restarts the baseline, and adds items to the watch list." }));
+  (v.repairs || []).sort((a, b) => a.t - b.t).forEach((rp, i) => kids.push(el("div", { class: "row" }, el("span", { textContent: new Date(rp.t).toLocaleDateString() + ": " + (rp.note || "") + " [" + (rp.tags || []).map(t => (REPAIR_TAGS[t] || REPAIR_TAGS.other).label).join(", ") + "]" }), el("button", { textContent: "Remove", onclick: () => { v.repairs.splice(i, 1); saveVehicles(); openVehicle(); } }))));
+  const rdate = el("input", { type: "date", value: new Date().toISOString().slice(0, 10), "aria-label": "Repair date" }), rnote = el("input", { placeholder: "What was done (optional)", maxLength: 120, "aria-label": "Repair note" });
+  const tagBoxes = Object.entries(REPAIR_TAGS).map(([k, d]) => { const cb = el("input", { type: "checkbox", value: k }); return el("label", { class: "check" }, cb, d.label); });
+  kids.push(el("label", { textContent: "Date" }), rdate, el("label", { textContent: "Note" }), rnote, el("div", { class: "fields" }, ...tagBoxes), el("div", { class: "bar" }, el("button", { class: "primary", textContent: "Add repair", onclick: () => { const tags = tagBoxes.map(l => l.querySelector("input")).filter(c => c.checked).map(c => c.value); const t = Date.parse(rdate.value + "T12:00:00"); if (!Number.isFinite(t)) return toast("Pick a date."); if (!tags.length) return toast("Pick at least one tag."); (v.repairs = v.repairs || []).push({ t, note: rnote.value.trim(), tags }); saveVehicles(); toast("Repair logged. Baseline restarts from that date."); openVehicle(); } })));
   kids.push(el("p", { textContent: v.vin ? "A VIN is remembered on this device to choose this profile automatically. It isn't included in exports." : "No VIN remembered yet. It's read on connect and stays on this device." }));
   if (v.vin) kids.push(el("button", { textContent: "Forget VIN", onclick: () => { delete v.vin; saveVehicles(); openVehicle(); } }));
   kids.push(el("h3", { textContent: "Add another vehicle" }));

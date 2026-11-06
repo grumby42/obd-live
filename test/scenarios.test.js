@@ -3,7 +3,7 @@ const fs = require("fs"), assert = require("assert");
 const html = fs.readFileSync("index.html", "utf8");
 const src = html.split("/*PURE-START*/")[1].split("/*PURE-END*/")[0];
 new Function(html.split("<script>")[1].split("</script>")[0]); // whole page script must parse
-const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom};")();
+const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom};")();
 const m = id => api.METRICS.find(x => x.id === id);
 
 // ---- Safety allowlist
@@ -193,5 +193,13 @@ r = rep(drive("interstate")); assert(r.theses.every(x => ["Supported","Weakened"
   r = api.analyzeDrive({ rows, vehicle: sierra, meta: {} }); assert(has(r, /Misfire counts in the first 90 seconds after a cold start/, "watch")); assert(has(r, /Unsteady idle right after a cold start/, "watch"));
   const clean = rows.map(x => ({ ...x, mis4: 0, rpm: x.rpm ? 900 : 0 })); r = api.analyzeDrive({ rows: clean, vehicle: sierra, meta: {} }); assert(has(r, /Clean start-up window/, "good"));
   const vt = api.valvetrainTrend([{ start: 1, mode06: [{ name: "VVT bank 1", val: 30, min: 0, max: 100, pass: true }] }, { start: 2, mode06: [{ name: "VVT bank 1", val: 70, min: 0, max: 100, pass: true }] }]); assert(vt.length === 2 && vt[1].worst === .7); }
+// Repairs
+{ const veh = { ...sierra, repairs: [{ t: 1.7e12 + 5 * 864e5, note: "Lifters, trans, radiator", tags: ["lifters", "transmission", "radiator"] }] };
+  const past = [0, 1, 2, 3].map(i => ({ id: "h" + i, start: 1.7e12 + i * 864e5, review: { stats: { kind: "Interstate / highway", transPeak: 230, slipCruise: 90, ectPlateau: 185 } } }));
+  r = api.analyzeDrive({ rows: drive("interstate", { transMax: 180 }), vehicle: veh, meta: { start: 1.7e12 + 6 * 864e5, codes: { stored: [], pending: [], permanent: [] } }, history: past });
+  assert(has(r, /Baseline restarted/), "baseline reset"); assert(!has(r, /changed from your normal/), "old drives must not judge new parts"); assert(r.notAssessed.some(n => /since the last repair/.test(n.why)));
+  const sp = api.repairSplit(past, veh.repairs); assert(sp.before.length === 4 && sp.after.length === 0);
+  const cmp = api.repairCompare(past.concat([{ id: "n1", start: 1.7e12 + 6 * 864e5, review: { stats: { kind: "Interstate / highway", transPeak: 180, slipCruise: 20 } } }]), veh.repairs[0]); const tp = cmp.rows.find(x => x.k === "transPeak"); assert(tp.before === 230 && tp.after === 180 && tp.tagged, JSON.stringify(tp)); assert(cmp.rows[0].tagged);
+  const wl = api.watchList(veh.repairs); assert(wl.some(w => /start-up window/.test(w.text)) && wl.some(w => /Converter slip/.test(w.text)) && wl.length >= 8); }
 assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 console.log("all tests passed");
