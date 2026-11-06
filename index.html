@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261106-1956Z">
-<meta name="build-timestamp-utc" content="2026-11-06T19:56:16Z">
+<meta name="build-id" content="OBD-20261106-2016Z">
+<meta name="build-timestamp-utc" content="2026-11-06T20:16:02Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261106-1956Z", BUILD_UTC = "2026-11-06T19:56:16Z";
+const BUILD_ID = "OBD-20261106-2016Z", BUILD_UTC = "2026-11-06T20:16:02Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -391,7 +391,7 @@ function simulatorReply(cmd, t) {
   }
   const map = { "010C":"410C"+hex(rpm*4,4),"010D":"410D"+hex(mph/0.621371),"0104":"4104"+hex(90+w*60),"0111":"4111"+hex(40+w*25),"0149":"4149"+hex(40+w*25),
    "010B":"410B"+hex(45+w*25),"0110":"4110"+hex((20+w*12)*100,4),"010E":"410E"+hex(128+40),"0162":"4162"+hex(155+w*40),"0105":"4105"+hex(130),"010F":"410F"+hex(60),
-   "0146":"4146"+hex(50),"013C":"413C"+hex(11000,4),"013D":"413D"+hex(10800,4),"0103":"410302"+"00","010A":"410A"+hex(20),"012E":"412E"+hex(10),"0133":"413399","0115":"4115"+hex(150)+"FF","0114":"4114"+hex(90+w*60)+hex(128),"0118":"4118"+hex(90-w*60)+hex(128),"0119":"4119"+hex(150)+"FF","0145":"4145"+hex(40+w*25),"014C":"414C"+hex(40+w*25),"0143":"4143"+hex(80+w*40,4),"0161":"4161"+hex(155+w*40),"0113":"411333",
+   "0146":"4146"+hex(50),"0132":"4132BF98","013C":"413C"+hex(11000,4),"013D":"413D"+hex(10800,4),"0103":"410302"+"00","010A":"410A"+hex(20),"012E":"412E"+hex(10),"0133":"413399","0115":"4115"+hex(150)+"FF","0114":"4114"+hex(90+w*60)+hex(128),"0118":"4118"+hex(90-w*60)+hex(128),"0119":"4119"+hex(150)+"FF","0145":"4145"+hex(40+w*25),"014C":"414C"+hex(40+w*25),"0143":"4143"+hex(80+w*40,4),"0161":"4161"+hex(155+w*40),"0113":"411333",
    "0600":"460000000001","0620":"462080000001","0640":"464000000001","0660":"466000000001","0680":"468000000001","06A0":"46A07FC00000","0621":"46218024006400000258","0151":"415101","0142":"4142"+hex(13900,4),"0106":"4106"+hex(128+w*4),"0107":"4107"+hex(131),
    "0108":"4108"+hex(127-w*4),"0109":"4109"+hex(130),"0144":"4144"+hex(32768,4),"015E":"415E"+hex(70+w*40,4),"012F":"412F"+hex(150),
    "011F":"411F"+hex(t/1000%3600,4),"0131":"4131"+hex(800,4),"0130":"413012","0121":"41210000","0163":"4163"+hex(520,4),"0101":"4101"+"82"+"07"+"E5"+"20",
@@ -442,6 +442,7 @@ function annotate(rowsIn) {
 }
 // Without a gear request, an automatic still tells on itself: rpm per mph falls into bands, one per gear, and the spacing of those bands
 // must match the published ratio set. Fit one unknown (final drive × tire constant), then assign each steady sample to its nearest band.
+function pgMaxRun(rows, t) { const a = nums(rows.filter(r => Math.abs(r.t - t) <= 30000), "purge"); return a.length ? Math.max(...a) : null; }
 function inferGears(rows, vehicle) {
   const known = Array.isArray(vehicle.ratios) ? vehicle.ratios.filter(x => x > 0) : null;
   if (!known || known.length < 2) return { ok: false, why: "no ratio set for this vehicle" };
@@ -764,11 +765,11 @@ function analyzeDrive(input) {
       else if (med <= -1000) add("Emissions controls", "watch", "Tank held " + rnd(mmHg, 1) + " mmHg of vacuum across the drive", "Median " + rnd(med) + " Pa, range " + rnd(range) + " Pa.", "Below GM's P0446 set point of about -7.5 mmHg. The reading does change, so the sensor is responding.", ["Restricted vent path", "Vent valve stuck closed"], ["Cap test: see the EVAP step in Health check."], LIT.gmP0446);
       else add("Emissions controls", "good", "EVAP tank pressure stayed in a normal band", "Median " + rnd(med) + " Pa, range " + rnd(range) + " Pa.", "The tank breathed normally and never approached the vent-restriction set point.", [], [], LIT.gmP0446);
       // Cap test: a mark containing 'cap' with the engine off, compare 20 s before vs 20 s after.
-      const capMark = rows.find(r => r.mark && /cap/i.test(String(r.mark)) && !(r.rpm > 400));
+      const capMark = rows.find(r => r.mark && /cap/i.test(String(r.mark)) && !/tight/i.test(String(r.mark)));
       if (capMark) { const before = nums(rows.filter(r => r.t < capMark.t && r.t >= capMark.t - 25000), "evapp"), after = nums(rows.filter(r => r.t > capMark.t + 3000 && r.t <= capMark.t + 30000), "evapp");
         if (before.length >= 2 && after.length >= 2) { const d = pctl(after, .5) - pctl(before, .5); tested.push("Gas-cap test"); stats.capTestDelta = d;
-          if (Math.abs(d) >= 500) add("Emissions controls", "attention", "Gas-cap test: tank pressure moved " + (d > 0 ? "+" : "") + rnd(d) + " Pa when the cap was opened", "From " + rnd(pctl(before, .5)) + " Pa to " + rnd(pctl(after, .5)) + " Pa within 30 s of your 'cap' mark, engine off.", "The sensor responds, so the vacuum it reported was real: the tank was sealed against a vent that couldn't relieve it.", ["Canister vent valve stuck closed or blocked", "Pinched or clogged vent hose", "Canister or vent filter plugged"], ["Have the vent valve commanded open on a scan tool while watching tank pressure, or inspect the vent hose and filter under the car."], LIT.gmP0446);
-          else add("Emissions controls", "attention", "Gas-cap test: tank pressure did not move when the cap was opened", "Changed " + rnd(d) + " Pa within 30 s of your 'cap' mark, engine off. Opening the cap must bring a sealed tank to atmosphere.", "A reading that ignores an open cap is not measuring the tank. The sensor, its wiring, or its reference is the suspect, not the vent.", ["Tank-pressure sensor failed", "Sensor wiring or connector", "Sensor reference line disconnected"], ["Check the tank-pressure sensor circuit (GM P0450–P0453 charts) before replacing vent parts."], LIT.gmP0446); } }
+          if (Math.abs(d) >= 500) add("Emissions controls", "attention", "Gas-cap test: tank pressure moved " + (d > 0 ? "+" : "") + rnd(d) + " Pa when the cap was opened", "From " + rnd(pctl(before, .5)) + " Pa to " + rnd(pctl(after, .5)) + " Pa within 30 s of your 'cap' mark" + (capMark.rpm > 400 ? " (engine running, purge " + (pgMaxRun(rows, capMark.t) === 0 ? "at 0%, so the purge valve wasn't a factor)" : "active, which can also move the reading)") : " (engine off)") + ".", "The sensor responds, so the vacuum it reported was real: the tank was sealed against a vent that couldn't relieve it.", ["Canister vent valve stuck closed or blocked", "Pinched or clogged vent hose", "Canister or vent filter plugged"], ["Have the vent valve commanded open on a scan tool while watching tank pressure, or inspect the vent hose and filter under the car."], LIT.gmP0446);
+          else add("Emissions controls", "attention", "Gas-cap test: tank pressure did not move when the cap was opened", "Changed " + rnd(d) + " Pa within 30 s of your 'cap' mark" + (capMark.rpm > 400 ? " (engine running)" : " (engine off)") + ". Opening the cap must bring a sealed tank to atmosphere.", "A reading that ignores an open cap is not measuring the tank. The sensor, its wiring, or its reference is the suspect, not the vent.", ["Tank-pressure sensor failed", "Sensor wiring or connector", "Sensor reference line disconnected"], ["Check the tank-pressure sensor circuit (GM P0450–P0453 charts) before replacing vent parts."], LIT.gmP0446); } }
     } else if (ev.length) need("EVAP tank pressure", "Fewer than 8 minutes of tank-pressure samples."); 
     const pg = nums(rows, "purge", r => r._warm && r._closed), warmClosedMin = secondsTrue(rows, r => r._warm && r._closed) / 60;
     if (pg.length >= 30 && warmClosedMin >= 5) { tested.push("Purge command"); const mx = Math.max(...pg); stats.purgeMax = mx;
@@ -948,7 +949,7 @@ const HEALTH_STEPS = [
  { id: "c60", title: "Steady 55+ mph for 2 minutes", why: "Lockup slip, gear-ratio stability, and the speedometer check against GPS.", how: "On a highway at the legal speed.", done: r => secondsTrue(r, x => x._cruise && x.mph >= 55) >= 120 },
  { id: "accel", title: "One firm acceleration above 2,000 rpm", why: "Full-throttle breathing estimate and slip under load.", how: "Only where safe and legal, such as a clear on-ramp.", done: r => secondsTrue(r, x => x.tps >= 60 && x.mph > 10 && x.rpm >= 2000) >= 3 },
  { id: "decel", title: "Coast down from 50 mph without braking hard", why: "Deceleration fuel cut shows the rear oxygen sensors responding, and the converter releasing.", how: "Lift off and let it slow on a clear road.", done: r => secondsTrue(r, x => x.fuelstat === 4 || (x._acc < -0.5 && x.tps < 18 && x.mph > 20)) >= 8 },
- { id: "cap", title: "EVAP cap test: key on, engine off, Mark 'cap', loosen the gas cap", why: "Separates a real tank vacuum (vent can't breathe) from a tank-pressure sensor that reports a fixed value. Only needed when an EVAP code or a frozen tank-pressure reading shows up.", how: "Parked, engine off, ignition on and connected. Tap Mark, type cap, then loosen the fuel cap and wait 20 seconds before starting.", done: r => r.some(x => x.mark && /cap/i.test(String(x.mark)) && !(x.rpm > 400)), manual: true, optional: true },
+ { id: "cap", title: "EVAP cap test: parked, Mark 'Cap loose', loosen the gas cap, wait 30 s, Mark 'Cap tight', tighten", why: "Separates a real tank vacuum (vent can't breathe) from a tank-pressure sensor that reports a fixed value. Only needed when an EVAP code or a frozen tank-pressure reading shows up. Marking switches the EVAP readings to once a second for three minutes.", how: "Parked and connected, engine off or idling. Wait 30 s connected first, tap Mark → Cap loose, loosen the fuel cap, wait 30 s, tap Mark → Cap tight, tighten it, wait 30 s more.", done: r => r.some(x => x.mark && /cap/i.test(String(x.mark)) && !/tight/i.test(String(x.mark))), manual: true, optional: true },
  { id: "mark", title: "Mark any symptom when it happens", why: "A mark pins speed, rpm, gear, and voltage to the moment, which is what turns a complaint into evidence.", how: "Tap Mark, or have a passenger do it.", done: r => r.some(x => x.mark), manual: true },
  { id: "codes", title: "Read codes and self-tests after the drive", why: "Codes set during the drive only show up if read afterwards.", how: "Parked: Diagnostics tab, Read codes, then Read self-test results.", done: () => false, manual: true, external: "codes" }
 ];
@@ -1210,7 +1211,7 @@ function prosecute(rows, meta, vehicle, S, history) {
     E("Infrared thermometer at the thermostat housing vs the app's reading", "open")
   ], settle: "The infrared check. If the metal reads near 195°F while the app reads 174°F, the sensor is the suspect." });
   { const ev = nums(rows, "evapp"), evMed = ev.length >= 6 ? pctl(ev, .5) : null, evRange = ev.length >= 6 ? Math.max(...ev) - Math.min(...ev) : null, pg = nums(rows, "purge", r => r._warm && r._closed), pgMax = pg.length >= 30 ? Math.max(...pg) : null;
-    const capMark = rows.find(r => r.mark && /cap/i.test(String(r.mark)) && !(r.rpm > 400)), capDelta = (() => { if (!capMark) return null; const b = nums(rows.filter(r => r.t < capMark.t && r.t >= capMark.t - 25000), "evapp"), a = nums(rows.filter(r => r.t > capMark.t + 3000 && r.t <= capMark.t + 30000), "evapp"); return b.length >= 2 && a.length >= 2 ? pctl(a, .5) - pctl(b, .5) : null; })();
+    const capMark = rows.find(r => r.mark && /cap/i.test(String(r.mark)) && !/tight/i.test(String(r.mark))), capDelta = (() => { if (!capMark) return null; const b = nums(rows.filter(r => r.t < capMark.t && r.t >= capMark.t - 25000), "evapp"), a = nums(rows.filter(r => r.t > capMark.t + 3000 && r.t <= capMark.t + 30000), "evapp"); return b.length >= 2 && a.length >= 2 ? pctl(a, .5) - pctl(b, .5) : null; })();
     if (evMed !== null || has(/^P044[0-9]|^P045[0-9]/)) theses.push({ name: "The EVAP vent path is blocked", why: "A vent that can't breathe lets the tank pull vacuum as fuel is used and as it cools; GM's P0446 test looks for exactly that excess vacuum.", evidence: [
       E("Vent-performance code P0446 reported: " + (codes === null ? "codes not read" : has(/^P0446/) ? "yes" : "no"), codes === null ? "open" : has(/^P0446/) ? "for" : "against"),
       E("Tank pressure held below GM's set point (about -7.5 mmHg / -1000 Pa): " + (evMed === null ? "no reading" : rnd(evMed) + " Pa median"), evMed === null ? "open" : evMed <= -1000 ? "for" : "against"),
@@ -1439,7 +1440,7 @@ const PRESETS = {
  Phone: [ W("phone",[],[4,3],[4,3]), W("number",["speedo"],[2,3],[4,3]), W("number",["grade"],[2,3],[4,3]), W("line",["mph","gmph"],[4,4],[6,4],{win:5}), W("line",["vib"],[4,4],[6,4],{win:5}), W("line",["noise"],[4,4],[6,4],{win:5}), W("scatter",["mph","vib"],[4,5],[6,5]) ],
  Engine: [ W("misfire",[],[4,4],[6,4]), W("line",["ect","oilt","trans"],[4,4],[6,4],{win:15}), W("line",["stft1","stft2","ltft1","ltft2"],[4,4],[6,4],{win:5}),
    W("line",["rpm"],[4,3],[6,4],{win:5}), W("number",["oilp"],[2,3],[3,3]), W("number",["oilt"],[2,3],[3,3]), W("number",["knock"],[2,3],[3,3]), W("number",["timing"],[2,3],[3,3]), W("number",["load"],[2,3],[3,3]), W("number",["hp"],[2,3],[3,3]), W("number",["oill"],[2,3],[3,3]), W("number",["map"],[2,3],[3,3]) ],
- Fuel: [ W("number",["mpg"],[2,3],[3,3]), W("needle",["fuel"],[2,3],[3,3]), W("number",["ltft1"],[2,3],[3,3]), W("number",["ltft2"],[2,3],[3,3]), W("line",["mpg"],[4,4],[6,4],{win:15}),
+ Fuel: [ W("number",["mpg"],[2,3],[3,3]), W("needle",["fuel"],[2,3],[3,3]), W("number",["evapp"],[2,3],[3,3]), W("number",["purge"],[2,3],[3,3]), W("number",["ltft1"],[2,3],[3,3]), W("number",["ltft2"],[2,3],[3,3]), W("line",["mpg"],[4,4],[6,4],{win:15}),
    W("line",["lambda"],[4,3],[6,4],{win:5}), W("number",["maf"],[2,3],[3,3]), W("number",["frate"],[2,3],[3,3]), W("share",[],[4,4],[6,4],{share:"drive",view:"donut"}), W("history",["mpg"],[4,4],[6,4],{stat:"avg"}) ],
  Diagnostics: [ W("status",[],[4,3],[6,3]), W("readiness",[],[4,6],[6,6]), W("codes",[],[4,6],[6,7]), W("truck",[],[4,5],[6,5]), W("crosscheck",[],[4,5],[6,5]), W("misfire",[],[4,4],[6,3]), W("mode06",[],[4,8],[12,7]) ],
  "All sensors": [ W("allsensors",[],[4,12],[12,12]) ]
@@ -1579,14 +1580,19 @@ function visibleIds() {
   return ids;
 }
 const INTERVAL = { fast: [120, 1000], med: [1000, 3000], slow: [5000, 20000] };
+// After a mark, the EVAP pressure readings are polled once a second for three minutes so a cap test is captured before and after.
+const FOCUS_IDS = new Set(["evapp", "evapa", "evapw", "purge", "fuel"]); let focusUntil = 0;
+function focusEvap(ms = 180000) { focusUntil = Date.now() + ms; }
 function nextMetric(now) {
   if (labBuf) { const f = ["volt", "atrv", "rpm"].map(i => byId[i]).filter(m => mstate[m.id].status !== "unsupported" && mstate[m.id].status !== "failed").sort((a, b) => mstate[a.id].last - mstate[b.id].last); return f[0] || null; }
   const vis = visibleIds(); let best = null, bestScore = 1;
   for (const m of METRICS) {
     if (!m.cmd) continue; const s = mstate[m.id];
     if (s.status === "unsupported") continue;
-    const iv = s.status === "failed" ? 60000 : INTERVAL[m.tier][vis.has(m.id) ? 0 : 1];
-    const score = (now - s.last) / iv;
+    const focused = now < focusUntil && FOCUS_IDS.has(m.id);
+    const iv = s.status === "failed" ? 60000 : focused ? 1000 : INTERVAL[m.tier][vis.has(m.id) ? 0 : 1];
+    // Fast metrics are never "caught up", so without a cap they starve the slow ones to a sample every few minutes.
+    const score = Math.min((now - s.last) / iv, m.tier === "slow" || focused ? 99 : 2);
     if (score >= bestScore && score > (best ? bestScore : 0)) { best = m; bestScore = score; }
   }
   return best;
@@ -2361,9 +2367,9 @@ function renderEverything(g) {
 /* ---------- Marks ---------- */
 function addMark() {
   if (!session) return toast("Connect first.");
-  if (movingNow()) { markPending = "Marked while driving"; toast("Marked."); return; }
-  $("dlg").classList.remove("wide"); const put = t => { markPending = t; $("dlg").close(); toast("Marked: " + t); }, txt = el("input", { placeholder: "Your note", maxLength: 60, "aria-label": "Note" });
-  showDlg("Mark this moment", el("p", { textContent: "This pins a note to the log with what the vehicle was doing." }), el("div", { class: "bar" }, ["Blower noise", "Blower speed changed", "Blower stopped", "Lights dimmed", "Shudder", "Slip feeling", "Rough running"].map(t => el("button", { textContent: t, onclick: () => put(t) }))), txt, el("div", { class: "bar" }, el("button", { class: "primary", textContent: "Save note", onclick: () => txt.value.trim() && put(txt.value.trim()) })));
+  if (movingNow()) { markPending = "Marked while driving"; focusEvap(); toast("Marked."); return; }
+  $("dlg").classList.remove("wide"); const put = t => { markPending = t; focusEvap(); $("dlg").close(); toast("Marked: " + t); }, txt = el("input", { placeholder: "Your note", maxLength: 60, "aria-label": "Note" });
+  showDlg("Mark this moment", el("p", { textContent: "This pins a note to the log with what the vehicle was doing." }), el("div", { class: "bar" }, ["Cap loose", "Cap tight", "Blower noise", "Blower speed changed", "Blower stopped", "Lights dimmed", "Shudder", "Slip feeling", "Rough running"].map(t => el("button", { textContent: t, onclick: () => put(t) }))), txt, el("div", { class: "bar" }, el("button", { class: "primary", textContent: "Save note", onclick: () => txt.value.trim() && put(txt.value.trim()) })));
 }
 /* ---------- Gauge drill-in ---------- */
 function openDrill(id) {
