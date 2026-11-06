@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261106-1857Z">
-<meta name="build-timestamp-utc" content="2026-11-06T18:57:55Z">
+<meta name="build-id" content="OBD-20261106-1956Z">
+<meta name="build-timestamp-utc" content="2026-11-06T19:56:16Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261106-1857Z", BUILD_UTC = "2026-11-06T18:57:55Z";
+const BUILD_ID = "OBD-20261106-1956Z", BUILD_UTC = "2026-11-06T19:56:16Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -302,6 +302,7 @@ const METRICS = [
  ...[1,2,3,4,5,6,7,8].map(n => { const mid = (0xA1 + n).toString(16).toUpperCase();
    return { id:"mis"+n, label:"Cyl "+n+" misfires (counter C)", group:"Misfire", cmd:"06"+mid, unit:"count", tier:"slow", digits:0, min:0, max:50, basis:"standard", mid, raw:r=>parseMode06(r,mid)[0x0C], kids:[{ id:"misb"+n, label:"Cyl "+n+" misfires (counter B)", unit:"count", digits:0, min:0, max:50, raw:r=>parseMode06(r,mid)[0x0B] }], rule:{hi:0,note:"Misfire monitor counters. SAE defines one counter for the current or last drive cycle and one for the last ten cycles; published sources disagree on which is $0B and which is $0C, so both are logged and the review rates growth within a drive."} }; }),
  { id:"ratio",label:"Engine rpm per mph",group:"Transmission",unit:"rpm/mph",digits:1,min:0,max:200,basis:"derived",need:["rpm","mph"],calc:v=>v.mph>5&&v.rpm>0?v.rpm/v.mph:null },
+ { id:"geari",label:"Gear (inferred from rpm per mph)",group:"Transmission",unit:"",digits:0,min:0,max:10,basis:"derived",need:["rpm","mph"],calc:v=>{ const veh=typeof vehicles==="object"&&vehicles[vid]; if(!veh||!veh.ratios||!veh.gearK||!(v.mph>8)||!(v.rpm>400)||(mstate.gear&&mstate.gear.status==="ok")) return null; const x=Math.log(v.rpm/v.mph/veh.gearK); let g=null,d=9; veh.ratios.forEach((r,i)=>{const e=Math.abs(x-Math.log(r)); if(e<d){d=e;g=i+1;}}); return d<=(v.mph>15?.05:.10)?g:null; } },
  { id:"fflow",label:"Estimated fuel flow",group:"Fuel",unit:"gal/h",digits:2,min:0,max:40,basis:"derived",need:["maf"],calc:v=>v.maf>0?v.maf/(14.7*(v.lambda>0?v.lambda:1))*3600/(6.17*454):null },
  { id:"alt",label:"Estimated altitude",group:"Driving",unit:"ft",digits:0,min:-500,max:12000,basis:"derived",need:["baro"],calc:v=>v.baro>0?(1-Math.pow(v.baro/101.325,0.1903))*145366:null },
  { id:"gmph",label:"GPS speed",group:"Phone",unit:"mph",digits:0,min:0,max:120,basis:"phone",tier:"med" },
@@ -412,6 +413,7 @@ const LIT = {
   moore: "Moore, Drivability From The Front Seat, 2015",
   techlink: "GM TechLink, 2022",
   j1979: "SAE J1979 data definitions",
+  gmP0446: "GM DTC P0446 chart (2010 LaCrosse version), EVAP Vent System Performance",
   guide: "Starting guide, not a manufacturer limit"
 };
 function annotate(rowsIn) {
@@ -437,6 +439,34 @@ function annotate(rowsIn) {
     r._ratio = r.mph > 12 && r.rpm > 400 ? r.rpm / r.mph : null;
   }
   return rows;
+}
+// Without a gear request, an automatic still tells on itself: rpm per mph falls into bands, one per gear, and the spacing of those bands
+// must match the published ratio set. Fit one unknown (final drive × tire constant), then assign each steady sample to its nearest band.
+function inferGears(rows, vehicle) {
+  const known = Array.isArray(vehicle.ratios) ? vehicle.ratios.filter(x => x > 0) : null;
+  if (!known || known.length < 2) return { ok: false, why: "no ratio set for this vehicle" };
+  if (rows.some(r => Number.isInteger(r.gear))) return { ok: false, why: "gear is already reported" };
+  const fit = [];
+  rows.forEach((r, i) => {
+    if (!r._ratio || !(r.mph > 15) || (r.tps ?? 0) > 45 || Math.abs(r._acc ?? 0) > 1.5) return;
+    const near = []; for (let j = Math.max(0, i - 4); j <= Math.min(rows.length - 1, i + 4); j++) if (rows[j]._ratio && Math.abs(rows[j].t - r.t) <= 5000) near.push(rows[j]._ratio);
+    if (near.length >= 5 && Math.abs(r._ratio / pctl(near, .5) - 1) <= .04) fit.push(Math.log(r._ratio));
+  });
+  if (fit.length < 40) return { ok: false, why: "fewer than 40 steady samples above 15 mph" };
+  const lk = known.map(Math.log), cost = K => { let c = 0; for (const v of fit) { let best = 9; for (const g of lk) best = Math.min(best, Math.abs(v - g - K)); c += Math.min(best, .15); } return c; };
+  let bestK = null, bestC = Infinity, second = Infinity;
+  for (let K = Math.log(12); K <= Math.log(150); K += .005) { const c = cost(K); if (c < bestC) { bestC = c; bestK = K; } }
+  for (let K = Math.log(12); K <= Math.log(150); K += .005) { if (Math.abs(K - bestK) > .12) second = Math.min(second, cost(K)); }
+  const assign = (ratio, tol) => { let g = null, d = 9; lk.forEach((v, i) => { const e = Math.abs(Math.log(ratio) - v - bestK); if (e < d) { d = e; g = i + 1; } }); return d <= tol ? g : null; };
+  const counts = {}; fit.forEach(v => { const g = assign(Math.exp(v), .05); if (g) counts[g] = (counts[g] || 0) + 1; });
+  const populated = Object.keys(counts).filter(g => counts[g] >= 15).length, residual = bestC / fit.length;
+  if (populated < 2) return { ok: false, why: "only one gear band seen, so the ratio set can't be anchored" };
+  if (residual > .035) return { ok: false, why: "steady rpm-per-mph bands don't fit the published ratio set (" + (residual * 100).toFixed(1) + "% residual)" };
+  if (second < bestC * 1.25) return { ok: false, why: "two different anchors fit the bands almost equally well" };
+  rows.forEach(r => { if (r._ratio && r.mph > 8) { const g = assign(r._ratio, r.mph > 15 ? .05 : .10); if (g) { r.gear = g; r._gearInferred = true; } } });
+  // Carry a gear across short unassigned stretches (shift transients) so consecutive-row shift detection can see the change.
+  let last = null, lastT = 0; rows.forEach(r => { if (Number.isInteger(r.gear)) { last = r.gear; lastT = r.t; } else if (last !== null && r.mph > 8 && r.t - lastT <= 4000) { r.gear = last; r._gearInferred = true; } else if (r.mph <= 2) last = null; });
+  return { ok: true, K: Math.exp(bestK), counts, residual, samples: fit.length };
 }
 // A community GM request only counts as trustworthy if the truck's own physics agree with it.
 function validateSignals(rows, meta, vehicle = {}) {
@@ -534,11 +564,14 @@ const dtcFamily = c => {
 function analyzeDrive(input) {
   const { rows: rawRows = [], meta = {}, vehicle = {}, history = [] } = input;
   const rows = annotate(rawRows), F = [], na = [], tested = [];
+  const inferred = inferGears(rows, vehicle);
+  const codesAll = meta.codes ? [...(meta.codes.stored || []), ...(meta.codes.pending || []), ...(meta.codes.permanent || [])] : [];
   const trip = classify(rows), val = validateSignals(rows, meta, vehicle), engine = vehicle.engine || {}, L = engine.L || null, cyl = engine.cyl || null;
+  if (inferred.ok) val.gear = "inferred";
   const add = (system, level, title, evidence, meaning, causes = [], next = [], basis = LIT.guide) => F.push({ system, level, title, evidence, meaning, causes, next, basis });
   const need = (system, why) => na.push({ system, why });
   const usable = k => val[k] !== "suspect" && nums(rows, k).length >= 5;
-  const unverified = k => val[k] === "ok" ? "" : " This signal is an unverified GM request, so treat it as a lead.";
+  const unverified = k => val[k] === "ok" ? "" : val[k] === "inferred" ? " Gear here is inferred from rpm per mph against the published ratio set, not read from the transmission." : " This signal is an unverified GM request, so treat it as a lead.";
   const firstEct = nums(rows, "ect")[0], coldStart = firstEct !== undefined && firstEct < 100;
   const warmSec = secondsTrue(rows, r => r._warm);
   const stats = { kind: trip.kind, miles: trip.miles };
@@ -548,6 +581,8 @@ function analyzeDrive(input) {
   const rate = rows.length > 1 ? rows.length / Math.max(1, trip.seconds) : 0, gaps = rows.filter((r, i) => i && (r.t - rows[i - 1].t) > 5000).length;
   if (!rows.length) { return { systems: systemCard([], []), tuneup: tuneUpView([], trip), trip, findings: [], notAssessed: [{ system: "Everything", why: "No drive data was recorded." }], tested: [], channels: 0, validation: {}, stats, verdict: { level: "nodata", headline: "No data to review.", detail: "" } }; }
   if (gaps) add("Data quality", "info", gaps + " gap" + (gaps > 1 ? "s" : "") + " in the recording", gaps + " breaks longer than 5 seconds across " + rnd(trip.seconds / 60, 1) + " minutes.", "Readings around those gaps are excluded from time-based calculations.", ["Screen sleep, Bluetooth dropout, or browser backgrounding"], ["Keep the page in the foreground on a charging phone."], "Recording check");
+  if (inferred.ok) add("Data quality", "info", "Gear inferred from rpm per mph", Object.keys(inferred.counts).sort().map(g => "gear " + g + ": " + inferred.counts[g] + " steady samples").join(", ") + "; fit residual " + rnd(inferred.residual * 100, 1) + "%.", "This vehicle reports no gear, so each steady sample was matched to the published ratio set. Shift detection below rests on that inference.", [], [], "Published gear ratios, " + (vehicle.ratiosBasis || "community list"));
+  else if (vehicle.ratios && !rows.some(r => Number.isInteger(r.gear))) need("Gear inference", "Couldn't infer gear from rpm per mph: " + inferred.why + ".");
   Object.entries(val).forEach(([k, s]) => { if (s === "suspect") add("Data quality", "info", "Ignored a questionable GM reading: " + k, "It failed a physical sanity check, such as staying flat while driving or disagreeing with engine rpm per mph.", "That request probably means something else on this vehicle, so it wasn't used in this review.", [], ["Use the scan in Data & sources to find the right request."], "Internal plausibility test"); });
 
   // Codes and status are the highest-authority inputs.
@@ -720,10 +755,34 @@ function analyzeDrive(input) {
   const ev = rpmEvents(rows, vehicle), evCount = k => ev.filter(e => e.kind === k).length; stats.rpmEvents = { total: ev.length, downshift: evCount("downshift"), unlock: evCount("converter unlock"), accel: evCount("acceleration"), unexplained: evCount("unexplained rise"), other: evCount("other") };
   if (ev.length) { const u = evCount("unexplained rise"), summary = ["downshift","converter unlock","acceleration","unexplained rise","other"].map(k => evCount(k) + " " + k).filter(x => !/^0 /.test(x)).join(", ");
     add("Transmission", u >= 3 ? "watch" : "info", ev.length + " high-rpm moment" + (ev.length > 1 ? "s" : "") + " while moving: " + summary, ev.slice(0, 6).map(e => e.rpm + " rpm at " + e.mph + " mph" + (Number.isInteger(e.gear) ? " in " + e.gear + (e.gear === 1 ? "st" : e.gear === 2 ? "nd" : e.gear === 3 ? "rd" : "th") : "") + ": " + e.kind + ". " + e.why).join(" "), "Each moment the engine passed 2,400 rpm on the move is sorted by what the speed, the gear ratio, and the converter did at the same time. A downshift or an unlock is the transmission choosing; a rise with everything else flat is the one to worry about.", u ? ["Clutch or converter slip", "A shift that didn't complete"] : [], u ? ["Mark the moment next time it happens; the app then pairs the feel with the data."] : [], "Measured from this drive"); }
+  // EVAP: the tank-pressure sensor and purge valve together tell whether the vent side can breathe.
+  { const ev = nums(rows, "evapp"), evRun = rows.filter(r => r._running && typeof r.evapp === "number"), spanMin = evRun.length >= 2 ? (evRun[evRun.length - 1].t - evRun[0].t) / 60000 : 0;
+    const evapCode = codesAll.some(c => /^P04(4[0-9]|5[0-9])$/.test(c)), sensorCode = codesAll.some(c => /^P045[0-3]$/.test(c));
+    if (ev.length >= 6 && spanMin >= 8) { tested.push("EVAP tank pressure"); const med = pctl(ev, .5), range = Math.max(...ev) - Math.min(...ev), mmHg = med / 133.322;
+      stats.evapMed = med; stats.evapRange = range;
+      if (range < 30) add("Emissions controls", med <= -1000 ? "watch" : "info", "EVAP tank pressure never moved: " + rnd(med) + " Pa (" + rnd(mmHg, 1) + " mmHg) all drive", "Range " + rnd(range) + " Pa over " + rnd(spanMin) + " minutes and " + ev.length + " samples, including before start. A real tank breathes with temperature and fuel slosh.", med <= -1000 ? "Either the tank is holding real vacuum with the vent unable to relieve it, or the sensor (or its circuit) is reporting a fixed value. GM's P0446 chart sets the code below about -7.5 mmHg of tank pressure; this is " + rnd(Math.abs(mmHg / 7.5), 1) + "× that." + (sensorCode ? " A tank-pressure sensor circuit code is present, which points at the sensor." : " No sensor-circuit code (P0450–P0453) is set, so the computer believes the sensor is in range.") : "A fixed reading near zero usually means a sensor that isn't being refreshed; it's not a fault on its own.", med <= -1000 ? ["Blocked or stuck-closed canister vent valve or vent hose", "Clogged vent filter or canister", "Tank-pressure sensor or wiring reading a fixed value"] : [], med <= -1000 ? ["Key on, engine off, tap Mark and type 'cap', then loosen the gas cap and wait 20 s. If the reading jumps toward 0 Pa the vacuum was real; if it doesn't move, the sensor is the suspect."] : [], LIT.gmP0446);
+      else if (med <= -1000) add("Emissions controls", "watch", "Tank held " + rnd(mmHg, 1) + " mmHg of vacuum across the drive", "Median " + rnd(med) + " Pa, range " + rnd(range) + " Pa.", "Below GM's P0446 set point of about -7.5 mmHg. The reading does change, so the sensor is responding.", ["Restricted vent path", "Vent valve stuck closed"], ["Cap test: see the EVAP step in Health check."], LIT.gmP0446);
+      else add("Emissions controls", "good", "EVAP tank pressure stayed in a normal band", "Median " + rnd(med) + " Pa, range " + rnd(range) + " Pa.", "The tank breathed normally and never approached the vent-restriction set point.", [], [], LIT.gmP0446);
+      // Cap test: a mark containing 'cap' with the engine off, compare 20 s before vs 20 s after.
+      const capMark = rows.find(r => r.mark && /cap/i.test(String(r.mark)) && !(r.rpm > 400));
+      if (capMark) { const before = nums(rows.filter(r => r.t < capMark.t && r.t >= capMark.t - 25000), "evapp"), after = nums(rows.filter(r => r.t > capMark.t + 3000 && r.t <= capMark.t + 30000), "evapp");
+        if (before.length >= 2 && after.length >= 2) { const d = pctl(after, .5) - pctl(before, .5); tested.push("Gas-cap test"); stats.capTestDelta = d;
+          if (Math.abs(d) >= 500) add("Emissions controls", "attention", "Gas-cap test: tank pressure moved " + (d > 0 ? "+" : "") + rnd(d) + " Pa when the cap was opened", "From " + rnd(pctl(before, .5)) + " Pa to " + rnd(pctl(after, .5)) + " Pa within 30 s of your 'cap' mark, engine off.", "The sensor responds, so the vacuum it reported was real: the tank was sealed against a vent that couldn't relieve it.", ["Canister vent valve stuck closed or blocked", "Pinched or clogged vent hose", "Canister or vent filter plugged"], ["Have the vent valve commanded open on a scan tool while watching tank pressure, or inspect the vent hose and filter under the car."], LIT.gmP0446);
+          else add("Emissions controls", "attention", "Gas-cap test: tank pressure did not move when the cap was opened", "Changed " + rnd(d) + " Pa within 30 s of your 'cap' mark, engine off. Opening the cap must bring a sealed tank to atmosphere.", "A reading that ignores an open cap is not measuring the tank. The sensor, its wiring, or its reference is the suspect, not the vent.", ["Tank-pressure sensor failed", "Sensor wiring or connector", "Sensor reference line disconnected"], ["Check the tank-pressure sensor circuit (GM P0450–P0453 charts) before replacing vent parts."], LIT.gmP0446); } }
+    } else if (ev.length) need("EVAP tank pressure", "Fewer than 8 minutes of tank-pressure samples."); 
+    const pg = nums(rows, "purge", r => r._warm && r._closed), warmClosedMin = secondsTrue(rows, r => r._warm && r._closed) / 60;
+    if (pg.length >= 30 && warmClosedMin >= 5) { tested.push("Purge command"); const mx = Math.max(...pg); stats.purgeMax = mx;
+      if (mx === 0) add("Emissions controls", evapCode ? "watch" : "info", "Purge was never commanded on", "0% duty across " + rnd(warmClosedMin) + " warm closed-loop minutes.", evapCode ? "With an EVAP code active, purge at 0% can't be read as a separate fault from this drive. It does mean purge vapor can't explain any rich correction seen here." : "Purge is withheld after a cold start, with an EVAP fault active, or while a monitor is staging. Alone it isn't a fault; it becomes one if it stays at 0% across warm drives with no code.", [], [], LIT.gmP0446);
+      else add("Emissions controls", "good", "Purge was commanded during the drive", "Up to " + rnd(mx) + "% duty while warm in closed loop.", "The computer is using the canister.", [], [], LIT.gmP0446); }
+  }
+  // Code history from the odometer counters: how long the light has been on relative to the last clear.
+  { const mil = nums(rows, "mildist"), clr = nums(rows, "clrdist"), wu = nums(rows, "warmups");
+    if (mil.length && clr.length && mil[mil.length - 1] > 0) { const m = mil[mil.length - 1], c = clr[clr.length - 1]; stats.milMiles = m; stats.clearMiles = c;
+      add("Codes", "info", "Light on for " + rnd(m) + " of the " + rnd(c) + " miles since codes were last cleared", (c - m >= 0 ? "It came back within " + rnd(c - m) + " miles of the clear" : "The counters disagree") + (wu.length ? ", " + rnd(wu[wu.length - 1]) + " warm-up cycles ago" : "") + ".", c - m < 100 ? "A code that returns this soon after a clear is a standing condition, not a one-off." : "The fault took a while to recur after the clear, which fits an intermittent condition.", [], [], "Standard PIDs $21, $31, $30"); } }
   const cat = shiftCatalog(rows, val.gear !== "suspect"); stats.shifts = cat.pairs; stats.tccApply = tccApplySpeed(rows); const hr = heatRate(rows); if (hr !== null) stats.transHeatRate = hr;
   ["sh12","sh23","sh34"].forEach(k => { const v = nums(rows, k); if (v.length) stats[k] = Number(pctl(v, .5).toFixed(2)); });
   if (cat.shifts.length) { const cd = cat.shifts.filter(s => s.kind === "coast-down"), firm = cd.filter(s => /firm/.test(s.feel)), fl2 = cd.filter(s => s.feel === "flare"), cush = cd.filter(s => /cushioned/.test(s.feel));
-    if (cd.length) add("Transmission", (firm.length >= 3 && firm.length >= cd.length * .5) || fl2.length >= 3 ? "watch" : "info", cd.length + " coast-down downshifts: " + firm.length + " firm with converter locked, " + cush.length + " cushioned, " + fl2.length + " flares", Object.entries(cat.pairs).filter(([k]) => /coast/.test(k)).map(([k, p]) => k.replace(" coast", "") + " ×" + p.n + " at ~" + Math.round(p.mphMed) + " mph, rpm step " + (p.jumpMed > 0 ? "+" : "") + Math.round(p.jumpMed) + ", locked through " + Math.round(p.lockedShare * 100) + "%").join("; ") + ".", "A coast-down downshift raises engine speed to the new ratio. If the converter clutch stays applied through it, that step reaches the driveline and is felt as a clunk; a released converter cushions it. Relearning transmissions often change this behavior over the first few hundred miles.", firm.length ? ["Converter clutch strategy during coast-down shifts, which the TCM adapts", "A shift that completes abruptly"] : [], firm.length ? ["Mark the clunks so the catalog can pair them with specific shifts.", "Ask the shop whether coast-down clutch control was fast-learned."] : [], "Measured from this drive"); }
+    if (cd.length) add("Transmission", (firm.length >= 3 && firm.length >= cd.length * .5) || fl2.length >= 3 ? "watch" : "info", cd.length + " coast-down downshifts: " + firm.length + (cd.some(s => /unknown/.test(s.feel)) || !cd.some(s => typeof s.slipPeak === "number") ? " firm (rpm step of 250 or more), " : " firm with converter locked, ") + cush.length + " cushioned, " + fl2.length + " flares", Object.entries(cat.pairs).filter(([k]) => /coast/.test(k)).map(([k, p]) => k.replace(" coast", "") + " ×" + p.n + " at ~" + Math.round(p.mphMed) + " mph, rpm step " + (p.jumpMed > 0 ? "+" : "") + Math.round(p.jumpMed) + ", locked through " + Math.round(p.lockedShare * 100) + "%").join("; ") + ".", "A coast-down downshift raises engine speed to the new ratio. If the converter clutch stays applied through it, that step reaches the driveline and is felt as a clunk; a released converter cushions it. Relearning transmissions often change this behavior over the first few hundred miles.", firm.length ? ["Converter clutch strategy during coast-down shifts, which the TCM adapts", "A shift that completes abruptly"] : [], firm.length ? ["Mark the clunks so the catalog can pair them with specific shifts.", "Ask the shop whether coast-down clutch control was fast-learned."] : [], "Measured from this drive"); }
   const fl = flares(rows, val.gear === "ok"); stats.flares = fl.length;
   if (fl.length >= 2 || (fl.length === 1 && trip.miles < 5)) add("Transmission", "watch", fl.length + " possible rpm flare" + (fl.length > 1 ? "s" : ""), fl.slice(0, 5).map(x => "+" + rnd(x.rise) + " rpm at " + rnd(x.mph) + " mph").join(", ") + ".", "Engine speed rose and fell back without a matching speed or throttle change, which is what slipping can look like. Normal converter unlock and relock or a quick downshift can look the same in one-second data.", ["Clutch or converter slip", "Downshift on a grade", "Clearing wheel spin"], ["Note where these occurred and whether you felt them.", "Share the CSV with your transmission shop."]);
   if (usable("slip") && val.slip !== "suspect") {
@@ -841,7 +900,7 @@ const SYSTEMS = [
    loop: "Oil-life is usually calculated from how the engine was used, not measured from the oil.", trust: "A calculated number can look fine while the real oil level is low. The dipstick is the ground truth." },
  { id: "trans", name: "Transmission", from: ["Transmission"], plain: "Whether gears and the torque converter behave smoothly without excess heat.",
    loop: "Speed and load → transmission computer commands hydraulic pressure → speed sensors confirm the shift.", trust: "Comparing engine speed against road speed is an independent physics check, even when a GM data request is unverified." },
- { id: "emissions", name: "Emissions system", from: ["Emissions"], plain: "Whether the exhaust cleanup hardware looks healthy.",
+ { id: "emissions", name: "Emissions system", from: ["Emissions", "Emissions controls"], plain: "Whether the exhaust cleanup hardware looks healthy.",
    loop: "Upstream and downstream oxygen sensors compare exhaust before and after the catalyst.", trust: "Catalyst temperature is often modeled rather than measured, so a displayed value may not be a sensor reading." }
 ];
 const STATUS_RANK = { attention: 3, watch: 2, good: 1, info: 0 };
@@ -889,11 +948,12 @@ const HEALTH_STEPS = [
  { id: "c60", title: "Steady 55+ mph for 2 minutes", why: "Lockup slip, gear-ratio stability, and the speedometer check against GPS.", how: "On a highway at the legal speed.", done: r => secondsTrue(r, x => x._cruise && x.mph >= 55) >= 120 },
  { id: "accel", title: "One firm acceleration above 2,000 rpm", why: "Full-throttle breathing estimate and slip under load.", how: "Only where safe and legal, such as a clear on-ramp.", done: r => secondsTrue(r, x => x.tps >= 60 && x.mph > 10 && x.rpm >= 2000) >= 3 },
  { id: "decel", title: "Coast down from 50 mph without braking hard", why: "Deceleration fuel cut shows the rear oxygen sensors responding, and the converter releasing.", how: "Lift off and let it slow on a clear road.", done: r => secondsTrue(r, x => x.fuelstat === 4 || (x._acc < -0.5 && x.tps < 18 && x.mph > 20)) >= 8 },
+ { id: "cap", title: "EVAP cap test: key on, engine off, Mark 'cap', loosen the gas cap", why: "Separates a real tank vacuum (vent can't breathe) from a tank-pressure sensor that reports a fixed value. Only needed when an EVAP code or a frozen tank-pressure reading shows up.", how: "Parked, engine off, ignition on and connected. Tap Mark, type cap, then loosen the fuel cap and wait 20 seconds before starting.", done: r => r.some(x => x.mark && /cap/i.test(String(x.mark)) && !(x.rpm > 400)), manual: true, optional: true },
  { id: "mark", title: "Mark any symptom when it happens", why: "A mark pins speed, rpm, gear, and voltage to the moment, which is what turns a complaint into evidence.", how: "Tap Mark, or have a passenger do it.", done: r => r.some(x => x.mark), manual: true },
  { id: "codes", title: "Read codes and self-tests after the drive", why: "Codes set during the drive only show up if read afterwards.", how: "Parked: Diagnostics tab, Read codes, then Read self-test results.", done: () => false, manual: true, external: "codes" }
 ];
-function healthSteps(rowsIn, extra = {}) { const r = annotate(rowsIn); return HEALTH_STEPS.map(s => ({ id: s.id, title: s.title, how: s.how, why: s.why, done: s.external ? !!extra[s.external] : (r.length ? !!s.done(r) : false) })); }
-function healthCoverage(steps) { const n = steps.filter(s => s.done).length; return { done: n, total: steps.length, label: n + " of " + steps.length + " checks completed" }; }
+function healthSteps(rowsIn, extra = {}) { const r = annotate(rowsIn); return HEALTH_STEPS.map(s => ({ id: s.id, title: s.title, how: s.how, why: s.why, optional: !!s.optional, done: s.external ? !!extra[s.external] : (r.length ? !!s.done(r) : false) })); }
+function healthCoverage(steps) { const core = steps.filter(s => !s.optional), n = core.filter(s => s.done).length; return { done: n, total: core.length, label: n + " of " + core.length + " checks completed" + (steps.some(s => s.optional && s.done) ? " plus optional" : "") }; }
 const GLOSSARY = [
  ["Fuel trim", "The percentage the computer adds to or removes from its base fuel amount. Positive means it's adding fuel because the mix looks lean. Short-term reacts in seconds; long-term is the learned correction."],
  ["Closed loop", "The computer is using oxygen sensor feedback to correct fuel. Open loop means it isn't, as when cold, at full throttle, or coasting."],
@@ -1149,6 +1209,16 @@ function prosecute(rows, meta, vehicle, S, history) {
     E("Oil runs well above coolant: " + (S.oilPeak !== undefined && S.ectPlateau !== undefined ? say(S.oilPeak - S.ectPlateau, 0, "°F") : "n/a"), S.oilPeak !== undefined && S.ectPlateau !== undefined ? (S.oilPeak - S.ectPlateau >= 15 ? "for" : "against") : "open"),
     E("Infrared thermometer at the thermostat housing vs the app's reading", "open")
   ], settle: "The infrared check. If the metal reads near 195°F while the app reads 174°F, the sensor is the suspect." });
+  { const ev = nums(rows, "evapp"), evMed = ev.length >= 6 ? pctl(ev, .5) : null, evRange = ev.length >= 6 ? Math.max(...ev) - Math.min(...ev) : null, pg = nums(rows, "purge", r => r._warm && r._closed), pgMax = pg.length >= 30 ? Math.max(...pg) : null;
+    const capMark = rows.find(r => r.mark && /cap/i.test(String(r.mark)) && !(r.rpm > 400)), capDelta = (() => { if (!capMark) return null; const b = nums(rows.filter(r => r.t < capMark.t && r.t >= capMark.t - 25000), "evapp"), a = nums(rows.filter(r => r.t > capMark.t + 3000 && r.t <= capMark.t + 30000), "evapp"); return b.length >= 2 && a.length >= 2 ? pctl(a, .5) - pctl(b, .5) : null; })();
+    if (evMed !== null || has(/^P044[0-9]|^P045[0-9]/)) theses.push({ name: "The EVAP vent path is blocked", why: "A vent that can't breathe lets the tank pull vacuum as fuel is used and as it cools; GM's P0446 test looks for exactly that excess vacuum.", evidence: [
+      E("Vent-performance code P0446 reported: " + (codes === null ? "codes not read" : has(/^P0446/) ? "yes" : "no"), codes === null ? "open" : has(/^P0446/) ? "for" : "against"),
+      E("Tank pressure held below GM's set point (about -7.5 mmHg / -1000 Pa): " + (evMed === null ? "no reading" : rnd(evMed) + " Pa median"), evMed === null ? "open" : evMed <= -1000 ? "for" : "against"),
+      E("Purge valve ruled out as the vacuum source (never commanded on): " + (pgMax === null ? "not enough warm data" : pgMax === 0 ? "yes, 0% all drive" : "no, purge reached " + rnd(pgMax) + "%"), pgMax === null ? "open" : pgMax === 0 ? "for" : "open"),
+      E("Sensor-circuit codes P0450–P0453 absent, so the computer trusts the sensor: " + (codes === null ? "codes not read" : has(/^P045[0-3]/) ? "no, a sensor code is set" : "yes"), codes === null ? "open" : has(/^P045[0-3]/) ? "against" : "for"),
+      E("Reading changed over the drive (a live sensor): " + (evRange === null ? "no reading" : rnd(evRange) + " Pa range"), evRange === null ? "open" : evRange >= 30 ? "for" : "open"),
+      E("Gas-cap test (Mark 'cap', engine off): " + (capDelta === null ? "not done" : "pressure moved " + rnd(capDelta) + " Pa"), capDelta === null ? "open" : Math.abs(capDelta) >= 500 ? "for" : "against")
+    ], settle: "Key on, engine off: tap Mark, type cap, loosen the fuel cap, wait 20 s. Movement toward 0 Pa convicts the vent side; no movement acquits it and indicts the sensor." }); }
   theses.push({ name: "Purge vapor is enriching the mixture", why: "A purge valve that flows too much dumps fuel vapor into the intake, pushing trims negative while it's open.", evidence: [
     E("Short-term trim moves negative as purge duty rises (bank 1 correlation " + (purge.r !== null ? rnd(purge.r, 2) : "n/a") + ", bank 2 " + (purge2.r !== null ? rnd(purge2.r, 2) : "n/a") + ")", purge.r !== null && purge.n >= 60 ? (purge.r <= -.3 ? "for" : "against") : "open"),
     E("Both banks affected equally", split !== null ? (Math.abs(split) < 4 ? "for" : "against") : "open"),
@@ -1292,14 +1362,14 @@ function shiftCatalog(rowsIn, gearOk = true) {
     const a = rows[i - 1], b = rows[i];
     if (!Number.isInteger(a.gear) || !Number.isInteger(b.gear) || a.gear === b.gear || !(b.mph > 2) || b.t - a.t > 2500) continue;
     const win = rows.slice(i, Math.min(rows.length, i + 4)).filter(x => x.t - b.t <= 3500), rpmAfterMax = Math.max(...win.map(x => x.rpm).filter(Number.isFinite)), rpmAfterMin = Math.min(...win.map(x => x.rpm).filter(Number.isFinite));
-    const slips = [a, ...win].map(x => x.slip).filter(x => typeof x === "number"), lockedThrough = slips.length >= 3 && slips.every(s => Math.abs(s) < 60), slipPeak = slips.length ? Math.max(...slips.map(Math.abs)) : null;
+    const slips = [a, ...win].map(x => x.slip).filter(x => typeof x === "number"), slipKnown = slips.length >= 3, lockedThrough = slipKnown && slips.every(s => Math.abs(s) < 60), slipPeak = slips.length ? Math.max(...slips.map(Math.abs)) : null;
     const down = b.gear < a.gear, coast = (b.tps ?? 100) < 22 && (b._acc ?? 0) <= .5, expected = ratios[a.gear] && ratios[b.gear] ? a.rpm * ratios[b.gear] / ratios[a.gear] : null;
     const jump = (down ? rpmAfterMax : rpmAfterMin) - a.rpm, overshoot = expected !== null ? (down ? rpmAfterMax - expected : expected - rpmAfterMin) : null;
     let feel = "unclassified";
-    if (down && coast) feel = overshoot !== null && overshoot >= 200 ? "flare" : lockedThrough && Math.abs(jump) >= 250 ? "firm, converter locked through" : !lockedThrough ? "cushioned, converter released" : "mild";
+    if (down && coast) feel = overshoot !== null && overshoot >= 200 ? "flare" : !slipKnown ? (Math.abs(jump) >= 250 ? "firm (converter state unknown)" : "mild") : lockedThrough && Math.abs(jump) >= 250 ? "firm, converter locked through" : !lockedThrough ? "cushioned, converter released" : "mild";
     else if (down) feel = overshoot !== null && overshoot >= 250 ? "flare" : "power downshift";
-    else feel = overshoot !== null && overshoot >= 200 ? "flare" : lockedThrough ? "locked" : "released";
-    out.push({ t: b.t, from: a.gear, to: b.gear, kind: down ? (coast ? "coast-down" : "power-down") : "up", mph: Math.round(b.mph), rpmBefore: Math.round(a.rpm), rpmAfter: Math.round(down ? rpmAfterMax : rpmAfterMin), jump: Math.round(jump), expected: expected !== null ? Math.round(expected) : null, overshoot: overshoot !== null ? Math.round(overshoot) : null, slipPeak: slipPeak !== null ? Math.round(slipPeak) : null, lockedThrough, tps: b.tps, trans: b.trans, feel });
+    else feel = overshoot !== null && overshoot >= 200 ? "flare" : !slipKnown ? "up" : lockedThrough ? "locked" : "released";
+    out.push({ t: b.t, from: a.gear, to: b.gear, inferred: !!(a._gearInferred || b._gearInferred), kind: down ? (coast ? "coast-down" : "power-down") : "up", mph: Math.round(b.mph), rpmBefore: Math.round(a.rpm), rpmAfter: Math.round(down ? rpmAfterMax : rpmAfterMin), jump: Math.round(jump), expected: expected !== null ? Math.round(expected) : null, overshoot: overshoot !== null ? Math.round(overshoot) : null, slipPeak: slipPeak !== null ? Math.round(slipPeak) : null, lockedThrough, tps: b.tps, trans: b.trans, feel });
   }
   const pairs = {};
   out.forEach(s => { const k = s.from + "→" + s.to + (s.kind === "coast-down" ? " coast" : s.kind === "power-down" ? " power" : ""); const p = pairs[k] = pairs[k] || { n: 0, mph: [], jump: [], over: [], locked: 0, flares: 0 }; p.n++; p.mph.push(s.mph); p.jump.push(s.jump); if (s.overshoot !== null) p.over.push(s.overshoot); if (s.lockedThrough) p.locked++; if (s.feel === "flare") p.flares++; });
@@ -1348,7 +1418,7 @@ const DEFAULT_VEHICLES = {
   equinox: { id: "equinox", name: "2014 Chevrolet Equinox", engine: null, layout: null, afm: false, trans: "6-speed automatic", gears: 6, notes: "", match: { wmi: ["2GN", "2CN"], year: "E" } },
   lucerne: { id: "lucerne", name: "2006 Buick Lucerne", engine: null, layout: "V", afm: false, trans: "", gears: 4, notes: "", match: { wmi: ["1G4"], year: "6" } }
 };
-const ENGINE_CHOICES = { lucerne: [{ label: "3.8L V6 (L26)", L: 3.8, cyl: 6, layout: "V", trans: "4T65-E 4-speed", gears: 4 }, { label: "4.6L Northstar V8 (LD8)", L: 4.6, cyl: 8, layout: "V", trans: "4T80-E 4-speed", gears: 4 }], equinox: [{ label: "2.4L 4-cylinder", L: 2.4, cyl: 4, layout: "I" }, { label: "3.6L V6", L: 3.6, cyl: 6, layout: "V", bank1Cyls: [1, 3, 5], bankNote: "GM's 3.6L V6 service description (2009 STS) puts cylinders 1-3-5 on the right bank, 2-4-6 on the left, firing order 1-2-3-4-5-6; bank 1 holds cylinder 1 by SAE convention. Assumed to apply to the Equinox LFX." }] };
+const ENGINE_CHOICES = { lucerne: [{ label: "3.8L V6 (L26)", L: 3.8, cyl: 6, layout: "V", trans: "4T65-E 4-speed", gears: 4, ratios: [2.921, 1.568, 1.000, 0.705], ratiosBasis: "4T65-E ratios as listed by community spec pages (not a GM document)" }, { label: "4.6L Northstar V8 (LD8)", L: 4.6, cyl: 8, layout: "V", trans: "4T80-E 4-speed", gears: 4 }], equinox: [{ label: "2.4L 4-cylinder", L: 2.4, cyl: 4, layout: "I" }, { label: "3.6L V6", L: 3.6, cyl: 6, layout: "V", bank1Cyls: [1, 3, 5], bankNote: "GM's 3.6L V6 service description (2009 STS) puts cylinders 1-3-5 on the right bank, 2-4-6 on the left, firing order 1-2-3-4-5-6; bank 1 holds cylinder 1 by SAE convention. Assumed to apply to the Equinox LFX." }] };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("obd." + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem("obd." + k, JSON.stringify(v, (key, val) => key === "_node" ? undefined : val)); } catch (e) {} }
@@ -1363,7 +1433,7 @@ const PRESETS = {
    W("number",["trans"],[2,3],[3,3]), W("number",["ect"],[2,3],[3,3]), W("number",["volt"],[2,3],[3,3]), W("number",["slip"],[2,3],[3,3]), W("status",[],[4,2],[12,2]) ],
  Transmission: [ W("gearbox",[],[4,3],[3,4]), W("needle",["trans"],[4,4],[3,4]), W("line",["slip"],[4,4],[6,4],{win:5}), W("scatter",["mph","rpm"],[4,5],[6,5]),
    W("line",["trans"],[4,4],[6,5],{win:15}), W("share",[],[4,4],[4,4],{share:"gear",view:"bars"}), W("share",[],[4,4],[4,4],{share:"temp",view:"donut"}),
-   W("share",[],[4,4],[4,4],{share:"drive",view:"donut"}), W("number",["sh12"],[2,3],[3,3]), W("number",["sh23"],[2,3],[3,3]), W("number",["sh34"],[2,3],[3,3]), W("number",["ratio"],[2,3],[3,3]), W("history",["trans"],[4,4],[12,4],{stat:"max"}) ],
+   W("share",[],[4,4],[4,4],{share:"drive",view:"donut"}), W("number",["sh12"],[2,3],[3,3]), W("number",["sh23"],[2,3],[3,3]), W("number",["sh34"],[2,3],[3,3]), W("number",["ratio"],[2,3],[3,3]), W("number",["geari"],[2,3],[3,3]), W("history",["trans"],[4,4],[12,4],{stat:"max"}) ],
  Electrical: [ W("elab",[],[4,3],[4,3]), W("needle",["volt"],[2,4],[4,4]), W("number",["atrv"],[2,4],[4,4]), W("line",["volt","atrv"],[4,4],[12,4],{win:15}), W("history",["volt"],[4,4],[12,4],{stat:"min"}) ],
  "System map": [ W("sysmap",[],[4,12],[12,10]) ],
  Phone: [ W("phone",[],[4,3],[4,3]), W("number",["speedo"],[2,3],[4,3]), W("number",["grade"],[2,3],[4,3]), W("line",["mph","gmph"],[4,4],[6,4],{win:5}), W("line",["vib"],[4,4],[6,4],{win:5}), W("line",["noise"],[4,4],[6,4],{win:5}), W("scatter",["mph","vib"],[4,5],[6,5]) ],
@@ -1382,7 +1452,7 @@ let vehicles = store.get("vehicles", null);
 if (!vehicles || typeof vehicles !== "object") vehicles = {};
 for (const k in DEFAULT_VEHICLES) { const saved = vehicles[k] || {}; vehicles[k] = { ...DEFAULT_VEHICLES[k], ...saved }; if (!saved.trans) vehicles[k].trans = DEFAULT_VEHICLES[k].trans; }
 // Profiles saved by earlier builds may have a detected engine but no bank map; fill it from the engine choice.
-for (const k in vehicles) { const v = vehicles[k], ch = (ENGINE_CHOICES[k] || []).find(c => v.engine && c.label === v.engine.label); if (ch && !v.bank1Cyls) { v.bank1Cyls = ch.bank1Cyls; v.bankNote = ch.bankNote; v.layout = v.layout || ch.layout; } }
+for (const k in vehicles) { const v = vehicles[k], ch = (ENGINE_CHOICES[k] || []).find(c => v.engine && c.label === v.engine.label); if (ch && !v.bank1Cyls) { v.bank1Cyls = ch.bank1Cyls; v.bankNote = ch.bankNote; v.layout = v.layout || ch.layout; } if (ch && ch.ratios && !v.ratios) { v.ratios = ch.ratios; v.ratiosBasis = ch.ratiosBasis; } }
 let vid = store.get("vid", "sierra"); if (!vehicles[vid]) vid = "sierra";
 const vkey = k => "v." + vid + "." + k;
 function saveVehicles() { store.set("vehicles", vehicles); }
@@ -1452,7 +1522,9 @@ function tick(now) { // once per second
   METRICS.filter(m => m.calc).forEach(m => { const v = m.calc(latest); record(m.id, v, now); mstate[m.id].status = v === null ? mstate[m.id].status : "ok"; });
   stableBuf.push({ tps: latest.tps ?? 0, mph: latest.mph ?? 0 }); if (stableBuf.length > 8) stableBuf.shift();
   if (latest.mph !== undefined && latest.mph !== null) { addShare("drive", driveState(latest.mph, prevMph === null ? 0 : latest.mph - prevMph)); prevMph = latest.mph; }
-  if (latest.gear !== undefined && latest.gear !== null) addShare("gear", String(latest.gear));
+  if (latest.gear !== undefined && latest.gear !== null) addShare("gear", String(latest.gear)); else if (latest.geari !== undefined && latest.geari !== null) addShare("gear", String(latest.geari));
+  // Vehicles with no gear request: fit the ratio-set anchor from this drive every 30 s until it holds, and keep it per vehicle.
+  if (vehicles[vid] && vehicles[vid].ratios && !(mstate.gear && mstate.gear.status === "ok") && rows.length >= 90 && rows.length % 30 === 0) { try { const inf = inferGears(annotate(rows.slice(-1200)), vehicles[vid]); if (inf.ok) { const prev = vehicles[vid].gearK; vehicles[vid].gearK = inf.K; if (!prev || Math.abs(prev / inf.K - 1) > .01) saveVehicles(); } } catch (e) {} }
   if (latest.trans !== undefined && latest.trans !== null) addShare("temp", tempBand(latest.trans));
   // Log only fresh values: a stale reading must not count as a new sample in the review.
   const MAX_AGE = { fast: 3000, med: 8000, slow: 1100 };
@@ -1594,7 +1666,7 @@ async function identifyVehicle() {
       const b = dataBytes(await askH("7DF", "0113"), "4113"), twoBanks = !!(b && b.length && (b[0] & 0xF0) !== 0);
       let cyls = null; try { const mids = parseSupport(await askH("7DF", "06A0"), 0xA0, "46"); const n = [...mids].filter(x => x >= 0xA2 && x <= 0xAD).length; if (n >= 3) cyls = n; } catch (e) {}
       const choices = ENGINE_CHOICES[vid], pick = choices.find(e => cyls ? e.cyl === cyls : (e.layout === "V") === twoBanks) || null;
-      if (pick) { vehicles[vid].engine = { label: pick.label, L: pick.L, cyl: pick.cyl, detected: true }; vehicles[vid].layout = pick.layout; vehicles[vid].bank1Cyls = pick.bank1Cyls; vehicles[vid].bankNote = pick.bankNote; if (pick.trans) vehicles[vid].trans = pick.trans; if (pick.gears) vehicles[vid].gears = pick.gears; saveVehicles(); toast("Engine looks like " + pick.label + " from " + (cyls ? "its misfire monitors" : "its O2 sensor layout") + ". Check this in Vehicle settings."); }
+      if (pick) { vehicles[vid].engine = { label: pick.label, L: pick.L, cyl: pick.cyl, detected: true }; vehicles[vid].layout = pick.layout; vehicles[vid].bank1Cyls = pick.bank1Cyls; vehicles[vid].bankNote = pick.bankNote; if (pick.trans) vehicles[vid].trans = pick.trans; if (pick.gears) vehicles[vid].gears = pick.gears; if (pick.ratios) { vehicles[vid].ratios = pick.ratios; vehicles[vid].ratiosBasis = pick.ratiosBasis; } saveVehicles(); toast("Engine looks like " + pick.label + " from " + (cyls ? "its misfire monitors" : "its O2 sensor layout") + ". Check this in Vehicle settings."); }
     }
   } catch (e) {}
 }
@@ -1894,7 +1966,7 @@ R.healthcheck = (w, box) => {
   let n = 0, sig = "";
   return () => { if (n++ % 8) return; const st = healthSteps(rows, { codes: !!(codes && codes.readAt && codes.readAt > driveStart + 60000) }), s = JSON.stringify(st.map(x => x.done)); if (s === sig) return; sig = s; list.textContent = "";
     list.append(el("div", { class: "sub", textContent: healthCoverage(st).label }));
-    st.forEach(x => list.append(el("details", { class: "f", style: "padding:6px 8px" }, el("summary", {}, el("b", { class: "pill " + (x.done ? "good" : ""), textContent: (x.done ? "✓ " : "○ ") + x.title })), el("div", { class: "sub", style: "white-space:normal", textContent: x.how }), el("div", { class: "sub", style: "white-space:normal;color:var(--text)", textContent: "Why: " + x.why })))); };
+    st.forEach(x => list.append(el("details", { class: "f", style: "padding:6px 8px" }, el("summary", {}, el("b", { class: "pill " + (x.done ? "good" : ""), textContent: (x.done ? "✓ " : "○ ") + x.title + (x.optional ? " (optional)" : "") })), el("div", { class: "sub", style: "white-space:normal", textContent: x.how }), el("div", { class: "sub", style: "white-space:normal;color:var(--text)", textContent: "Why: " + x.why })))); };
 };
 R.healthcard = (w, box) => {
   const list = el("div", { class: "scroll" }); box.append(header(w, "Total health so far", ""), el("div", { class: "body" }, list));
@@ -2434,7 +2506,7 @@ function openVehicle() {
   const nm = el("input", { value: v.name, "aria-label": "Name", onchange: () => { v.name = nm.value.slice(0, 60) || v.name; saveVehicles(); renderVehicleSelect(); } });
   kids.push(el("label", { textContent: "Name" }), nm);
   const choices = ENGINE_CHOICES[vid] || [];
-  if (choices.length) { const e = el("select", { "aria-label": "Engine", onchange: () => { const pick = choices.find(c => c.label === e.value); v.engine = pick ? { label: pick.label, L: pick.L, cyl: pick.cyl } : null; v.layout = pick ? pick.layout : null; v.bank1Cyls = pick ? pick.bank1Cyls : undefined; v.bankNote = pick ? pick.bankNote : undefined; if (pick && pick.trans) v.trans = pick.trans; if (pick && pick.gears) v.gears = pick.gears; saveVehicles(); renderGrid(); openVehicle(); } }, el("option", { value: "", textContent: "Not set (detected on connect)" }), choices.map(c => el("option", { value: c.label, textContent: c.label, selected: v.engine && v.engine.label === c.label }))); kids.push(el("label", { textContent: "Engine" }), e); }
+  if (choices.length) { const e = el("select", { "aria-label": "Engine", onchange: () => { const pick = choices.find(c => c.label === e.value); v.engine = pick ? { label: pick.label, L: pick.L, cyl: pick.cyl } : null; v.layout = pick ? pick.layout : null; v.bank1Cyls = pick ? pick.bank1Cyls : undefined; v.bankNote = pick ? pick.bankNote : undefined; v.ratios = pick ? pick.ratios : undefined; v.ratiosBasis = pick ? pick.ratiosBasis : undefined; if (pick && pick.trans) v.trans = pick.trans; if (pick && pick.gears) v.gears = pick.gears; saveVehicles(); renderGrid(); openVehicle(); } }, el("option", { value: "", textContent: "Not set (detected on connect)" }), choices.map(c => el("option", { value: c.label, textContent: c.label, selected: v.engine && v.engine.label === c.label }))); kids.push(el("label", { textContent: "Engine" }), e); }
   else { const L = el("input", { type: "number", step: "0.1", value: v.engine ? v.engine.L : "", "aria-label": "Displacement" }), c = el("input", { type: "number", step: "1", value: v.engine ? v.engine.cyl : "", "aria-label": "Cylinders" });
     const up = () => { const lv = Number(L.value), cv = Number(c.value); if (lv > 0 && cv > 0) { v.engine = { label: lv + "L " + cv + "-cylinder", L: lv, cyl: cv }; saveVehicles(); renderGrid(); } }; L.onchange = c.onchange = up;
     kids.push(el("div", { class: "fields" }, el("div", {}, el("label", { textContent: "Liters" }), L), el("div", {}, el("label", { textContent: "Cylinders" }), c))); }

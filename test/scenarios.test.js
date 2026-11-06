@@ -3,7 +3,7 @@ const fs = require("fs"), assert = require("assert");
 const html = fs.readFileSync("index.html", "utf8");
 const src = html.split("/*PURE-START*/")[1].split("/*PURE-END*/")[0];
 new Function(html.split("<script>")[1].split("</script>")[0]); // whole page script must parse
-const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,shiftCatalog,transShopReport,tccApplySpeed,rpmEvents,eventWindows,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom};")();
+const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,shiftCatalog,transShopReport,tccApplySpeed,rpmEvents,eventWindows,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom,inferGears};")();
 const m = id => api.METRICS.find(x => x.id === id);
 
 // ---- Safety allowlist
@@ -179,7 +179,7 @@ assert(api.reportMarkdown(rep(drive("mixed", { leak: true })), sierra, {}).inclu
   const q = drive("mixed"); q.forEach(x => { x.vib = .3; }); r = rep(q); assert(has(r, /No speed-dependent vibration/, "good")); }
 r = rep(drive("interstate", { mis4: 3 })); assert(has(r, /Trace misfire count on cylinder 4/, "info"), "trace " + bad(r));
 { const rows = []; const t0 = 1.7e12; for (let i = 0; i < 20; i++) rows.push({ t: t0 + i * 1000, rpm: 0, volt: 12.5, mph: 0, ect: 200 }); for (let i = 20; i < 200; i++) rows.push({ t: t0 + i * 1000, rpm: 700, mph: 0, ect: 200, tps: 12, volt: i < 60 ? 14.5 : 12.6 }); for (let i = 200; i < 260; i++) rows.push({ t: t0 + i * 1000, rpm: 750, mph: 0, ect: 200, tps: 12, volt: 14.1 });
-  const st = api.healthSteps(rows, { codes: true }), on = id => st.find(s => s.id === id).done; assert(on("koeo") && on("start") && on("idle") && on("loads") && on("codes"), JSON.stringify(st.map(s => [s.id, s.done]))); assert(!on("c60") && !on("decel")); assert.strictEqual(api.healthCoverage(st).done, 6); assert(on("warm")); assert.strictEqual(st.length, 12); assert(st.every(s => s.why)); }
+  const st = api.healthSteps(rows, { codes: true }), on = id => st.find(s => s.id === id).done; assert(on("koeo") && on("start") && on("idle") && on("loads") && on("codes"), JSON.stringify(st.map(s => [s.id, s.done]))); assert(!on("c60") && !on("decel")); assert.strictEqual(api.healthCoverage(st).done, 6); assert(on("warm")); assert.strictEqual(st.length, 13); assert(st.every(s => s.why)); assert.strictEqual(st.filter(s => s.optional).length, 1); }
 // Prosecution
 r = rep(drive("mixed", { bank: true, mis4: 40 })); assert(r.theses && r.theses.length === 8); { const inj = r.theses.find(x => /injector leaks/.test(x.name)); assert(inj.evidence.length === 4 && inj.status); const ign = r.theses.find(x => /Ignition/.test(x.name)); assert(ign.evidence.some(e => e.verdict === "for")); }
 r = rep(drive("interstate")); assert(r.theses.every(x => ["Supported","Weakened","Leaning cleared","Not cleared"].includes(x.status))); assert(api.reportMarkdown(r, sierra, {}).includes("Assume guilty"));
@@ -223,4 +223,34 @@ assert.strictEqual(api.matchVehicle("1G4000000600000000".slice(0, 17), { lucerne
   r = rep(d); assert(has(r, /coast-down downshifts/), "finding " + bad(r)); assert(r.stats.shifts && r.stats.tccApply);
   const md = api.transShopReport([{ id: "x", start: 1.7e12, end: 1.7e12 + 6e5, review: { kind: "City", stats: r.stats }, codes: null }], { name: "Sierra", repairs: [{ t: 1.69e12, note: "trans", tags: ["transmission"] }] }); assert(md.includes("Shifts observed") && md.includes("Repairs logged") && md.includes("Questions these data raise")); }
 assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
+
+// Gear inference for a vehicle with no gear request: a 4-speed whose rpm/mph bands match the published ratio set.
+{ const R = [2.921, 1.568, 1.000, 0.705], K = 42, rows = []; let t = 0, mph = 0;
+  const profile = []; for (let c = 0; c < 4; c++) { for (let i = 0; i < 60; i++) profile.push(Math.min(55, i * 1.2)); for (let i = 0; i < 90; i++) profile.push(55); for (let i = 0; i < 40; i++) profile.push(Math.max(0, 55 - i * 1.5)); for (let i = 0; i < 20; i++) profile.push(0); }
+  profile.forEach(v => { mph = v; const g = mph < 14 ? 1 : mph < 26 ? 2 : mph < 42 ? 3 : 4, tps = mph > 0 ? 18 : 3; const rpm = mph > 1 ? mph * K * R[g - 1] * (1 + (Math.random() - .5) * .02) : 700; rows.push({ t: t * 1000, rpm, mph, tps, ect: 190, load: 30, volt: 14, stft1: 0, ltft1: 0, fuelstat: 2 }); t++; });
+  const inf = api.inferGears(api.annotate(rows), { ratios: R }); assert(inf.ok, JSON.stringify(inf)); assert(Math.abs(inf.K / K - 1) < .03, "K " + inf.K); assert(Object.keys(inf.counts).length === 3 || Object.keys(inf.counts).length === 4, JSON.stringify(inf.counts));
+  const rep = api.analyzeDrive({ rows, meta: {}, vehicle: { ratios: R, gears: 4 }, history: [] }); assert.strictEqual(rep.validation.gear, "inferred"); assert(rep.findings.some(f => /Gear inferred/.test(f.title)));
+  const keys = Object.keys(rep.stats.shifts); assert(keys.some(k => /^1→2/.test(k)) && keys.some(k => /^3→4/.test(k)) && keys.some(k => /^4→3 coast/.test(k)), keys.join(","));
+  assert(!rep.findings.some(f => /converter locked/.test(f.title)), "no converter claims without slip");
+  // Wrong ratio set must not anchor: a 6-speed set against 4-speed bands.
+  const bad = api.inferGears(api.annotate(rows), { ratios: [4.03, 2.36, 1.53, 1.15, 0.85, 0.67] }); assert(!bad.ok || bad.residual > .02, JSON.stringify(bad));
+  // A gear PID present means no inference.
+  assert(!api.inferGears(api.annotate(rows.map(r => ({ ...r, gear: 3 }))), { ratios: R }).ok); }
+// EVAP: frozen tank pressure with P0446 and purge at 0%, then a cap test that moves the reading.
+{ const base = { rows: drive("city") }; base.rows.forEach(r => { r.evapp = -4122; r.purge = 0; });
+  const meta = { codes: { stored: ["P0446"], pending: [], permanent: [] } };
+  const rep = api.analyzeDrive({ rows: base.rows, meta, vehicle: {}, history: [] });
+  assert(rep.findings.some(f => f.level === "watch" && /never moved/.test(f.title)), "frozen evap"); assert(rep.findings.some(f => /Purge was never commanded/.test(f.title) && f.level === "watch"));
+  const th = rep.theses.find(t => /EVAP vent/.test(t.name)); assert(th && th.evidence.filter(e => e.verdict === "for").length >= 3, JSON.stringify(th));
+  const rows2 = base.rows.map(r => ({ ...r })); const t0 = rows2[0].t; for (let i = 0; i < 60; i++) rows2.unshift({ t: t0 - (60 - i) * 1000, rpm: 0, volt: 12.2, evapp: i < 30 ? -4122 : -40, mark: i === 29 ? "cap" : undefined });
+  const rep2 = api.analyzeDrive({ rows: rows2, meta, vehicle: {}, history: [] }); assert(rep2.findings.some(f => /Gas-cap test: tank pressure moved/.test(f.title)), rep2.findings.map(f => f.title).join("|"));
+  assert(rep2.theses.find(t => /EVAP vent/.test(t.name)).evidence.some(e => /Gas-cap/.test(e.text) && e.verdict === "for"));
+  const rows3 = base.rows.map(r => ({ ...r })); for (let i = 0; i < 60; i++) rows3.unshift({ t: t0 - (60 - i) * 1000, rpm: 0, volt: 12.2, evapp: -4122, mark: i === 29 ? "cap" : undefined });
+  const rep3 = api.analyzeDrive({ rows: rows3, meta, vehicle: {}, history: [] }); assert(rep3.findings.some(f => /did not move/.test(f.title)));
+  const hs = api.healthSteps(rows3); assert(hs.find(s => s.id === "cap").done);
+  // Normal tank: breathing reading, no code → good.
+  const ok = { rows: drive("city") }; ok.rows.forEach((r, i) => { r.evapp = -200 + Math.sin(i / 50) * 150; r.purge = r.ect >= 170 ? 30 : 0; });
+  const rep4 = api.analyzeDrive({ rows: ok.rows, meta: { codes: { stored: [], pending: [], permanent: [] } }, vehicle: {}, history: [] }); assert(rep4.findings.some(f => /normal band/.test(f.title) && f.level === "good")); assert(!rep4.theses.find(t => /EVAP vent/.test(t.name)).evidence.some(e => e.verdict === "for" && /P0446 reported/.test(e.text))); }
+// Code history from odometer counters.
+{ const d = { rows: drive("city") }; d.rows.forEach(r => { r.mildist = 672; r.clrdist = 734; r.warmups = 78; }); const rep = api.analyzeDrive({ rows: d.rows, meta: {}, vehicle: {}, history: [] }); const f = rep.findings.find(f => /Light on for 672/.test(f.title)); assert(f && /within 62 miles/.test(f.evidence), f && f.evidence); }
 console.log("all tests passed");
