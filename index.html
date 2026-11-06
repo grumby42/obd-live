@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261106-1843Z">
-<meta name="build-timestamp-utc" content="2026-11-06T18:43:18Z">
+<meta name="build-id" content="OBD-20261106-1844Z">
+<meta name="build-timestamp-utc" content="2026-11-06T18:44:57Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261106-1843Z", BUILD_UTC = "2026-11-06T18:43:18Z";
+const BUILD_ID = "OBD-20261106-1844Z", BUILD_UTC = "2026-11-06T18:44:57Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1438,11 +1438,11 @@ class SimLink {
 }
 let queue = Promise.resolve();
 function exclusive(fn) { const run = queue.then(fn, fn); queue = run.catch(() => {}); return run; }
-async function ask(cmd) {
+async function ask(cmd, timeout) {
   cmd = String(cmd).toUpperCase().replace(/\s+/g, "");
   if (!isAllowedCommand(cmd)) throw new Error("Blocked by read-only allowlist: " + cmd);
   if (!session) throw new Error("Not connected");
-  return session.link.send(cmd);
+  return session.link.send(cmd, timeout);
 }
 async function askH(header, cmd) {
   return exclusive(async () => { if (session && session.header !== header) { await ask("ATSH" + header); session.header = header; } return ask(cmd); });
@@ -1509,8 +1509,11 @@ async function start(link, label) {
     resetLive(); const s = { link, header: null, savedAt: Date.now() }; session = s; driveId = "d" + Date.now(); driveStart = Date.now();
     if (!link.sim && navigator.storage && navigator.storage.persist) { try { await navigator.storage.persist(); } catch (e) {} }
     setStatus("Initializing " + label + "…");
-    await exclusive(async () => { for (const c of ["ATZ","ATE0","ATL0","ATS0","ATH0","ATAT1","ATSP0"]) await ask(c); });
-    { const probe = await askH("7DF", "0100"); if (isNoData(probe)) throw new Error("No response from the vehicle. Turn the ignition on, then reconnect."); const pn = String(await exclusive(() => ask("ATDPN"))).replace(/[^0-9A-F]/gi, "").slice(-1); s.proto = pn; s.can = pn === "" ? true : /^[6-9]$/.test(pn); // unreadable answer: assume CAN, the common case
+    // CAN first, which every vehicle so far uses and answers instantly. Only if that fails, let the adapter search protocols, which can take ten seconds or more.
+    await exclusive(async () => { for (const c of ["ATZ","ATE0","ATL0","ATS0","ATH0","ATAT1","ATSP6","ATSH7DF"]) await ask(c); s.header = "7DF"; });
+    { let probe = await exclusive(() => ask("0100", 6000)), pn = "6";
+      if (isNoData(probe)) { setStatus("No CAN answer; searching protocols…"); await exclusive(() => ask("ATSP0")); probe = await exclusive(() => ask("0100", 20000)); if (isNoData(probe)) throw new Error("No response from the vehicle. Turn the ignition on, then reconnect."); pn = String(await exclusive(() => ask("ATDPN"))).replace(/[^0-9A-F]/gi, "").slice(-1); s.header = null; }
+      s.proto = pn; s.can = pn === "" ? true : /^[6-9]$/.test(pn);
       if (!s.can) toast("This vehicle isn't on CAN (protocol " + pn + "): GM-specific requests, self-tests, and multi-module identity are skipped."); }
     supported = new Set(); let base = 0;
     while (base <= 0xA0) { const raw = await askH("7DF", "01" + base.toString(16).toUpperCase().padStart(2, "0")); parseSupport(raw, base).forEach(p => supported.add(p)); if (!supported.has(base + 32)) break; base += 32; }
