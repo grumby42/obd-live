@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261106-1609Z">
-<meta name="build-timestamp-utc" content="2026-11-06T16:09:53Z">
+<meta name="build-id" content="OBD-20261106-1610Z">
+<meta name="build-timestamp-utc" content="2026-11-06T16:10:29Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261106-1609Z", BUILD_UTC = "2026-11-06T16:09:53Z";
+const BUILD_ID = "OBD-20261106-1610Z", BUILD_UTC = "2026-11-06T16:10:29Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -2313,10 +2313,10 @@ function openLab() {
 }
 async function openCaseFile() {
   await loadDrives(); const cf = caseFile(drives, vehicles[vid], codes ? JSON.stringify(codes) : ""), host = el("div"); $("dlg").classList.add("wide");
+  if (cf.watch && cf.watch.length) { host.append(el("h3", { textContent: "Post-repair watch list" })); cf.watch.forEach(w => host.append(el("div", { class: "row" }, el("span", { textContent: w.text }), el("span", { textContent: w.repair })))); }
   if (!cf.drives) { host.append(el("p", { textContent: "No reviewed drives saved yet. Drives are reviewed automatically when you disconnect." })); }
   else {
     host.append(el("p", { textContent: cf.drives + " reviewed drives from " + new Date(cf.span[0]).toLocaleDateString() + " to " + new Date(cf.span[1]).toLocaleDateString() + ". Codes seen: " + (cf.codesSeen.length ? cf.codesSeen.map(c => c.code).join(", ") : "none while connected") + "." }));
-    if (cf.watch && cf.watch.length) { host.append(el("h3", { textContent: "Post-repair watch list" })); cf.watch.forEach(w => host.append(el("div", { class: "row" }, el("span", { textContent: w.text }), el("span", { textContent: w.repair })))); }
     (cf.repairs || []).forEach(rp => { host.append(el("h3", { textContent: "Before and after: " + new Date(rp.t).toLocaleDateString() + (rp.note ? " · " + rp.note : "") }), el("p", { class: "sub", style: "white-space:normal", textContent: rp.compare.before + " drives before, " + rp.compare.after + " after. Medians; rows tied to this repair come first. Drives of different kinds mix here, so compare like with like when you can." }));
       host.append(el("table", {}, el("thead", {}, el("tr", {}, ["Measure", "Before", "After", "Change"].map((h, i) => el("th", { class: i ? "n" : "", textContent: h })))), el("tbody", {}, rp.compare.rows.map(x => el("tr", {}, el("td", { textContent: (x.tagged ? "★ " : "") + x.label + (x.unit ? " (" + x.unit + ")" : "") }), el("td", { class: "n", textContent: x.before === null ? "–" : x.before.toFixed(x.d) + " (" + x.nb + ")" }), el("td", { class: "n", textContent: x.after === null ? "–" : x.after.toFixed(x.d) + " (" + x.na + ")" }), el("td", { class: "n", textContent: x.before !== null && x.after !== null ? ((x.after - x.before) > 0 ? "+" : "") + (x.after - x.before).toFixed(x.d) : "" })))))); });
     host.append(el("h3", { textContent: "Pooled theses" }));
