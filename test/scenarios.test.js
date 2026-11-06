@@ -3,7 +3,7 @@ const fs = require("fs"), assert = require("assert");
 const html = fs.readFileSync("index.html", "utf8");
 const src = html.split("/*PURE-START*/")[1].split("/*PURE-END*/")[0];
 new Function(html.split("<script>")[1].split("</script>")[0]); // whole page script must parse
-const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,rpmEvents,eventWindows,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom};")();
+const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,shiftCatalog,transShopReport,tccApplySpeed,rpmEvents,eventWindows,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom};")();
 const m = id => api.METRICS.find(x => x.id === id);
 
 // ---- Safety allowlist
@@ -216,5 +216,11 @@ assert.strictEqual(api.matchVehicle("1G4000000600000000".slice(0, 17), { lucerne
   put(1200, (x, i) => { x.rpm = x.mph * 26 * (1 + .35 * Math.min(1, i / 2)); x.slip = 10; x.gear = 6; x.tps = 19; });
   const ev = api.rpmEvents(api.annotate(d)); const kinds = ev.map(e => e.kind); assert(kinds.includes("downshift") && kinds.includes("converter unlock") && kinds.includes("unexplained rise"), JSON.stringify(ev));
   r = rep(d); assert(has(r, /high-rpm moment/), "events finding " + bad(r)); assert(api.eventWindows(d, ev, [], 10).length >= 21); }
+// Shift catalog: coast-down downshifts with the converter locked are firm; with it released, cushioned
+{ const d = drive("city"); // the synthetic city drive has gears by speed band; add a locked-through coast-down and a released one
+  const a = api.annotate(d), cat = api.shiftCatalog(a, true); assert(cat.shifts.length > 0, "shifts found"); assert(Object.keys(cat.pairs).length > 0);
+  const cd = cat.shifts.filter(s => s.kind === "coast-down"); assert(cd.length > 0, "coast-down found: " + JSON.stringify(cat.shifts.slice(0, 3)));
+  r = rep(d); assert(has(r, /coast-down downshifts/), "finding " + bad(r)); assert(r.stats.shifts && r.stats.tccApply);
+  const md = api.transShopReport([{ id: "x", start: 1.7e12, end: 1.7e12 + 6e5, review: { kind: "City", stats: r.stats }, codes: null }], { name: "Sierra", repairs: [{ t: 1.69e12, note: "trans", tags: ["transmission"] }] }); assert(md.includes("Shifts observed") && md.includes("Repairs logged") && md.includes("Questions these data raise")); }
 assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 console.log("all tests passed");
