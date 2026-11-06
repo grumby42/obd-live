@@ -205,5 +205,8 @@ r = rep(drive("interstate")); assert(r.theses.every(x => ["Supported","Weakened"
 { const d = drive("interstate", { transMax: 235, coolHigh: 205 }); r = rep(d); assert(has(r, /above coolant at highway speed/, "watch"), "gap " + bad(r));
   const ok = drive("interstate", { transMax: 206, coolHigh: 205 }); r = rep(ok); assert(has(r, /close to coolant/, "good"), "gap ok " + bad(r));
   const osc = drive("interstate"); osc.forEach((x, i) => { x.mis4 = (i % 40) < 20 ? 2 : 0; }); r = rep(osc); const f = r.findings.find(q => /cylinder 4/.test(q.title)); assert(!f || f.level === "info", "oscillating counter must not count as growth: " + (f && f.title)); }
+// Slip verified by the stalled-at-stop physics check; gear tolerant of one noisy inversion
+{ const d = drive("city"); d.forEach(x => { if (x.mph < 1) { x.gear = 1; x.slip = x.rpm - 20; } }); r = rep(d); assert.strictEqual(r.validation.slip, "ok", "stalled stop should verify slip"); }
+assert.strictEqual(api.matchVehicle("1G4000000600000000".slice(0, 17), { lucerne: { match: { wmi: ["1G4"], year: "6" } } }), "lucerne");
 assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 console.log("all tests passed");
