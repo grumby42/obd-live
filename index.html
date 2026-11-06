@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261106-1718Z">
-<meta name="build-timestamp-utc" content="2026-11-06T17:18:02Z">
+<meta name="build-id" content="OBD-20261106-1742Z">
+<meta name="build-timestamp-utc" content="2026-11-06T17:42:11Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261106-1718Z", BUILD_UTC = "2026-11-06T17:18:02Z";
+const BUILD_ID = "OBD-20261106-1742Z", BUILD_UTC = "2026-11-06T17:42:11Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1501,8 +1501,10 @@ async function identifyVehicle() {
     if (guess && guess !== vid) { loadVehicle(guess); toast("Switched to " + vehicles[guess].name + " from its VIN."); }
     else if (!guess && vin && vin.length === 17 && !session.link.sim) toast("VIN not matched to a profile. Check that " + vehicles[vid].name + " is correct.");
     if (vin && vin.length === 17 && !session.link.sim) { vehicles[vid].vin = vin; saveVehicles(); }
-    try { truck.cal = asciiFrom(await askH("7DF", "0904"), "4904"); const cb = dataBytes(await askH("7DF", "0906"), "4906"); truck.cvn = cb ? cb.map(x => x.toString(16).padStart(2, "0")).join("") : null;
-      const was = store.get(vkey("fp2"), null), now = { cal: truck.cal || null, cvn: truck.cvn || null }; if ((now.cal || now.cvn) && !session.link.sim) { if (was && ["cal", "cvn"].some(k => was[k] && now[k] && was[k] !== now[k])) truck.fpChanged = true; store.set(vkey("fp2"), { cal: now.cal || (was && was.cal) || null, cvn: now.cvn || (was && was.cvn) || null }); } } catch (e) {}
+    // Several computers answer these broadcast requests in varying order, so the fingerprint is the sorted set of all answers.
+    const allOf = (raw, pre) => toMessages(raw).filter(m => m.startsWith(pre)).map(m => m.slice(pre.length)).sort().join("|") || null;
+    try { const calRaw = await askH("7DF", "0904"), cvnRaw = await askH("7DF", "0906"); truck.cal = asciiFrom(calRaw, "4904"); truck.calSet = allOf(calRaw, "4904"); truck.cvn = allOf(cvnRaw, "4906"); truck.ecuCount = toMessages(calRaw).filter(m => m.startsWith("4904")).length;
+      const was = store.get(vkey("fp3"), null), now = { cal: truck.calSet || null, cvn: truck.cvn || null }; if ((now.cal || now.cvn) && !session.link.sim) { if (was && ["cal", "cvn"].some(k => was[k] && now[k] && was[k] !== now[k])) truck.fpChanged = true; store.set(vkey("fp3"), { cal: now.cal || (was && was.cal) || null, cvn: now.cvn || (was && was.cvn) || null }); } } catch (e) {}
     if (!vehicles[vid].engine && ENGINE_CHOICES[vid]) {
       const b = dataBytes(await askH("7DF", "0113"), "4113");
       if (b && b.length) { const v6 = (b[0] & 0xF0) !== 0, pick = ENGINE_CHOICES[vid].find(e => (e.cyl === 6) === v6); vehicles[vid].engine = { label: pick.label, L: pick.L, cyl: pick.cyl, detected: true }; vehicles[vid].layout = pick.layout; vehicles[vid].bank1Cyls = pick.bank1Cyls; vehicles[vid].bankNote = pick.bankNote; saveVehicles(); toast("Engine looks like " + pick.label + " from its O2 sensor layout. Check this in Vehicle settings."); }
@@ -1795,7 +1797,7 @@ R.truck = (w, box) => {
   btn.onclick = async () => { if (!session) return; try { truck.vin = asciiFrom(await askH("7DF", "0902"), "4902"); truck.cal = asciiFrom(await askH("7DF", "0904"), "4904"); } catch (e) { toast(e.message); } };
   box.append(header(w, "Truck identity", "Standard"), el("div", { class: "body" }, btn, list));
   let sig = "";
-  return () => { btn.disabled = !session; const rows2 = [["VIN", truck.vin ? truck.vin.slice(0, 3) + "…" + truck.vin.slice(-4) + " (masked)" : null], ["Calibration ID", truck.cal], ["Software fingerprint", truck.cvn ? truck.cvn + (truck.fpChanged ? " (changed)" : "") : null], ["Computers answering", truck.ecus && truck.ecus.length ? truck.ecus.join(", ") : null], ["Odometer", latest.odo != null ? latest.odo.toFixed(0) + " mi" : null], ["Standard PIDs reported", supported ? String(supported.size) : null]].filter(r => r[1]); const s = JSON.stringify(rows2); if (s === sig) return; sig = s; list.textContent = "";
+  return () => { btn.disabled = !session; const rows2 = [["VIN", truck.vin ? truck.vin.slice(0, 3) + "…" + truck.vin.slice(-4) + " (masked)" : null], ["Calibration ID", truck.cal], ["Software fingerprint", truck.cvn ? truck.cvn.split("|").map(c => c.slice(0, 8)).join(", ") + (truck.fpChanged ? " (changed)" : "") : null], ["Computers answering ID requests", truck.ecuCount ? String(truck.ecuCount) : null], ["Computers answering", truck.ecus && truck.ecus.length ? truck.ecus.join(", ") : null], ["Odometer", latest.odo != null ? latest.odo.toFixed(0) + " mi" : null], ["Standard PIDs reported", supported ? String(supported.size) : null]].filter(r => r[1]); const s = JSON.stringify(rows2); if (s === sig) return; sig = s; list.textContent = "";
     rows2.forEach(r => list.append(el("div", { class: "row" }, el("span", { textContent: r[0] }), el("span", { textContent: r[1] })))); };
 };
 function sessionReport() { return analyzeDrive({ rows, meta: sessionMeta(), vehicle: vehicles[vid], history: drives }); }
