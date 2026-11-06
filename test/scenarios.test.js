@@ -201,5 +201,9 @@ r = rep(drive("interstate")); assert(r.theses.every(x => ["Supported","Weakened"
   const sp = api.repairSplit(past, veh.repairs); assert(sp.before.length === 4 && sp.after.length === 0);
   const cmp = api.repairCompare(past.concat([{ id: "n1", start: 1.7e12 + 6 * 864e5, review: { stats: { kind: "Interstate / highway", transPeak: 180, slipCruise: 20 } } }]), veh.repairs[0]); const tp = cmp.rows.find(x => x.k === "transPeak"); assert(tp.before === 230 && tp.after === 180 && tp.tagged, JSON.stringify(tp)); assert(cmp.rows[0].tagged);
   const wl = api.watchList(veh.repairs); assert(wl.some(w => /start-up window/.test(w.text)) && wl.some(w => /Converter slip/.test(w.text)) && wl.length >= 8); }
+// Transmission heat vs coolant; misfire counter hysteresis
+{ const d = drive("interstate", { transMax: 235, coolHigh: 205 }); r = rep(d); assert(has(r, /above coolant at highway speed/, "watch"), "gap " + bad(r));
+  const ok = drive("interstate", { transMax: 206, coolHigh: 205 }); r = rep(ok); assert(has(r, /close to coolant/, "good"), "gap ok " + bad(r));
+  const osc = drive("interstate"); osc.forEach((x, i) => { x.mis4 = (i % 40) < 20 ? 2 : 0; }); r = rep(osc); const f = r.findings.find(q => /cylinder 4/.test(q.title)); assert(!f || f.level === "info", "oscillating counter must not count as growth: " + (f && f.title)); }
 assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 console.log("all tests passed");

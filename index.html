@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261106-1610Z">
-<meta name="build-timestamp-utc" content="2026-11-06T16:10:29Z">
+<meta name="build-id" content="OBD-20261106-1718Z">
+<meta name="build-timestamp-utc" content="2026-11-06T17:18:02Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261106-1610Z", BUILD_UTC = "2026-11-06T16:10:29Z";
+const BUILD_ID = "OBD-20261106-1718Z", BUILD_UTC = "2026-11-06T17:18:02Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -643,10 +643,11 @@ function analyzeDrive(input) {
   rows.forEach(r => { Object.keys(r).forEach(k => { const m = k.match(/^misb(\d+)$/); if (m && typeof r[k] === "number") { const c = "mis" + m[1]; if (typeof r[c] !== "number" || r[k] > r[c]) r[c] = Math.max(r[k], typeof r[c] === "number" ? r[c] : 0); } }); });
   if (misKeys.length) {
     tested.push("Misfire counts");
-    const growth = k => { const v = nums(rows, k); let g = 0; for (let i = 1; i < v.length; i++) if (v[i] > v[i - 1]) g += v[i] - v[i - 1]; return g; };
+    // Counters can drop and climb back as the computer's window rolls; only a rise above the running maximum is a new count.
+    const growth = k => { const v = nums(rows, k); let g = 0, mx = v.length ? v[0] : 0; for (let i = 1; i < v.length; i++) { if (v[i] > mx) { g += v[i] - mx; mx = v[i]; } } return g; };
     const held = misKeys.filter(k => (nums(rows, k)[0] ?? 0) > 0), revs = rows.reduce((s, r) => s + (r.rpm > 0 ? r.rpm / 60 * r._dt : 0), 0);
     const mx = misKeys.map(k => [Number(k.slice(3)), growth(k)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
-    if (mx.length) { const k = "mis" + mx[0][0], cond = { idle: 0, cruise: 0, load: 0 }; for (let i = 1; i < rows.length; i++) { const d = (rows[i][k] ?? 0) - (rows[i - 1][k] ?? 0); if (d > 0) { if (rows[i]._idle) cond.idle += d; else if (rows[i]._highload) cond.load += d; else if (rows[i]._cruise) cond.cruise += d; } } stats.misByCond = cond; }
+    if (mx.length) { const k = "mis" + mx[0][0], cond = { idle: 0, cruise: 0, load: 0 }; let run = null; for (let i = 0; i < rows.length; i++) { const v = rows[i][k]; if (typeof v !== "number") continue; if (run === null) { run = v; continue; } if (v > run) { const d = v - run; run = v; if (rows[i]._idle) cond.idle += d; else if (rows[i]._highload) cond.load += d; else if (rows[i]._cruise) cond.cruise += d; } } stats.misByCond = cond; }
     stats.misTotal = mx.reduce((s, x) => s + x[1], 0);
     if (!mx.length && held.length) add("Combustion", "info", "No new misfire counts this drive", "Counters for cylinder " + held.map(k => k.slice(3)).join(", ") + " held a value from before but didn't rise.", "That earlier count may come from a previous drive. Watch whether it rises later.", [], [], LIT.j1979);
     else if (!mx.length) add("Combustion", "good", "No misfire counts recorded", misKeys.length + " cylinders reported.", "The computer's recent misfire counters stayed at zero. They update slowly, so a brief event could be missed.", [], [], LIT.j1979);
@@ -700,6 +701,11 @@ function analyzeDrive(input) {
     if (hotter >= 60 || pk >= 250) add("Transmission", "attention", "Transmission fluid ran very hot", "Peak " + rnd(pk) + "°F, above 240°F for " + rnd(hotter) + " seconds." + unverified("trans"), "Sustained heat ages fluid and clutches quickly.", ["Towing or grades", "Converter slip", "Cooler flow or thermal bypass fault"], ["Check the fluid condition and cooler flow. Keep the data for your transmission shop." + tb]);
     else if (hot >= 60) add("Transmission", "watch", "Transmission fluid spent time above the guide", "Peak " + rnd(pk) + "°F, above 220°F for " + rnd(hot) + " seconds." + unverified("trans"), "This may be load-related, but it's worth comparing with similar drives.", ["Load, heat, or stop-and-go traffic", "Converter slip"], ["Note the conditions at the hottest point." + tb]);
     else if (trip.runningSeconds >= 600 && val.trans === "ok") add("Transmission", "good", "Transmission temperature stayed moderate", "Peak " + rnd(pk) + "°F" + (stats.transCruise ? ", " + rnd(stats.transCruise) + "°F at steady cruise." : "."), "No heat concern on this drive. GM uses 190°F as a diagnostic warm-up reference.", [], [], LIT.techlink);
+    const gapHwy = (() => { const g = []; rows.forEach(x => { if (x._running && x.mph >= 60 && typeof x.trans === "number" && typeof x.ect === "number") g.push(x.trans - x.ect); }); return g.length >= 120 ? { med: pctl(g, .5), p90: pctl(g, .9), n: g.length } : null; })();
+    const gapIdle = (() => { const g = []; rows.forEach(x => { if (x._idle && x._warm && typeof x.trans === "number" && typeof x.ect === "number") g.push(x.trans - x.ect); }); return g.length >= 60 ? pctl(g, .5) : null; })();
+    if (gapHwy) { stats.transGapHwy = gapHwy.med; if (gapIdle !== null) stats.transGapIdle = gapIdle;
+      if (gapHwy.med >= 12) add("Transmission", "watch", "Fluid ran " + rnd(gapHwy.med) + "°F above coolant at highway speed", "Over " + rnd(gapHwy.n / 60) + " minutes at 60 mph and up" + (gapIdle !== null ? "; at warm idle the fluid sat " + (gapIdle < 0 ? rnd(-gapIdle) + "°F below" : rnd(gapIdle) + "°F above") + " coolant" : "") + ". Converter slip at cruise: " + (stats.slipCruise !== undefined ? rnd(stats.slipCruise) + " rpm" : "n/a") + ".", "On trucks whose transmission cooler sits in the radiator, fluid can't cool below coolant, and with the converter locked it usually settles close to coolant. Fluid climbing well above coolant at steady speed means heat is being made faster than the cooler circuit removes it.", ["Cooler circuit flow: thermal bypass valve not opening fully, restricted lines, or a cooler with less capacity than the original", "Heat generation: converter not locking, clutch drag, or a new unit during break-in", "Low fluid level"], ["Ask the shop whether the cooler lines were flushed and the thermal bypass valve replaced with the transmission, and whether the new radiator's cooler circuit matches the original.", "Repeat the same highway stretch after the relearn period and compare the gap.", "A shop can measure cooler line in and out temperatures."], "Physics check; GM TechLink (2022) covers 6L80 overheating diagnosis including the thermal bypass valve");
+      else add("Transmission", "good", "Fluid stayed close to coolant at highway speed", "Median gap " + signed(gapHwy.med, 0) + "°F over " + rnd(gapHwy.n / 60) + " minutes at 60 mph and up.", "That's what a working cooler circuit and a locked converter look like.", [], [], "Physics check"); }
     if (trip.runningSeconds >= 900 && pk < 120) add("Transmission", "info", "Transmission never warmed much", "Peak " + rnd(pk) + "°F after " + rnd(trip.runningSeconds / 60) + " minutes.", "Either the fluid warms slowly or this reading needs checking.", [], ["Compare with a scan tool you trust."]);
   } else need("Transmission temperature", "No trustworthy transmission temperature reading.");
   const clusters = ratioClusters(rows); stats.ratioClean = clusters.clean;
@@ -790,6 +796,7 @@ function analyzeDrive(input) {
   const order = { attention: 0, watch: 1, good: 2, info: 3 };
   F.sort((a, b) => order[a.level] - order[b.level]);
   F.forEach(f => { f.sure = howSure(f); if (!f.chain) { f.bestGuess = f.causes[0] || null; f.alsoPossible = f.causes.slice(1); }
+    if (!f.chain && f.system === "Combustion" && f.bestGuess) f.sure = { label: "Low", why: "The counts are the vehicle's own; the cause is a list of common explanations, not a tested one." };
     if (f.chain) { const best = f.chain.hypotheses.find(h => h.name === f.bestGuess); const lines = best ? best.hits : 0; { f.sure = lines >= 3 ? { label: "Medium-high", why: lines + " independent observations fit the best explanation, and " + f.ruledOut.length + " alternative" + (f.ruledOut.length === 1 ? " was" : "s were") + " weakened." } : lines === 2 ? { label: "Medium", why: "Two observations fit; others weren't testable on this drive." } : { label: "Low", why: "Only one observation supports it, so alternatives remain open." }; } } });
   const theses = prosecute(rows, meta, vehicle, stats, history);
   return { theses, marks, crossChecks: xc, systems: systemCard(F, tested), tuneup: tuneUpView(F, trip), trip, findings: F, notAssessed: na, tested, channels: channels.size, sampleRate: rate, validation: val, stats, verdict: { level, headline, detail } };
