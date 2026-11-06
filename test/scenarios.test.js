@@ -3,7 +3,7 @@ const fs = require("fs"), assert = require("assert");
 const html = fs.readFileSync("index.html", "utf8");
 const src = html.split("/*PURE-START*/")[1].split("/*PURE-END*/")[0];
 new Function(html.split("<script>")[1].split("</script>")[0]); // whole page script must parse
-const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom};")();
+const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom};")();
 const m = id => api.METRICS.find(x => x.id === id);
 
 // ---- Safety allowlist
@@ -187,5 +187,11 @@ r = rep(drive("interstate")); assert(r.theses.every(x => ["Supported","Weakened"
 { const mk = (i, s, mis) => ({ id: "c" + i, start: 1.7e12 + i * 864e5, review: { kind: "Mixed", stats: s }, summary: Object.fromEntries(Object.entries(mis).map(([k, v]) => [k, { max: v }])), codes: i === 1 ? { stored: ["P0300"], pending: [], permanent: [] } : null });
   const cf = api.caseFile([mk(0, { trim1cruise: -8, trim2cruise: -3, ectPlateau: 174, knock: 4 }, { mis3: 0, mis5: 1 }), mk(1, { trim1cruise: -9, trim2cruise: -3, ectPlateau: 174, knock: 5 }, { mis3: 1, mis5: 2, mis6: 1 }), mk(2, { trim1cruise: -8.6, trim2cruise: -3.5, ectPlateau: 175, knock: 4.8 }, { mis3: 1, mis5: 2, mis6: 1 })], sierra.engine ? { engine: { cyl: 6 }, bank1Cyls: [1, 3, 5] } : {}, "");
   assert.strictEqual(cf.drives, 3); assert(cf.codesSeen.some(c => c.code === "P0300")); const inj = cf.pooled.find(t => /bank 1/.test(t.name)); assert(inj.evidence.some(e => /P0300/.test(e.text) && e.verdict === "against")); const shared = cf.pooled.find(t => /shared cause/.test(t.name)); assert.strictEqual(shared.status, "Supported", shared.status); assert(cf.mis.find(m => m.c === 5).grew); assert(cf.trends.find(t => t.k === "trim1cruise").n === 3); }
+// Core engine
+{ const rows = []; const t0 = 1.7e12; for (let i = 0; i < 10; i++) rows.push({ t: t0 + i * 1000, rpm: 0, ect: 60, mph: 0, mis4: 0 }); for (let i = 10; i < 120; i++) rows.push({ t: t0 + i * 1000, rpm: 900 + (i % 2 ? 120 : -120), ect: 60 + i * .3, mph: 0, tps: 12, fuelstat: i > 40 ? 2 : 1, stft1: 3, mis4: i > 60 ? 4 : 0 });
+  const cs = api.coldStartWindow(rows); assert(cs && cs.cold && cs.misGrow["4"] === 4 && cs.idleRpmSpread >= 200 && cs.closedLoopSec === 31, JSON.stringify(cs));
+  r = api.analyzeDrive({ rows, vehicle: sierra, meta: {} }); assert(has(r, /Misfire counts in the first 90 seconds after a cold start/, "watch")); assert(has(r, /Unsteady idle right after a cold start/, "watch"));
+  const clean = rows.map(x => ({ ...x, mis4: 0, rpm: x.rpm ? 900 : 0 })); r = api.analyzeDrive({ rows: clean, vehicle: sierra, meta: {} }); assert(has(r, /Clean start-up window/, "good"));
+  const vt = api.valvetrainTrend([{ start: 1, mode06: [{ name: "VVT bank 1", val: 30, min: 0, max: 100, pass: true }] }, { start: 2, mode06: [{ name: "VVT bank 1", val: 70, min: 0, max: 100, pass: true }] }]); assert(vt.length === 2 && vt[1].worst === .7); }
 assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 console.log("all tests passed");

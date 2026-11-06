@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261105-0709Z">
-<meta name="build-timestamp-utc" content="2026-11-05T07:09:07Z">
+<meta name="build-id" content="OBD-20261106-1559Z">
+<meta name="build-timestamp-utc" content="2026-11-06T15:59:08Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261105-0709Z", BUILD_UTC = "2026-11-05T07:09:07Z";
+const BUILD_ID = "OBD-20261106-1559Z", BUILD_UTC = "2026-11-06T15:59:08Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -660,6 +660,14 @@ function analyzeDrive(input) {
   } else need("Combustion", "Misfire counters weren't recorded.");
   if (usable("knock")) { const hi = pctl(nums(rows, "knock", r => r._running), .98); stats.knock = hi; if (hi >= 6) add("Combustion", "watch", "Repeated knock retard", "98th percentile " + rnd(hi, 1) + "°." + unverified("knock"), "The computer may be pulling timing to protect the engine.", ["Lower-octane fuel", "Heat or heavy load", "Carbon buildup"], ["Check fuel grade and compare under similar conditions."]); }
 
+  // Core engine: the first 90 seconds after a start are where valvetrain and sealing faults show first
+  const cs = coldStartWindow(rows);
+  if (cs) { tested.push("Start-up window"); stats.startIdleSpread = cs.idleRpmSpread; stats.startMis = Object.values(cs.misGrow).reduce((s, v) => s + v, 0);
+    const misTxt = Object.keys(cs.misGrow).length ? Object.entries(cs.misGrow).map(([c, v]) => "cyl " + c + " +" + v).join(", ") : "none";
+    if (Object.keys(cs.misGrow).length) add("Core engine", cs.cold ? "watch" : "info", "Misfire counts in the first 90 seconds after " + (cs.cold ? "a cold" : "a warm") + " start", misTxt + ". Idle rpm spread " + (cs.idleRpmSpread !== null ? rnd(cs.idleRpmSpread) + " rpm" : "n/a") + ".", "Counts right after a cold start, before the engine warms, are the classic early sign of a lifter, a cam follower, a valve not sealing, or a leaking injector, because clearances and sealing are worst cold. Repeated across starts, they matter more than counts anywhere else.", ["Collapsed or worn lifter (cylinder-deactivation lifters on AFM engines)", "Valve sealing or carbon on intake valves", "Injector dribble after sitting"], ["Capture several cold starts and see whether the same cylinder repeats.", "A shop can check with a relative compression test or a lifter noise diagnosis."], "Measured in the start-up window");
+    else add("Core engine", "good", "Clean start-up window", "No misfire counts in the first 90 seconds after " + (cs.cold ? "a cold" : "a warm") + " start from " + rnd(cs.startEct) + "°F; idle rpm spread " + (cs.idleRpmSpread !== null ? rnd(cs.idleRpmSpread) + " rpm" : "n/a") + (cs.closedLoopSec !== null ? "; closed loop in " + rnd(cs.closedLoopSec) + " s" : "") + ".", "The cold-start window is where mechanical faults show first, and it was quiet.", [], [], "Measured in the start-up window");
+    if (cs.idleRpmSpread !== null && cs.idleRpmSpread >= 150 && cs.cold) add("Core engine", "watch", "Unsteady idle right after a cold start", "Idle rpm varied " + rnd(cs.idleRpmSpread) + " rpm across the window.", "One-second data can't resolve individual power strokes, so this is coarse, but a wide swing cold that settles warm points at sealing or a cold misfire.", ["Valve or lifter", "Idle air control or a leak that closes with heat"], ["Compare with the warm idle spread later in the drive."], "Measured in the start-up window");
+  } else need("Start-up window", "The engine start wasn't recorded; connect before starting.");
   // Electrical
   const vr = rows.filter(r => r._running && typeof r.volt === "number"), voff = nums(rows, "volt", r => typeof r.rpm === "number" && r.rpm <= 50);
   if (vr.length >= 20) {
@@ -1189,7 +1197,20 @@ function caseFile(drives, vehicle, currentCodes) {
     ], settle: "Mark any felt shudder; see whether counters move with it." }
   ];
   pooled.forEach(t => { const f = t.evidence.filter(e => e.verdict === "for").length, a = t.evidence.filter(e => e.verdict === "against").length; t.status = f >= 2 && f > a ? "Supported" : a >= 2 && f === 0 ? "Weakened" : a > f ? "Leaning cleared" : "Not cleared"; });
-  return { drives: ds.length, span: ds.length ? [ds[0].start, ds[ds.length - 1].start] : null, trends: trends.filter(t => t.n), mis, codesSeen, pooled };
+  const vvt = valvetrainTrend(ds);
+  return { vvt, drives: ds.length, span: ds.length ? [ds[0].start, ds[ds.length - 1].start] : null, trends: trends.filter(t => t.n), mis, codesSeen, pooled };
+}
+/* ---------- Core engine: cold-start window and valvetrain self-test trend ---------- */
+function coldStartWindow(rows) {
+  const i0 = rows.findIndex((r, i) => i && typeof rows[i - 1].rpm === "number" && rows[i - 1].rpm <= 50 && r.rpm > 400); if (i0 < 0) return null;
+  const t0 = rows[i0].t, win = rows.filter(r => r.t >= t0 && r.t <= t0 + 90000), cold = typeof rows[i0].ect === "number" && rows[i0].ect < 120;
+  const rpm = nums(win, "rpm", r => r.t >= t0 + 5000 && r.mph < 1), st1 = nums(win, "stft1", r => r.fuelstat === 2), st2 = nums(win, "stft2", r => r.fuelstat === 2);
+  const misGrow = {}; Object.keys(win[0] || {}).concat(...win.map(r => Object.keys(r))).filter((k, i, a) => /^mis\d+$/.test(k) && a.indexOf(k) === i).forEach(k => { const v = nums(win, k); if (v.length >= 2 && v[v.length - 1] > v[0]) misGrow[k.slice(3)] = v[v.length - 1] - v[0]; });
+  return { cold, startEct: rows[i0].ect, idleRpmMin: rpm.length ? Math.min(...rpm) : null, idleRpmSpread: rpm.length >= 10 ? pctl(rpm, .9) - pctl(rpm, .1) : null, stftSwing: st1.length >= 10 ? pctl(st1, .9) - pctl(st1, .1) : null, stftSwing2: st2.length >= 10 ? pctl(st2, .9) - pctl(st2, .1) : null, misGrow, closedLoopSec: (() => { const r = win.find(x => x.fuelstat === 2); return r ? (r.t - t0) / 1000 : null; })() };
+}
+function valvetrainTrend(drives) {
+  const out = []; drives.filter(d => d.mode06 && d.mode06.length).forEach(d => { const v = d.mode06.filter(x => /VVT/.test(x.name) && x.pass !== null); if (!v.length) return; out.push({ t: d.start, worst: Math.max(...v.map(x => x.max > x.min ? (x.val - x.min) / (x.max - x.min) : 0)), n: v.length, fails: v.filter(x => x.pass === false).length }); });
+  return out.sort((a, b) => a.t - b.t);
 }
 
 function matchVehicle(vin, vehicles) {
@@ -2271,6 +2292,7 @@ async function openCaseFile() {
     cf.pooled.forEach(t => host.append(el("details", { class: "f", open: t.status === "Supported" }, el("summary", {}, el("span", { class: "lv " + (t.status === "Supported" ? "attention" : t.status === "Weakened" ? "good" : "watch"), textContent: t.status === "Supported" ? "✕" : t.status === "Weakened" ? "✓" : "?" }), t.name + ": " + t.status), el("ul", {}, t.evidence.map(e => el("li", { textContent: ({ for: "FOR: ", against: "AGAINST: ", open: "OPEN: " })[e.verdict] + e.text }))), el("p", { textContent: "To settle: " + t.settle }))));
     host.append(el("h3", { textContent: "Misfire history by cylinder (counter C, per drive)" }));
     host.append(el("table", {}, el("thead", {}, el("tr", {}, el("th", { textContent: "Cyl" }), el("th", { textContent: "Bank" }), ...drives.filter(d => d.review).map(d => el("th", { class: "n", textContent: new Date(d.start).toLocaleDateString(undefined, { month: "numeric", day: "numeric" }) })))), el("tbody", {}, cf.mis.map(m => el("tr", {}, el("td", { textContent: String(m.c) }), el("td", { textContent: m.bank === null ? "?" : String(m.bank) }), ...m.hist.map(v => el("td", { class: "n", textContent: v === null ? "–" : String(v) })))))));
+    if (cf.vvt && cf.vvt.length) { host.append(el("h3", { textContent: "Valvetrain self-tests over time" }), el("p", { class: "sub", style: "white-space:normal", textContent: "Worst VVT self-test result as a share of the way to its limit. Cam phasers that struggle, or a stretching chain, push this toward 100% before any code sets." })); host.append(el("table", {}, el("tbody", {}, cf.vvt.map(v => el("tr", {}, el("td", { textContent: new Date(v.t).toLocaleDateString() }), el("td", { class: "n", textContent: v.n + " tests" }), el("td", { class: "n", textContent: Math.round(v.worst * 100) + "% of limit" + (v.fails ? ", " + v.fails + " failed" : "") })))))); }
     host.append(el("h3", { textContent: "Trends across drives" }));
     host.append(el("table", {}, el("thead", {}, el("tr", {}, ["Measure", "Drives", "Low", "Median", "High", "Drift"].map((h, i) => el("th", { class: i ? "n" : "", textContent: h })))), el("tbody", {}, cf.trends.map(t => el("tr", {}, el("td", { textContent: t.label + (t.unit ? " (" + t.unit + ")" : "") }), el("td", { class: "n", textContent: String(t.n) }), el("td", { class: "n", textContent: t.n > 1 ? t.lo.toFixed(t.d) : t.pts[0].v.toFixed(2) }), el("td", { class: "n", textContent: t.n > 1 ? t.med.toFixed(t.d) : "" }), el("td", { class: "n", textContent: t.n > 1 ? t.hi.toFixed(t.d) : "" }), el("td", { class: "n", textContent: t.drift === null ? "" : (t.drift > 0 ? "+" : "") + t.drift.toFixed(t.d) }))))));
     host.append(el("p", { class: "sub", style: "white-space:normal", textContent: "Drift compares the later half of drives with the earlier half. Measures only count on drives where they could be rated, so highway and city drives contribute different rows." }));
