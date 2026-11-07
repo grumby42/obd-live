@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261107-1330Z">
-<meta name="build-timestamp-utc" content="2026-11-07T13:30:21Z">
+<meta name="build-id" content="OBD-20261107-1335Z">
+<meta name="build-timestamp-utc" content="2026-11-07T13:35:42Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -118,7 +118,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261107-1330Z", BUILD_UTC = "2026-11-07T13:30:21Z";
+const BUILD_ID = "OBD-20261107-1335Z", BUILD_UTC = "2026-11-07T13:35:42Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -496,6 +496,30 @@ function annotate(rowsIn) {
   }
   return rows;
 }
+// Is the transmission still adapting? There is no readable "learning" flag, so this is an inference from what adaptation changes:
+// the shift-time values the module reports, the rate of rpm flares on upshifts, and how many coast-downs land firm. State plus a confidence, never a bare verdict.
+function learningState(current, history) {
+  const why = [], hist = (history || []).filter(h => h && typeof h === "object");
+  const cur = current || {}, vals = ["sh12", "sh23", "sh34"];
+  const seq = [cur, ...hist].filter(h => vals.some(k => typeof h[k] === "number")).slice(0, 5);
+  let maxRel = null, moving = 0, compared = 0;
+  for (let i = 0; i + 1 < seq.length; i++) vals.forEach(k => { const a = seq[i][k], b = seq[i + 1][k]; if (typeof a === "number" && typeof b === "number" && b > 0) { const rel = Math.abs(a - b) / b; compared++; maxRel = maxRel === null ? rel : Math.max(maxRel, rel); if (rel > .08) moving++; } });
+  const upPairs = p => Object.entries(p || {}).filter(([k]) => /^\d→\d$/.test(k) && Number(k[0]) < Number(k[2]));
+  const flareRate = p => { const u = upPairs(p); const n = u.reduce((s, [, v]) => s + v.n, 0), f = u.reduce((s, [, v]) => s + (v.flares || 0), 0); return n >= 5 ? { n, rate: f / n } : null; };
+  const cdFirm = p => { const c = Object.entries(p || {}).filter(([k]) => / coast$/.test(k)); const n = c.reduce((s, [, v]) => s + v.n, 0), firm = c.reduce((s, [, v]) => s + v.n * (Math.abs(v.jumpMed || 0) >= 250 ? 1 : 0), 0); return n >= 4 ? { n, share: firm / n } : null; };
+  const fr = flareRate(cur.shifts), fh = hist.map(h => flareRate(h.shifts)).filter(Boolean), cf = cdFirm(cur.shifts), ch = hist.map(h => cdFirm(h.shifts)).filter(Boolean);
+  const shiftsSeen = (fr ? fr.n : 0) + fh.reduce((s, x) => s + x.n, 0);
+  let score = 0; // positive = still learning
+  if (compared) { if (moving >= 2) { score += 2; why.push("shift-time values moved more than 8% between " + moving + " of the last " + compared + " drive pairs"); } else if (maxRel !== null && maxRel <= .04) { score -= 2; why.push("shift-time values held within " + Math.round(maxRel * 100) + "% across " + seq.length + " drives"); } else why.push("shift-time values moved " + Math.round((maxRel || 0) * 100) + "% at most"); }
+  if (fr) { if (fr.rate >= .25) { score += 1; why.push(Math.round(fr.rate * 100) + "% of upshifts flared this drive"); } else if (fr.rate <= .1) { score -= 1; why.push("only " + Math.round(fr.rate * 100) + "% of upshifts flared this drive"); } }
+  if (fh.length >= 2 && fr) { const prev = fh[0].rate; if (fr.rate < prev - .1) { score += 1; why.push("flares falling drive to drive, which is adaptation in progress"); } }
+  if (cf) { if (cf.share >= .5) { score += 1; why.push(Math.round(cf.share * 100) + "% of coast-downs landed firm"); } else if (cf.share <= .25) { score -= 1; why.push("most coast-downs landed soft"); } }
+  const drives = seq.length, conf = drives >= 5 && shiftsSeen >= 60 ? "High" : drives >= 3 && shiftsSeen >= 25 ? "Medium" : "Low";
+  if (!compared && !fr && !cf) return { state: "unknown", label: "Not enough data", confidence: "Low", why: ["Needs shift-time values or a few catalogued shifts; drive with gear data reporting."], score: 0 };
+  const state = score >= 2 ? "active" : score <= -2 ? "settled" : "settling";
+  return { state, label: state === "active" ? "Learning: active" : state === "settled" ? "Learning: settled" : "Learning: settling", confidence: conf, why, score, drives, shiftsSeen };
+}
+
 // Without a gear request, an automatic still tells on itself: rpm per mph falls into bands, one per gear, and the spacing of those bands
 // must match the published ratio set. Fit one unknown (final drive × tire constant), then assign each steady sample to its nearest band.
 function pgMaxRun(rows, t) { const a = nums(rows.filter(r => Math.abs(r.t - t) <= 30000), "purge"); return a.length ? Math.max(...a) : null; }
@@ -863,7 +887,9 @@ function analyzeDrive(input) {
   { const mil = nums(rows, "mildist"), clr = nums(rows, "clrdist"), wu = nums(rows, "warmups");
     if (mil.length && clr.length && mil[mil.length - 1] > 0) { const m = mil[mil.length - 1], c = clr[clr.length - 1]; stats.milMiles = m; stats.clearMiles = c;
       add("Codes", "info", "Light on for " + rnd(m) + " of the " + rnd(c) + " miles since codes were last cleared", (c - m >= 0 ? "It came back within " + rnd(c - m) + " miles of the clear" : "The counters disagree") + (wu.length ? ", " + rnd(wu[wu.length - 1]) + " warm-up cycles ago" : "") + ".", c - m < 100 ? "A code that returns this soon after a clear is a standing condition, not a one-off." : "The fault took a while to recur after the clear, which fits an intermittent condition.", [], [], "Standard PIDs $21, $31, $30"); } }
-  const cat = shiftCatalog(rows, val.gear !== "suspect"); stats.shifts = cat.pairs; stats.tccApply = tccApplySpeed(rows); const hr = heatRate(rows); if (hr !== null) stats.transHeatRate = hr;
+  const cat = shiftCatalog(rows, val.gear !== "suspect");
+  { const ls = learningState({ sh12: stats.sh12, sh23: stats.sh23, sh34: stats.sh34, shifts: cat.pairs }, (history || []).map(h => h && h.review && h.review.stats ? h.review.stats : h && h.stats ? h.stats : h).filter(Boolean).reverse());
+    if (ls.state !== "unknown") { stats.learning = ls.state; stats.learningConfidence = ls.confidence; add("Transmission", ls.state === "active" ? "info" : "good", ls.label + " (" + ls.confidence + " confidence)", ls.why.join("; ") + ".", "No readable learning flag exists; this is inferred from shift-time values across drives, upshift flares, and coast-down firmness. " + (ls.state === "active" ? "Expect it to settle over a few hundred miles of mixed driving." : ls.state === "settled" ? "Shift behaviour has stopped changing drive to drive; what remains is what you have." : "Changing, but slowing."), [], [], "Inference from this vehicle's own drives"); } } stats.shifts = cat.pairs; stats.tccApply = tccApplySpeed(rows); const hr = heatRate(rows); if (hr !== null) stats.transHeatRate = hr;
   ["sh12","sh23","sh34"].forEach(k => { const v = nums(rows, k); if (v.length) stats[k] = Number(pctl(v, .5).toFixed(2)); });
   if (cat.shifts.length) { const cd = cat.shifts.filter(s => s.kind === "coast-down"), firm = cd.filter(s => /firm/.test(s.feel)), fl2 = cd.filter(s => s.feel === "flare"), cush = cd.filter(s => /cushioned/.test(s.feel));
     if (cd.length) add("Transmission", (firm.length >= 3 && firm.length >= cd.length * .5) || fl2.length >= 3 ? "watch" : "info", cd.length + " coast-down downshifts: " + firm.length + (cd.some(s => /unknown/.test(s.feel)) || !cd.some(s => typeof s.slipPeak === "number") ? " firm (rpm step of 250 or more), " : " firm with converter locked, ") + cush.length + " cushioned, " + fl2.length + " flares", Object.entries(cat.pairs).filter(([k]) => /coast/.test(k)).map(([k, p]) => k.replace(" coast", "") + " ×" + p.n + " at ~" + Math.round(p.mphMed) + " mph, rpm step " + (p.jumpMed > 0 ? "+" : "") + Math.round(p.jumpMed) + ", locked through " + Math.round(p.lockedShare * 100) + "%").join("; ") + ".", "A coast-down downshift raises engine speed to the new ratio. If the converter clutch stays applied through it, that step reaches the driveline and is felt as a clunk; a released converter cushions it. Relearning transmissions often change this behavior over the first few hundred miles.", firm.length ? ["Converter clutch strategy during coast-down shifts, which the TCM adapts", "A shift that completes abruptly"] : [], firm.length ? ["Mark the clunks so the catalog can pair them with specific shifts.", "Ask the shop whether coast-down clutch control was fast-learned."] : [], "Measured from this drive"); }
@@ -1521,7 +1547,7 @@ const PRESETS = {
  "Health check": [ W("healthcheck",[],[4,9],[6,8]), W("healthcard",[],[4,8],[6,8]), W("needle",["rpm"],[4,4],[4,4]), W("number",["ect"],[2,3],[4,4]), W("number",["volt"],[2,3],[4,4]) ],
  Glance: [ W("needle",["rpm"],[2,5],[4,5]), W("needle",["mph"],[2,5],[4,5]), W("gearbox",[],[4,3],[4,5]),
    W("number",["trans"],[2,3],[3,3]), W("number",["ect"],[2,3],[3,3]), W("number",["volt"],[2,3],[3,3]), W("number",["slip"],[2,3],[3,3]), W("status",[],[4,2],[12,2]) ],
- Transmission: [ W("gearbox",[],[4,3],[3,4]), W("needle",["trans"],[4,4],[3,4]), W("line",["slip"],[4,4],[6,4],{win:5}), W("scatter",["mph","rpm"],[4,5],[6,5]),
+ Transmission: [ W("learn",[],[4,3],[6,3]), W("gearbox",[],[4,3],[3,4]), W("needle",["trans"],[4,4],[3,4]), W("line",["slip"],[4,4],[6,4],{win:5}), W("scatter",["mph","rpm"],[4,5],[6,5]),
    W("line",["trans"],[4,4],[6,5],{win:15}), W("share",[],[4,4],[4,4],{share:"gear",view:"bars"}), W("share",[],[4,4],[4,4],{share:"temp",view:"donut"}),
    W("share",[],[4,4],[4,4],{share:"drive",view:"donut"}), W("number",["sh12"],[2,3],[3,3]), W("number",["sh23"],[2,3],[3,3]), W("number",["sh34"],[2,3],[3,3]), W("number",["ratio"],[2,3],[3,3]), W("number",["geari"],[2,3],[3,3]), W("history",["trans"],[4,4],[12,4],{stat:"max"}) ],
  Electrical: [ W("elab",[],[4,3],[4,3]), W("needle",["volt"],[2,4],[4,4]), W("number",["atrv"],[2,4],[4,4]), W("line",["volt","atrv"],[4,4],[12,4],{win:15}), W("history",["volt"],[4,4],[12,4],{stat:"min"}) ],
@@ -1579,6 +1605,7 @@ function loadVehicle(id) {
   if (store.get(vkey("glancev"), 0) !== 2) { dash.Glance = buildDash("Glance"); store.set(vkey("glancev"), 2); }
   fits = store.get(vkey("fits"), {}); if (!("Trip" in fits)) { fits.Trip = true; store.set(vkey("fits"), fits); }
   if (store.get(vkey("tripv"), 0) !== 4) { dash.Trip = buildDash("Trip"); store.set(vkey("tripv"), 4); }
+  if (!store.get(vkey("learnv"), 0)) { dash.Transmission = buildDash("Transmission"); store.set(vkey("learnv"), 1); }
   rules = store.get(vkey("rules"), {}); customs = store.get(vkey("customs"), []); rawDids = store.get(vkey("rawdids"), []);
   customs.forEach(registerCustom); rawDids.forEach(registerRawDid);
   tab = store.get(vkey("tab"), "Health check"); if (!dash[tab] && tab !== EV) tab = "Health check";
@@ -2031,6 +2058,19 @@ R.share = (w, box) => {
     if (view !== "donut") leg.textContent = "";
   };
 };
+R.learn = (w, box) => {
+  const big = el("b", { style: "font-size:1.5em" }), conf = el("div", { class: "pill" }), why = el("div", { class: "sub", style: "white-space:normal;font-size:.75rem" });
+  box.append(header(w, "Transmission learning", "Estimate"), el("div", { class: "body" }, big, conf, why));
+  let last = 0, cache = null;
+  return () => {
+    const now = Date.now();
+    if (session && now - last > 30000 && rows.length >= 60) { last = now; try { const cat = shiftCatalog(rows, !(mstate.gear && mstate.gear.status === "failed")), cur = { shifts: cat.pairs }; ["sh12","sh23","sh34"].forEach(k => { const v = rows.map(r => r[k]).filter(x => typeof x === "number"); if (v.length) cur[k] = pctl(v, .5); }); cache = learningState(cur, drives.map(d => d.review && d.review.stats).filter(Boolean).reverse()); announceLearning(cache); } catch (e) {} }
+    const ls = cache; box.className = "w " + (!ls || ls.state === "unknown" ? "" : ls.state === "settled" ? "good" : "");
+    big.textContent = ls ? ls.label : session ? "Gathering shifts…" : "Not connected"; conf.textContent = ls && ls.state !== "unknown" ? ls.confidence + " confidence · " + (ls.drives || 0) + " drives, " + (ls.shiftsSeen || 0) + " shifts" : ""; why.textContent = ls ? ls.why.slice(0, 2).join(". ") : "";
+  };
+};
+let lastSpoken = "";
+function announceLearning(ls) { if (!phonePrefs.speak || !ls || ls.state === "unknown" || !("speechSynthesis" in window)) return; const text = ls.label.replace("Learning: ", "Transmission learning ") + ", " + ls.confidence.toLowerCase() + " confidence"; if (text === lastSpoken) return; lastSpoken = text; try { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(text)); } catch (e) {} }
 R.tires = (w, box) => {
   const cells = {}, grid = el("div", { class: "tires" }); ["tpfl","tpfr","tprr","tprl"].forEach(i => { const c = el("div", { class: "tire" }, el("b"), el("span", { textContent: byId[i].label.replace(" tire", "") })); cells[i] = c; grid.append(c); });
   box.append(header(w, "Tire pressures", "Unverified"), el("div", { class: "body" }, grid));
@@ -2478,7 +2518,7 @@ function aboutOf(m) { if (ABOUT[m.id]) return ABOUT[m.id]; if (m.basis === "phon
 function evWidgets() {
   const F = (type, about, extra = {}, big = true) => ({ w: { id: "ev" + type + (extra.share || (extra.metrics || []).join("")), type, metrics: [], ...extra }, about, big });
   const views = [
-    ["Vehicle status", [F("status", "Whether the check-engine light is on, and code counts."), F("gearbox", "Current gear and converter slip together."), F("tires", "Four tire pressures from the body module (GM trucks)."), F("misfire", "Recent misfires per cylinder, which shows whether a problem is localized."), F("readiness", "Which emissions self-tests have finished."), F("codes", "Stored, pending, and permanent trouble codes, plus freeze frame."), F("mode06", "Computer self-test results against the vehicle's own limits."), F("truck", "VIN, software fingerprint, and which computers answer. It stays on this device."), F("crosscheck", "Whether related sensors move together."), F("sysmap", "A schematic of where each sensor sits in the air, fuel, exhaust, coolant, oil, and transmission paths, colored by its live value. Exact in order, approximate in position."), F("phone", "Opt-in GPS, motion, and microphone capture."), F("elab", "Parked tests for starting voltage and accessory load.")]],
+    ["Vehicle status", [F("status", "Whether the check-engine light is on, and code counts."), F("gearbox", "Current gear and converter slip together."), F("learn", "Is the transmission still adapting? Inferred, with a confidence."), F("tires", "Four tire pressures from the body module (GM trucks)."), F("misfire", "Recent misfires per cylinder, which shows whether a problem is localized."), F("readiness", "Which emissions self-tests have finished."), F("codes", "Stored, pending, and permanent trouble codes, plus freeze frame."), F("mode06", "Computer self-test results against the vehicle's own limits."), F("truck", "VIN, software fingerprint, and which computers answer. It stays on this device."), F("crosscheck", "Whether related sensors move together."), F("sysmap", "A schematic of where each sensor sits in the air, fuel, exhaust, coolant, oil, and transmission paths, colored by its live value. Exact in order, approximate in position."), F("phone", "Opt-in GPS, motion, and microphone capture."), F("elab", "Parked tests for starting voltage and accessory load.")]],
     ["Gauges", ["rpm","mph","trans","ect","volt","fuel"].map(i => F("needle", "Needle gauge. Colors show its limit, if one exists.", { metrics: [i] }, false))],
     ["Graphs and pies", [F("line", "Fuel corrections over time.", { metrics: ["stft1","ltft1","stft2","ltft2"], win: 5 }), F("line", "All major heat readings together.", { metrics: ["ect","oilt","trans"], win: 15 }), F("line", "Converter slip over time.", { metrics: ["slip"], win: 5 }), F("scatter", "Each point is engine speed against road speed. Each locked gear forms a straight ray.", { metrics: ["mph","rpm"] }), F("share", "Time in each gear.", { share: "gear", view: "bars" }), F("share", "Time in each transmission temperature band.", { share: "temp", view: "donut" }), F("share", "Time stopped, cruising, accelerating, and slowing.", { share: "drive", view: "donut" }), F("history", "Transmission temperature peak on each saved drive.", { metrics: ["trans"], stat: "max" }), F("history", "Estimated fuel economy on each saved drive.", { metrics: ["mpg"], stat: "avg" })]],
     ["Health", [F("healthcheck", "The guided steps that exercise more of the vehicle."), F("healthcard", "System-by-system status for this session.")]]
@@ -2597,6 +2637,7 @@ function openPhone() {
     row("exportPosition", "Include position in exports", "Off by default, so exported files never show where you drove unless you choose this."),
     row("motion", "Motion: vibration level and frequency", "Mount the phone firmly. A loose phone measures itself, not the vehicle."),
     row("mic", "Microphone: cabin noise level and pitch", "Relative level only. Useful with marks: tap Mark when a noise appears."),
+    row("speak", "Speak transmission-learning changes", "Uses the phone's own voice to say when the learning estimate changes state. Nothing is recorded."),
     el("p", { textContent: "Not available: tire pressure, steering angle, or anything on networks the LX can't reach." }));
 }
 /* ---------- Electrical Lab ---------- */

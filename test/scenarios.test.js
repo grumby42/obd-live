@@ -3,7 +3,7 @@ const fs = require("fs"), assert = require("assert");
 const html = fs.readFileSync("index.html", "utf8");
 const src = html.split("/*PURE-START*/")[1].split("/*PURE-END*/")[0];
 new Function(html.split("<script>")[1].split("</script>")[0]); // whole page script must parse
-const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,shiftCatalog,transShopReport,tccApplySpeed,rpmEvents,eventWindows,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom,inferGears,toMessagesByEcu,hmm};")();
+const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,shiftCatalog,transShopReport,tccApplySpeed,rpmEvents,eventWindows,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom,inferGears,toMessagesByEcu,hmm,learningState};")();
 const m = id => api.METRICS.find(x => x.id === id);
 
 // ---- Safety allowlist
@@ -292,4 +292,12 @@ assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
   const d = drive("city"); let mode = "V8", k = 0; d.forEach((r, i) => { if (i % 120 === 0 && r.mph > 20) mode = mode === "V8" ? "V4" : "V8"; r.afm = r.rpm > 400 ? mode : undefined; r.mis1 = k; if (i > 1 && d[i - 1].afm && d[i - 1].afm !== r.afm) k++; });
   const rep = api.analyzeDrive({ rows: d, meta: {}, vehicle: { afmCyls: [1, 4, 6, 7] }, history: [] }); const f = rep.findings.find(x => /misfire counts landed within 8 s/.test(x.title)); assert(f, rep.findings.map(x => x.title).join("|")); assert(typeof rep.stats.afmShare === "number");
   const d2 = drive("city"); d2.forEach(r => { r.afm = r.rpm > 400 ? "V8" : undefined; }); const rep2 = api.analyzeDrive({ rows: d2, meta: {}, vehicle: { afmCyls: [1, 4, 6, 7] }, history: [] }); assert(rep2.findings.some(x => /Cylinder deactivation/.test(x.title) && x.level === "info")); }
+
+// Transmission learning estimate: moving shift-time values and flares read as active; stable values and soft coast-downs as settled.
+{ const pairsOf = (flares, firmJump) => ({ "1→2": { n: 10, flares }, "2→3": { n: 10, flares }, "3→4": { n: 8, flares: 0 }, "3→2 coast": { n: 6, jumpMed: firmJump }, "4→3 coast": { n: 6, jumpMed: firmJump } });
+  const active = api.learningState({ sh12: .60, sh23: .55, sh34: .50, shifts: pairsOf(4, 400) }, [{ sh12: .52, sh23: .48, sh34: .44, shifts: pairsOf(5, 420) }, { sh12: .45, sh23: .40, sh34: .40, shifts: pairsOf(6, 450) }, { sh12: .40, sh23: .36, sh34: .35 }]);
+  assert.strictEqual(active.state, "active", JSON.stringify(active)); assert(["Medium", "High"].includes(active.confidence));
+  const settled = api.learningState({ sh12: .50, sh23: .45, sh34: .40, shifts: pairsOf(0, 120) }, [{ sh12: .50, sh23: .46, sh34: .40, shifts: pairsOf(1, 130) }, { sh12: .51, sh23: .45, sh34: .41, shifts: pairsOf(0, 110) }, { sh12: .50, sh23: .45, sh34: .40, shifts: pairsOf(1, 120) }, { sh12: .50, sh23: .45, sh34: .40, shifts: pairsOf(0, 120) }]);
+  assert.strictEqual(settled.state, "settled", JSON.stringify(settled)); assert.strictEqual(settled.confidence, "High");
+  assert.strictEqual(api.learningState({}, []).state, "unknown"); }
 console.log("all tests passed");
