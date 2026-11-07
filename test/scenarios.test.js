@@ -3,7 +3,7 @@ const fs = require("fs"), assert = require("assert");
 const html = fs.readFileSync("index.html", "utf8");
 const src = html.split("/*PURE-START*/")[1].split("/*PURE-END*/")[0];
 new Function(html.split("<script>")[1].split("</script>")[0]); // whole page script must parse
-const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,shiftCatalog,transShopReport,tccApplySpeed,rpmEvents,eventWindows,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom,inferGears,toMessagesByEcu};")();
+const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,shiftCatalog,transShopReport,tccApplySpeed,rpmEvents,eventWindows,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom,inferGears,toMessagesByEcu,hmm};")();
 const m = id => api.METRICS.find(x => x.id === id);
 
 // ---- Safety allowlist
@@ -267,4 +267,9 @@ assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 // Module voltage after shutdown (0 V) is not "battery low before start".
 { const d = drive("city"); d.push({ t: d[d.length - 1].t + 5000, rpm: 0, volt: 0.02 }, { t: d[d.length - 1].t + 10000, rpm: 0, volt: 0 }, { t: d[d.length - 1].t + 15000, rpm: 0, volt: 0 });
   const rep = api.analyzeDrive({ rows: d, meta: {}, vehicle: {}, history: [] }); assert(!rep.findings.some(f => /Battery was low before start/.test(f.title)), "shutdown zero alarmed"); }
+
+// Cruise performance table: steady level samples binned by speed, best-economy band named.
+{ const rows = []; let t = 0; [[30, 10], [40, 12], [50, 16], [60, 20], [70, 27]].forEach(([mph, maf]) => { for (let i = 0; i < 120; i++) rows.push({ t: (t++) * 1000, rpm: mph * 30, mph, maf, tps: 15, ect: 195, load: 30, volt: 14, fuelstat: 2 }); });
+  const rep = api.analyzeDrive({ rows, meta: {}, vehicle: { tankGal: 26 }, history: [] }); const f = rep.findings.find(x => /Cruise performance/.test(x.title)); assert(f, rep.findings.map(x => x.title).join("|")); assert(/best economy at 30–39 mph/.test(f.title), f.title); assert(rep.stats.cruiseTable.length === 5, JSON.stringify(rep.stats.cruiseTable));
+  assert(rep.findings.some(x => /full 26-gal tank/.test(x.evidence)), "tank range line"); assert.strictEqual(api.hmm(519.25), "8:39"); }
 console.log("all tests passed");

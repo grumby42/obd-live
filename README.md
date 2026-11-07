@@ -22,3 +22,8 @@ Readings tagged **Unverified** come from community reports for other GM vehicles
 - Gear is inferred from engine rpm per mph against the transmission's published ratio set: one anchor (final drive × tire) is fitted per vehicle, each steady sample is matched to its nearest band, and the fit is rejected if the bands don't match the ratio spacing. Shift detection then runs on the inferred gear and says so.
 - EVAP: tank-pressure readings that never move, tank vacuum beyond GM's P0446 set point, and purge duty are reported, with an "assume guilty" thesis for a blocked vent. A gas-cap test (key on, engine off, Mark "cap", loosen the cap) separates a real vacuum from a sensor reporting a fixed value.
 - Code history: miles with the light on vs miles since the last clear.
+
+### Trip computer and fuel planning (aviation-style)
+- Vehicle settings take the tank size (owner's manual) and a reserve you want to keep. From fuel level, airflow-based burn rate and a rolling 10-minute window the app shows fuel in tank, burn rate, specific range (mpg), range to empty, range to reserve, and endurance to reserve and to empty in h:mm, plus trip distance, fuel used, average mpg, engine time and moving average speed since connect.
+- The review tables cruise performance by 10-mph band from steady, level samples, like an aircraft cruise chart, and names the best-economy band.
+- A no-scroll "Trip" page shows speed, gear, rpm per mph, fuel/range/endurance, specific range, fluid, oil and coolant temperatures, and module voltage.
