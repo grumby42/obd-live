@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261107-1306Z">
-<meta name="build-timestamp-utc" content="2026-11-07T13:06:58Z">
+<meta name="build-id" content="OBD-20261107-1310Z">
+<meta name="build-timestamp-utc" content="2026-11-07T13:10:46Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -118,7 +118,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261107-1306Z", BUILD_UTC = "2026-11-07T13:06:58Z";
+const BUILD_ID = "OBD-20261107-1310Z", BUILD_UTC = "2026-11-07T13:10:46Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1639,8 +1639,13 @@ async function ask(cmd, timeout) {
   cmd = String(cmd).toUpperCase().replace(/\s+/g, "");
   if (!isAllowedCommand(cmd)) throw new Error("Blocked by read-only allowlist: " + cmd);
   if (!session) throw new Error("Not connected");
-  return session.link.send(cmd, timeout);
+  const s = session, t0 = Date.now();
+  try { const r = await s.link.send(cmd, timeout); logX(s, cmd, r, t0); return r; }
+  catch (e) { logX(s, cmd, "⟂ " + e.message, t0); throw e; }
 }
+// Last 300 exchanges, kept for the connection log and the review packet (adapter traffic only, no location).
+function logX(s, cmd, r, t0) { (s.xlog = s.xlog || []).push({ t: t0, ms: Date.now() - t0, cmd, r: String(r).replace(/[\r\n>]+/g, " ").trim().slice(0, 120) }); if (s.xlog.length > 300) s.xlog.splice(0, s.xlog.length - 300); lastXlog = s.xlog; }
+let lastXlog = [];
 // A module outside the 7E0–7E7 range (the body module answers 241 → 641) needs the adapter's receive filter set, then cleared again.
 const RX_FOR = { "241": "641" };
 async function askH(header, cmd) {
@@ -1732,7 +1737,11 @@ async function start(link, label) {
     setStatus("Initializing " + label + "…");
     // CAN first, which every vehicle so far uses and answers instantly. Only if that fails, let the adapter search protocols, which can take ten seconds or more.
     await exclusive(async () => { for (const c of ["ATZ","ATE0","ATL0","ATS0","ATH0","ATAT1","ATSP6","ATSH7DF"]) await ask(c); s.header = "7DF"; });
-    { let probe = await exclusive(() => ask("0100", 6000)), pn = "6";
+    { let probe = null, pn = "6";
+      for (let attempt = 1; attempt <= 3 && probe === null; attempt++) {
+        try { probe = await exclusive(() => ask("0100", 6000)); }
+        catch (e) { if (!/timed out/.test(e.message)) throw e; setStatus("No reply to 0100 (try " + attempt + " of 3), checking the adapter…", "warn"); let alive = false; try { alive = /ELM|STN|OBD|v\d/i.test(await exclusive(() => ask("ATI", 3000))); } catch (e2) {}
+          if (!alive && attempt === 3) throw new Error("Adapter not responding. Turn Bluetooth off and on, or unplug and re-seat the OBDLink, then reconnect."); if (attempt === 3) probe = "NO DATA"; } }
       if (isNoData(probe)) { setStatus("No CAN answer; searching protocols…"); await exclusive(() => ask("ATSP0")); probe = await exclusive(() => ask("0100", 20000)); if (isNoData(probe)) throw new Error("No response from the vehicle. Turn the ignition on, then reconnect."); pn = String(await exclusive(() => ask("ATDPN"))).replace(/[^0-9A-F]/gi, "").slice(-1); s.header = null; }
       s.proto = pn; s.can = pn === "" ? true : /^[6-9]$/.test(pn);
       if (!s.can) toast("This vehicle isn't on CAN (protocol " + pn + "): GM-specific requests, self-tests, and multi-module identity are skipped."); }
@@ -1818,7 +1827,7 @@ async function deleteDrive(id) {
   await new Promise((res, rej) => { const t = d.transaction(["drives", "chunks"], "readwrite"); t.objectStore("drives").delete(id); keys.forEach(k => t.objectStore("chunks").delete(k)); t.oncomplete = res; t.onerror = () => rej(t.error); });
   await loadDrives();
 }
-const sessionMeta = () => ({ id: driveId, start: driveStart, build: BUILD_ID, codes, monitor, mode06, supported: supported ? [...supported] : [], fpChanged: !!truck.fpChanged, fp: { cal: truck.calSet || null, cvn: truck.cvn || null, was: truck.fpWas || null }, ecus: truck.ecus || [] });
+const sessionMeta = () => ({ id: driveId, start: driveStart, build: BUILD_ID, codes, monitor, mode06, supported: supported ? [...supported] : [], xlog: (lastXlog || []).slice(0, 60).concat((lastXlog || []).length > 120 ? (lastXlog || []).slice(-60) : (lastXlog || []).slice(60)), fpChanged: !!truck.fpChanged, fp: { cal: truck.calSet || null, cvn: truck.cvn || null, was: truck.fpWas || null }, ecus: truck.ecus || [] });
 let saving = false;
 async function saveDrive(final) {
   if (!driveId || saving) return;
@@ -2311,8 +2320,11 @@ function openMore() {
     scan.textContent = "Scan, parked only"; scan.disabled = false; if (!scanOut.children.length) scanOut.textContent = "No answers in this range.";
   } });
   ex.append(el("p", { textContent: "Asks the vehicle which GM read requests it answers. It sends read requests only. Anything that answers is logged raw from then on. Its meaning stays unknown until you check it against a known value." }), hdr, range, scan, scanOut);
+  const xl = el("div", { class: "scroll", style: "max-height:240px;font:11px ui-monospace,monospace;white-space:pre-wrap" }); const renderXlog = () => { const L = lastXlog || []; xl.textContent = L.length ? L.map(x => new Date(x.t).toISOString().slice(11, 19) + " " + String(x.ms).padStart(5) + "ms  " + x.cmd + "  →  " + (x.r || "(empty)")).join("\n") : "No adapter traffic yet."; }; renderXlog();
+  const xlBtn = el("button", { textContent: "Copy connection log", onclick: async () => { try { await navigator.clipboard.writeText(xl.textContent); toast("Copied " + (lastXlog || []).length + " exchanges."); } catch (e) { toast("Select and copy the text instead."); } } });
   showDlg("Data and sources",
     el("div", { class: "bar" }, el("button", { textContent: "Export session CSV", onclick: exportCsv }), el("button", { textContent: "Export history", onclick: exportHistory }), el("button", { textContent: "Import history", onclick: importHistory })),
+    el("h3", { textContent: "Connection log (last 300 adapter exchanges, this session or the one that just ended)" }), xlBtn, xl,
     el("h3", { textContent: "This session (table view of all readings)" }), stat,
     el("h3", { textContent: "What the green and red colors mean" }),
     el("p", { textContent: "Green and red come from the limit shown in each widget's settings. Most are starting guides, labeled as such. Readings with no defensible limit stay neutral. Tags show where data comes from: Standard is generic OBD, Unverified is a GM request from forums that this truck has not confirmed, Estimate is calculated here." }),
