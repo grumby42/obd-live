@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261107-0504Z">
-<meta name="build-timestamp-utc" content="2026-11-07T05:04:35Z">
+<meta name="build-id" content="OBD-20261107-0510Z">
+<meta name="build-timestamp-utc" content="2026-11-07T05:10:14Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -118,7 +118,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261107-0504Z", BUILD_UTC = "2026-11-07T05:04:35Z";
+const BUILD_ID = "OBD-20261107-0510Z", BUILD_UTC = "2026-11-07T05:10:14Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1732,7 +1732,7 @@ async function start(link, label) {
     METRICS.forEach(m => { if (m.pid && !supported.has(m.pid)) { mstate[m.id].status = "unsupported"; (m.kids || []).forEach(k => mstate[k.id].status = "unsupported"); } if (!s.can && m.cmd && (/^22/.test(m.cmd) || /^06/.test(m.cmd))) mstate[m.id].status = "unsupported"; });
     renderVehicleSelect(); syncEditControls(); renderTabs(); renderGrid();
     readCodes().then(() => s.can ? readMode06() : null).catch(() => {});
-    setStatus("Live: " + label, "ok");
+    setStatus("Live: " + label, "ok"); applyFit();
     $("stop").disabled = false; $("connect").disabled = $("sim").disabled = true; $("vehicle").disabled = true;
     try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
     runLoop(s).catch(e => { if (session === s) fail(e); });
@@ -1771,7 +1771,7 @@ async function readMode06() {
 }
 async function fail(e) { setStatus(e.message || String(e), "bad"); await stop(true); }
 async function stop(keep) {
-  const s = session; session = null;
+  const s = session; session = null; applyFit();
   if (s && !s.link.sim) { if (keep) await saveDrive(); else { await saveDrive(true); store.set("active", null); } }
   if (s) await s.link.close();
   if (wakeLock) { try { await wakeLock.release(); } catch (e) {} wakeLock = null; }
