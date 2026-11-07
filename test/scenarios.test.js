@@ -286,4 +286,10 @@ assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
   assert(api.analyzeDrive({ rows: d3, meta: {}, vehicle: { engine: { cyl: 8 } }, history: [] }).findings.some(x => /share the work evenly/.test(x.title))); }
 // Alternate request route: tire metric carries an engine-module fallback with 8-bit psi.
 { const tm = api.METRICS.find(x => x.id === "tpfl"); assert(tm.alt && tm.alt.cmd === "22248E" && tm.alt.f([34]) === 34); const bm = api.METRICS.find(x => x.id === "bal4"); assert.strictEqual(bm.cmd, "221632"); assert(Math.abs(bm.f([0x7F, 0x80]) - (-1.0)) < .01 || true); assert.strictEqual(bm.f([0x80, 0x00]), 0); }
+
+// AFM mode from injector widths; misfires clustered at mode changes are flagged.
+{ const am = api.METRICS.find(x => x.id === "afm"); assert(am && am.calc);
+  const d = drive("city"); let mode = "V8", k = 0; d.forEach((r, i) => { if (i % 120 === 0 && r.mph > 20) mode = mode === "V8" ? "V4" : "V8"; r.afm = r.rpm > 400 ? mode : undefined; r.mis1 = k; if (i > 1 && d[i - 1].afm && d[i - 1].afm !== r.afm) k++; });
+  const rep = api.analyzeDrive({ rows: d, meta: {}, vehicle: { afmCyls: [1, 4, 6, 7] }, history: [] }); const f = rep.findings.find(x => /misfire counts landed within 8 s/.test(x.title)); assert(f, rep.findings.map(x => x.title).join("|")); assert(typeof rep.stats.afmShare === "number");
+  const d2 = drive("city"); d2.forEach(r => { r.afm = r.rpm > 400 ? "V8" : undefined; }); const rep2 = api.analyzeDrive({ rows: d2, meta: {}, vehicle: { afmCyls: [1, 4, 6, 7] }, history: [] }); assert(rep2.findings.some(x => /Cylinder deactivation/.test(x.title) && x.level === "info")); }
 console.log("all tests passed");

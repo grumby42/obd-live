@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261107-1310Z">
-<meta name="build-timestamp-utc" content="2026-11-07T13:10:46Z">
+<meta name="build-id" content="OBD-20261107-1330Z">
+<meta name="build-timestamp-utc" content="2026-11-07T13:30:21Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -118,7 +118,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261107-1310Z", BUILD_UTC = "2026-11-07T13:10:46Z";
+const BUILD_ID = "OBD-20261107-1330Z", BUILD_UTC = "2026-11-07T13:30:21Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -325,6 +325,14 @@ const METRICS = [
  gm("bal6","Cylinder 6 balance rate","Engine","1634","","med",1,-200,200,b=>(((b[0]<<8)|b[1])/64)-512,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500 and 2014 Equinox, OBDb; scaling single-source)"}),
  gm("bal7","Cylinder 7 balance rate","Engine","1635","","med",1,-200,200,b=>(((b[0]<<8)|b[1])/64)-512,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500 and 2014 Equinox, OBDb; scaling single-source)"}),
  gm("bal8","Cylinder 8 balance rate","Engine","1636","","med",1,-200,200,b=>(((b[0]<<8)|b[1])/64)-512,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500 and 2014 Equinox, OBDb; scaling single-source)"}),
+ gm("inj1","Injector pulse width, cyl 1","Engine","1193","ms","med",2,0,30,b=>((b[0]<<8)|b[1])/65.535,{headers:["7E0"],basis:"community (OBDb definition for the Silverado 1500, unrecorded; zero vs non-zero is what the V4 detector uses)"}),
+ gm("inj2","Injector pulse width, cyl 2","Engine","1194","ms","med",2,0,30,b=>((b[0]<<8)|b[1])/65.535,{headers:["7E0"],basis:"community (OBDb definition for the Silverado 1500, unrecorded; zero vs non-zero is what the V4 detector uses)"}),
+ gm("inj3","Injector pulse width, cyl 3","Engine","1195","ms","med",2,0,30,b=>((b[0]<<8)|b[1])/65.535,{headers:["7E0"],basis:"community (OBDb definition for the Silverado 1500, unrecorded; zero vs non-zero is what the V4 detector uses)"}),
+ gm("inj4","Injector pulse width, cyl 4","Engine","1196","ms","med",2,0,30,b=>((b[0]<<8)|b[1])/65.535,{headers:["7E0"],basis:"community (OBDb definition for the Silverado 1500, unrecorded; zero vs non-zero is what the V4 detector uses)"}),
+ gm("inj5","Injector pulse width, cyl 5","Engine","1197","ms","med",2,0,30,b=>((b[0]<<8)|b[1])/65.535,{headers:["7E0"],basis:"community (OBDb definition for the Silverado 1500, unrecorded; zero vs non-zero is what the V4 detector uses)"}),
+ gm("inj6","Injector pulse width, cyl 6","Engine","1198","ms","med",2,0,30,b=>((b[0]<<8)|b[1])/65.535,{headers:["7E0"],basis:"community (OBDb definition for the Silverado 1500, unrecorded; zero vs non-zero is what the V4 detector uses)"}),
+ gm("inj7","Injector pulse width, cyl 7","Engine","1199","ms","med",2,0,30,b=>((b[0]<<8)|b[1])/65.535,{headers:["7E0"],basis:"community (OBDb definition for the Silverado 1500, unrecorded; zero vs non-zero is what the V4 detector uses)"}),
+ gm("inj8","Injector pulse width, cyl 8","Engine","129A","ms","med",2,0,30,b=>((b[0]<<8)|b[1])/65.535,{headers:["7E0"],basis:"community (OBDb definition for the Silverado 1500, unrecorded; zero vs non-zero is what the V4 detector uses)"}),
  gm("tiss","Trans input speed","Transmission","1941","rpm","fast",0,0,7000,b=>((b[0]<<8)|b[1])/4,{headers:["7E2"],basis:"community (recorded on a 2016 Silverado 1500, OBDb)"}),
  gm("fan","Cooling fan command","Temperatures","13AF","%","slow",0,0,100,b=>b[0]/2.55,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500, OBDb)"}),
  gm("grille","Active grille shutter","Temperatures","2366","%","slow",0,0,100,b=>b[0]/2.55,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500, OBDb)"}),
@@ -337,6 +345,7 @@ const METRICS = [
  { id:"ratio",label:"Engine rpm per mph",group:"Transmission",unit:"rpm/mph",digits:1,min:0,max:200,basis:"derived",need:["rpm","mph"],calc:v=>v.mph>5&&v.rpm>0?v.rpm/v.mph:null },
  { id:"slip2",label:"Converter slip from input speed",group:"Transmission",unit:"rpm",digits:0,min:-200,max:3000,basis:"derived",need:["rpm","tiss"],calc:v=>typeof v.tiss==="number"&&v.rpm>300?v.rpm-v.tiss:null },
  { id:"geari",label:"Gear (inferred from rpm per mph)",group:"Transmission",unit:"",digits:0,min:0,max:10,basis:"derived",need:["rpm","mph"],calc:v=>{ const veh=typeof vehicles==="object"&&vehicles[vid]; if(!veh||!veh.ratios||!veh.gearK||!(v.mph>8)||!(v.rpm>400)||(mstate.gear&&mstate.gear.status==="ok")) return null; const x=Math.log(v.rpm/v.mph/veh.gearK); let g=null,d=9; veh.ratios.forEach((r,i)=>{const e=Math.abs(x-Math.log(r)); if(e<d){d=e;g=i+1;}}); return d<=(v.mph>15?.05:.10)?g:null; } },
+ { id:"afm",label:"Cylinder mode (V8 / V4)",group:"Engine",unit:"",digits:0,min:0,max:8,basis:"derived",need:["rpm"],calc:v=>{ const veh=vehicles[vid]||{}, cyls=veh.afmCyls; if(!cyls||!(v.rpm>400)) return null; const on=[],off=[]; for(let c=1;c<=8;c++){ const w=v["inj"+c]; if(typeof w!=="number") continue; (w<0.05?off:on).push(c); } if(on.length+off.length<8) return null; const v4=cyls.every(c=>off.includes(c))&&on.length===4; return v4?"V4":off.length===0?"V8":"V8 ("+off.length+" off)"; } },
  { id:"slipi",label:"Converter slip (inferred)",group:"Transmission",unit:"rpm",digits:0,min:-200,max:3000,basis:"derived",need:["rpm","mph"],calc:v=>{ const veh=vehicles[vid]; if(!veh||!veh.ratios||!veh.gearK||!(v.mph>8)||typeof v.geari!=="number") return null; return v.rpm - v.mph*veh.gearK*veh.ratios[v.geari-1]; } },
  { id:"fflow",label:"Estimated fuel flow",group:"Fuel",unit:"gal/h",digits:2,min:0,max:40,basis:"derived",need:["maf"],calc:v=>v.maf>0?v.maf/(14.7*(v.lambda>0?v.lambda:1))*3600/(6.17*454):null },
  { id:"alt",label:"Estimated altitude",group:"Driving",unit:"ft",digits:0,min:-500,max:12000,basis:"derived",need:["baro"],calc:v=>v.baro>0?(1-Math.pow(v.baro/101.325,0.1903))*145366:null },
@@ -442,7 +451,7 @@ function simulatorReply(cmd, t) {
    "0600":"460000000001","0620":"462080000001","0640":"464000000001","0660":"466000000001","0680":"468000000001","06A0":"46A07FC00000","0621":"46218024006400000258","0151":"415101","0142":"4142"+hex(13900,4),"0106":"4106"+hex(128+w*4),"0107":"4107"+hex(131),
    "0108":"4108"+hex(127-w*4),"0109":"4109"+hex(130),"0144":"4144"+hex(32768,4),"015E":"415E"+hex(70+w*40,4),"012F":"412F"+hex(150),
    "011F":"411F"+hex(t/1000%3600,4),"0131":"4131"+hex(800,4),"0130":"413012","0121":"41210000","0163":"4163"+hex(520,4),"0101":"4101"+"82"+"07"+"E5"+"20",
-   "225005":"625005"+hex(Math.round(238*16),4),"225006":"625006"+hex(Math.round(241*16),4),"225007":"625007"+hex(Math.round(190*16),4),"225008":"625008"+hex(Math.round(236*16),4),"22162F":"62162F"+hex(Math.round((512+3)*64),4),"221630":"621630"+hex(Math.round((512-2)*64),4),"221631":"621631"+hex(Math.round((512+1)*64),4),"221632":"621632"+hex(Math.round((512-9)*64),4),"221633":"621633"+hex(Math.round((512+4)*64),4),"221634":"621634"+hex(Math.round((512+2)*64),4),"221635":"621635"+hex(Math.round((512+1)*64),4),"221636":"621636"+hex(Math.round((512+0)*64),4),"222345":"622345"+hex(Math.round((35+w*5)/0.58)),"221941":"621941"+hex(Math.round((rpm-slip)*4),4),"2213AF":"6213AF"+hex(w>.7?128:0),"222366":"622366"+hex(255),"221141":"621141"+hex(139),"221564":"621564"+hex(53),"221940":"621940"+hex(125+w*12),"22199A":"62199A"+hex(g),"221991":"621991"+hex(slip*8,4),"221993":"621993"+hex(22),"221994":"621994"+hex(26),"221995":"621995"+hex(28),
+   "225005":"625005"+hex(Math.round(238*16),4),"225006":"625006"+hex(Math.round(241*16),4),"225007":"625007"+hex(Math.round(190*16),4),"225008":"625008"+hex(Math.round(236*16),4),"22162F":"62162F"+hex(Math.round((512+3)*64),4),"221630":"621630"+hex(Math.round((512-2)*64),4),"221631":"621631"+hex(Math.round((512+1)*64),4),"221632":"621632"+hex(Math.round((512-9)*64),4),"221633":"621633"+hex(Math.round((512+4)*64),4),"221634":"621634"+hex(Math.round((512+2)*64),4),"221635":"621635"+hex(Math.round((512+1)*64),4),"221636":"621636"+hex(Math.round((512+0)*64),4),"221193":"621193"+hex(Math.round((w>.3&&w<.6?0:2.4)*65.535),4),"221194":"621194"+hex(Math.round(2.4*65.535),4),"221195":"621195"+hex(Math.round(2.4*65.535),4),"221196":"621196"+hex(Math.round((w>.3&&w<.6?0:2.4)*65.535),4),"221197":"621197"+hex(Math.round(2.4*65.535),4),"221198":"621198"+hex(Math.round((w>.3&&w<.6?0:2.4)*65.535),4),"221199":"621199"+hex(Math.round((w>.3&&w<.6?0:2.4)*65.535),4),"22129A":"62129A"+hex(Math.round(2.4*65.535),4),"222345":"622345"+hex(Math.round((35+w*5)/0.58)),"221941":"621941"+hex(Math.round((rpm-slip)*4),4),"2213AF":"6213AF"+hex(w>.7?128:0),"222366":"622366"+hex(255),"221141":"621141"+hex(139),"221564":"621564"+hex(53),"221940":"621940"+hex(125+w*12),"22199A":"62199A"+hex(g),"221991":"621991"+hex(slip*8,4),"221993":"621993"+hex(22),"221994":"621994"+hex(26),"221995":"621995"+hex(28),
    "221154":"621154"+hex(135),"221470":"621470"+hex(70+w*20),"22119F":"62119F"+hex(170),"2211A6":"6211A600","03":"4302030001710000","07":"4700","0A":"4A00","0902":"490201"+[..."SIMULATOR00000000"].map(c=>hex(c.charCodeAt(0))).join("") };
   for (let c = 1; c <= 8; c++) { const mid = (0xA1 + c).toString(16).toUpperCase(); map["06"+mid] = "46"+mid+"0B24000000000064"+mid+"0C24"+hex(c===4?2:0,4)+"00000064"; }
   return map[cmd] || "NO DATA";
@@ -728,6 +737,17 @@ function analyzeDrive(input) {
 
   // Combustion
   const misKeys = Object.keys(rows.reduce((o, r) => { Object.keys(r).forEach(k => { if (/^mis\d+$/.test(k)) o[k] = 1; }); return o; }, {})).filter(k => !cyl || Number(k.slice(3)) <= cyl);
+  // Cylinder deactivation (AFM): how much of the light-load time ran on four cylinders, and whether misfire counts land near mode changes (a lifter that doesn't re-engage cleanly shows there).
+  { const modes = rows.filter(r => typeof r.afm === "string" && r._running); if (modes.length >= 60) { tested.push("Cylinder deactivation");
+      const v4 = modes.filter(r => r.afm === "V4"), cruise = modes.filter(r => r._cruise), v4c = cruise.filter(r => r.afm === "V4");
+      let trans = 0; for (let i = 1; i < modes.length; i++) if (modes[i].afm !== modes[i - 1].afm) trans++;
+      const tTimes = []; for (let i = 1; i < modes.length; i++) if (modes[i].afm !== modes[i - 1].afm) tTimes.push(modes[i].t);
+      let near = 0, total = 0; misKeys.forEach(k => { let run = null; rows.forEach(r => { const v = r[k]; if (typeof v !== "number") return; if (run !== null && v > run) { total += v - run; if (tTimes.some(t => Math.abs(r.t - t) <= 8000)) near += v - run; } run = v; }); });
+      stats.afmShare = Number((v4.length / modes.length).toFixed(2)); stats.afmTransitions = trans; stats.afmCruiseShare = cruise.length ? Number((v4c.length / cruise.length).toFixed(2)) : null;
+      const line = "V4 for " + rnd(stats.afmShare * 100) + "% of running time" + (stats.afmCruiseShare !== null ? ", " + rnd(stats.afmCruiseShare * 100) + "% of cruise" : "") + ", " + trans + " mode changes.";
+      if (total >= 2 && near >= 2 && near / total >= .5) add("Combustion", "watch", near + " of " + total + " misfire counts landed within 8 s of a V4/V8 change", line, "Misfires clustered at mode changes point at a deactivation lifter that doesn't re-engage or release cleanly, which is the one place a lifter job shows itself in data.", ["AFM lifter not re-engaging cleanly", "Oil pressure or VLOM control during the switch"], ["Mark any shudder you feel at mode changes; compare which cylinders carry the counts with the AFM set (" + (vehicle.afmCyls || []).join(", ") + ")."], "Derived from injector pulse widths (unverified request) and misfire counters");
+      else if (cruise.length >= 120 && stats.afmCruiseShare !== null && stats.afmCruiseShare < .1) add("Combustion", "info", "Cylinder deactivation rarely engaged at cruise", line, "AFM normally engages at light steady load once warm. Cold coolant, towing mode, hills, or a recent reflash all keep it in V8; one drive isn't a verdict.", [], [], "Derived from injector pulse widths (unverified request)");
+      else add("Combustion", "info", "Cylinder deactivation " + (v4.length ? "engaged" : "not seen"), line, "Shown so the mode is on record next to misfires and oil pressure; no fault is implied.", [], [], "Derived from injector pulse widths (unverified request)"); } }
   // Counter B ($0B) is logged alongside counter C; growth in either within a drive counts.
   rows.forEach(r => { Object.keys(r).forEach(k => { const m = k.match(/^misb(\d+)$/); if (m && typeof r[k] === "number") { const c = "mis" + m[1]; if (typeof r[c] !== "number" || r[k] > r[c]) r[c] = Math.max(r[k], typeof r[c] === "number" ? r[c] : 0); } }); });
   // Cylinder balance rates (GM): the computer's own per-cylinder crank-speed contribution at idle. Negative = that cylinder pulls less than its share.
@@ -1510,7 +1530,7 @@ const PRESETS = {
    W("number",["endur"],[2,3],[3,3]), W("needle",["ect"],[2,4],[3,4]), W("number",["mpg10"],[2,3],[3,3]), W("tires",[],[4,3],[6,3]) ],
  "System map": [ W("sysmap",[],[4,12],[12,10]) ],
  Phone: [ W("phone",[],[4,3],[4,3]), W("number",["speedo"],[2,3],[4,3]), W("number",["grade"],[2,3],[4,3]), W("line",["mph","gmph"],[4,4],[6,4],{win:5}), W("line",["vib"],[4,4],[6,4],{win:5}), W("line",["noise"],[4,4],[6,4],{win:5}), W("scatter",["mph","vib"],[4,5],[6,5]) ],
- Engine: [ W("misfire",[],[4,4],[6,4]), W("line",["ect","oilt","trans"],[4,4],[6,4],{win:15}), W("line",["stft1","stft2","ltft1","ltft2"],[4,4],[6,4],{win:5}),
+ Engine: [ W("misfire",[],[4,4],[6,4]), W("number",["afm"],[2,3],[3,3]), W("number",["bal1"],[2,3],[3,3]), W("line",["ect","oilt","trans"],[4,4],[6,4],{win:15}), W("line",["stft1","stft2","ltft1","ltft2"],[4,4],[6,4],{win:5}),
    W("line",["rpm"],[4,3],[6,4],{win:5}), W("number",["oilp"],[2,3],[3,3]), W("number",["oilt"],[2,3],[3,3]), W("number",["knock"],[2,3],[3,3]), W("number",["timing"],[2,3],[3,3]), W("number",["load"],[2,3],[3,3]), W("number",["hp"],[2,3],[3,3]), W("number",["oill"],[2,3],[3,3]), W("number",["map"],[2,3],[3,3]) ],
  Fuel: [ W("number",["mpg"],[2,3],[3,3]), W("needle",["fuel"],[2,3],[3,3]), W("number",["evapp"],[2,3],[3,3]), W("number",["purge"],[2,3],[3,3]), W("number",["ltft1"],[2,3],[3,3]), W("number",["ltft2"],[2,3],[3,3]), W("line",["mpg"],[4,4],[6,4],{win:15}),
    W("line",["lambda"],[4,3],[6,4],{win:5}), W("number",["maf"],[2,3],[3,3]), W("number",["frate"],[2,3],[3,3]), W("share",[],[4,4],[6,4],{share:"drive",view:"donut"}), W("history",["mpg"],[4,4],[6,4],{stat:"avg"}) ],
