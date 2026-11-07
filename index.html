@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261106-2046Z">
-<meta name="build-timestamp-utc" content="2026-11-06T20:46:06Z">
+<meta name="build-id" content="OBD-20261107-0153Z">
+<meta name="build-timestamp-utc" content="2026-11-07T01:53:47Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -117,7 +117,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261106-2046Z", BUILD_UTC = "2026-11-06T20:46:06Z";
+const BUILD_ID = "OBD-20261107-0153Z", BUILD_UTC = "2026-11-07T01:53:47Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -155,6 +155,19 @@ function toMessages(raw) {
     else if (/^[0-9A-F]+$/.test(l)) { msgs.push(l); cur = null; }
   }
   return msgs;
+}
+// With headers on (ATH1, spaces off), each line is <ecu><PCI+data>. Several computers answering one broadcast interleave their
+// frames, so messages are reassembled per computer; headers-off parsing mixes them and the result changes with arrival order.
+function toMessagesByEcu(raw) {
+  const out = [], open = {};
+  for (const l of cleanLines(raw)) {
+    const m = l.match(/^([0-9A-F]{3}|[0-9A-F]{8})([0-9A-F]{2,})$/); if (!m) continue;
+    const ecu = m[1], d = m[2], pci = parseInt(d.slice(0, 2), 16), type = pci >> 4;
+    if (type === 0) { out.push({ ecu, msg: d.slice(2, 2 + (pci & 0xF) * 2) }); delete open[ecu]; }
+    else if (type === 1) { const len = ((pci & 0xF) << 8) | parseInt(d.slice(2, 4), 16); open[ecu] = { ecu, len, msg: d.slice(4) }; out.push(open[ecu]); }
+    else if (type === 2 && open[ecu]) { open[ecu].msg += d.slice(2); }
+  }
+  return out.map(o => ({ ecu: o.ecu, msg: o.len ? o.msg.slice(0, o.len * 2) : o.msg }));
 }
 function hexBytes(hex) { const o = []; for (let p = 0; p + 1 < hex.length; p += 2) o.push(parseInt(hex.slice(p, p + 2), 16)); return o; }
 function dataBytes(raw, prefix) {
@@ -492,7 +505,8 @@ function validateSignals(rows, meta, vehicle = {}) {
     else if (cold && amb !== undefined && Math.abs(first - amb) > 50) out[k] = "suspect";
     else out[k] = mins >= 8 && Math.max(...a) - Math.min(...a) >= 5 ? "ok" : "unknown";
   }
-  if (has("oilp")) { const a = nums(drive, "oilp"); out.oilp = flat("oilp") ? "suspect" : a.length >= 20 && Math.max(...a) - Math.min(...a) >= 3 ? "ok" : "unknown"; }
+  // A request that only ever answers zero is a dead or mis-mapped address, not a reading of zero.
+  if (has("oilp")) { const a = nums(drive, "oilp"); out.oilp = flat("oilp") || (a.length >= 5 && a.every(x => x === 0)) ? "suspect" : a.length >= 20 && Math.max(...a) - Math.min(...a) >= 3 ? "ok" : "unknown"; }
   if (has("knock")) out.knock = flat("knock") && nums(drive, "knock")[0] !== 0 ? "suspect" : "unknown";
   return out;
 }
@@ -690,6 +704,9 @@ function analyzeDrive(input) {
     const mx = misKeys.map(k => [Number(k.slice(3)), growth(k)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
     if (mx.length) { const k = "mis" + mx[0][0], cond = { idle: 0, cruise: 0, load: 0 }; let run = null; for (let i = 0; i < rows.length; i++) { const v = rows[i][k]; if (typeof v !== "number") continue; if (run === null) { run = v; continue; } if (v > run) { const d = v - run; run = v; if (rows[i]._idle) cond.idle += d; else if (rows[i]._highload) cond.load += d; else if (rows[i]._cruise) cond.cruise += d; } } stats.misByCond = cond; }
     stats.misTotal = mx.reduce((s, x) => s + x[1], 0);
+    if (revs >= 2000) stats.misPerKrev = Number((stats.misTotal / (revs / 1000)).toFixed(2));
+    // Where in warm-up the new counts landed: a cold-only pattern reads differently from a warm one.
+    { let cold = 0, warm = 0; misKeys.forEach(k => { let run = null; rows.forEach(r => { const v = r[k]; if (typeof v !== "number") return; if (run !== null && v > run) { if (typeof r.ect === "number" && r.ect < 160) cold += v - run; else warm += v - run; } run = v; }); }); if (cold + warm) stats.misColdShare = Number((cold / (cold + warm)).toFixed(2)); }
     if (!mx.length && held.length) add("Combustion", "info", "No new misfire counts this drive", "Counters for cylinder " + held.map(k => k.slice(3)).join(", ") + " held a value from before but didn't rise.", "That earlier count may come from a previous drive. Watch whether it rises later.", [], [], LIT.j1979);
     else if (!mx.length) add("Combustion", "good", "No misfire counts recorded", misKeys.length + " cylinders reported.", "The computer's recent misfire counters stayed at zero. They update slowly, so a brief event could be missed.", [], [], LIT.j1979);
     else {
@@ -711,7 +728,7 @@ function analyzeDrive(input) {
     if (cs.idleRpmSpread !== null && cs.idleRpmSpread >= 150 && cs.cold) add("Core engine", "watch", "Unsteady idle right after a cold start", "Idle rpm varied " + rnd(cs.idleRpmSpread) + " rpm across the window.", "One-second data can't resolve individual power strokes, so this is coarse, but a wide swing cold that settles warm points at sealing or a cold misfire.", ["Valve or lifter", "Idle air control or a leak that closes with heat"], ["Compare with the warm idle spread later in the drive."], "Measured in the start-up window");
   } else need("Start-up window", "The engine start wasn't recorded; connect before starting.");
   // Electrical
-  const vr = rows.filter(r => r._running && typeof r.volt === "number"), voff = nums(rows, "volt", r => typeof r.rpm === "number" && r.rpm <= 50);
+  const vr = rows.filter(r => r._running && typeof r.volt === "number"), firstRun = rows.findIndex(r => r._running), voff = nums(firstRun > 0 ? rows.slice(0, firstRun) : [], "volt", r => typeof r.rpm === "number" && r.rpm <= 50 && r.volt >= 5);
   if (vr.length >= 20) {
     tested.push("Charging voltage");
     const lo = pctl(nums(vr, "volt"), .05), hi = pctl(nums(vr, "volt"), .95), med = pctl(nums(vr, "volt"), .5); stats.voltMed = med;
@@ -854,7 +871,7 @@ function analyzeDrive(input) {
   const xc = crossOk ? crossChecks(rows, 100000) : [], disagree = xc.filter(x => x.status === "disagree" && x.n >= 120); xc.filter(x => x.status === "agree").length && tested.push("Sensor cross-checks");
   if (!crossOk) need("Sensor cross-checks", "This drive was recorded by a build that sampled paired sensors too far apart to compare.");
   if (disagree.length) add("Sensor checks", "watch", "Related sensors didn't move together even at steady throttle", disagree.map(x => x.name + " (correlation " + rnd(x.r, 2) + " over " + x.n + " steady samples)").join("; ") + ".", "Redundant or related signals should broadly agree when nothing is moving. One-second sampling still limits this, so treat it as a lead.", ["Sensor or wiring fault", "Sampling timing"], ["Check whether this repeats on another drive, and compare codes."], "Physics check");
-  if (meta.fpChanged) add("Computer identity", "watch", "Computer software fingerprint changed since last connect", "Calibration or verification number differs from the value stored on this device.", "This usually means a dealer update, reprogramming, or module replacement. If nothing like that happened, ask why.", ["Dealer software update", "Module replacement", "Aftermarket tune"], ["Check your service records."], LIT.j1979);
+  if (meta.fpChanged) add("Computer identity", "watch", "Computer software fingerprint changed since last connect", (meta.fp && meta.fp.was ? "Now " + [meta.fp.cal, meta.fp.cvn].filter(Boolean).join(" / ") + "; before " + [meta.fp.was.cal, meta.fp.was.cvn].filter(Boolean).join(" / ") + ". " : "") + "Calibration or verification number differs from the value stored on this device.", "This usually means a dealer update, reprogramming, or module replacement. If nothing like that happened, ask why.", ["Dealer software update", "Module replacement", "Aftermarket tune"], ["Check your service records."], LIT.j1979);
   const marks = markSnapshots(rows);
   const notes = buildChains(F, stats, rows, vehicle, meta, val, trip);
   notes.forEach(t => add("Weighing the evidence", "info", "Evidence that pulls in different directions", t, "Stated so the reasoning can be checked, not to settle it.", [], [], "Cross-signal reasoning"));
@@ -1251,7 +1268,7 @@ function prosecute(rows, meta, vehicle, S, history) {
   return theses;
 }
 /* ---------- Case file: every saved drive, pooled ---------- */
-const CASE_METRICS = [["trim1cruise","Bank 1 cruise trim","%",1],["trim2cruise","Bank 2 cruise trim","%",1],["trim1idle","Bank 1 idle trim","%",1],["trim2idle","Bank 2 idle trim","%",1],["ectPlateau","Coolant at cruise","°F",0],["ectPeak","Coolant peak","°F",0],["oilPeak","Oil peak","°F",0],["transCruise","Trans fluid at cruise","°F",0],["slipCruise","Converter slip at cruise","rpm",0],["knock","Knock retard (98th pct)","°",1],["voltMed","Running voltage","V",1],["idleMafPerL","Idle airflow per liter","g/s/L",2],["speedo","Speed vs GPS","%",1],["ratioClean","Cruise ratio stability","",2],["mpg","Estimated mpg","",1]];
+const CASE_METRICS = [["misPerKrev","Misfire rate","per 1,000 revs",2],["trim1cruise","Bank 1 cruise trim","%",1],["trim2cruise","Bank 2 cruise trim","%",1],["trim1idle","Bank 1 idle trim","%",1],["trim2idle","Bank 2 idle trim","%",1],["ectPlateau","Coolant at cruise","°F",0],["ectPeak","Coolant peak","°F",0],["oilPeak","Oil peak","°F",0],["transCruise","Trans fluid at cruise","°F",0],["slipCruise","Converter slip at cruise","rpm",0],["knock","Knock retard (98th pct)","°",1],["voltMed","Running voltage","V",1],["idleMafPerL","Idle airflow per liter","g/s/L",2],["speedo","Speed vs GPS","%",1],["ratioClean","Cruise ratio stability","",2],["mpg","Estimated mpg","",1]];
 function caseFile(drives, vehicle, currentCodes) {
   const ds = drives.filter(d => d.review && d.review.stats).sort((a, b) => a.start - b.start);
   const trends = CASE_METRICS.map(([k, label, unit, d]) => { const pts = ds.map(x => ({ t: x.start, v: x.review.stats[k], kind: x.review.kind })).filter(p => typeof p.v === "number"); if (pts.length < 2) return { k, label, unit, n: pts.length, pts, drift: null };
@@ -1667,9 +1684,11 @@ async function identifyVehicle() {
     else if (!guess && vin && vin.length === 17 && !session.link.sim) toast("VIN not matched to a profile. Check that " + vehicles[vid].name + " is correct.");
     if (vin && vin.length === 17 && !session.link.sim) { vehicles[vid].vin = vin; saveVehicles(); }
     // Several computers answer these broadcast requests in varying order, so the fingerprint is the sorted set of all answers.
-    const allOf = (raw, pre) => toMessages(raw).filter(m => m.startsWith(pre)).map(m => m.slice(pre.length)).sort().join("|") || null;
-    try { const calRaw = await askH("7DF", "0904"), cvnRaw = await askH("7DF", "0906"); truck.cal = asciiFrom(calRaw, "4904"); truck.calSet = allOf(calRaw, "4904"); truck.cvn = allOf(cvnRaw, "4906"); truck.ecuCount = toMessages(calRaw).filter(m => m.startsWith("4904")).length;
-      const was = store.get(vkey("fp3"), null), now = { cal: truck.calSet || null, cvn: truck.cvn || null }; if ((now.cal || now.cvn) && !session.link.sim) { if (was && ["cal", "cvn"].some(k => was[k] && now[k] && was[k] !== now[k])) truck.fpChanged = true; store.set(vkey("fp3"), { cal: now.cal || (was && was.cal) || null, cvn: now.cvn || (was && was.cvn) || null }); } } catch (e) {}
+    // Read with headers on so each computer's multi-frame answer is reassembled on its own (headers-off reads interleave and flap).
+    const allOf = (raw, pre) => toMessagesByEcu(raw).filter(m => m.msg.startsWith(pre)).map(m => m.ecu + ":" + m.msg.slice(pre.length)).sort().join("|") || null;
+    try { const [calRaw, cvnRaw] = await exclusive(async () => { await ask("ATH1"); if (session.header !== "7DF") { await ask("ATSH7DF"); session.header = "7DF"; } const a = await ask("0904"), b = await ask("0906"); await ask("ATH0"); return [a, b]; });
+      { const first = toMessagesByEcu(calRaw).find(m => m.msg.startsWith("4904")); truck.cal = first ? hexBytes(first.msg.slice(6)).filter(x => x >= 32 && x < 127).map(x => String.fromCharCode(x)).join("").trim() : null; } truck.calSet = allOf(calRaw, "4904"); truck.cvn = allOf(cvnRaw, "4906"); truck.ecuCount = toMessagesByEcu(calRaw).filter(m => m.msg.startsWith("4904")).length;
+      const was = store.get(vkey("fp4"), null), now = { cal: truck.calSet || null, cvn: truck.cvn || null }; if ((now.cal || now.cvn) && !session.link.sim) { if (was && ["cal", "cvn"].some(k => was[k] && now[k] && was[k] !== now[k])) { truck.fpChanged = true; truck.fpWas = was; } store.set(vkey("fp4"), { cal: now.cal || (was && was.cal) || null, cvn: now.cvn || (was && was.cvn) || null, at: Date.now() }); } } catch (e) {}
     if (!vehicles[vid].engine && ENGINE_CHOICES[vid]) {
       const b = dataBytes(await askH("7DF", "0113"), "4113"), twoBanks = !!(b && b.length && (b[0] & 0xF0) !== 0);
       let cyls = null; try { const mids = parseSupport(await askH("7DF", "06A0"), 0xA0, "46"); const n = [...mids].filter(x => x >= 0xA2 && x <= 0xAD).length; if (n >= 3) cyls = n; } catch (e) {}
@@ -1721,7 +1740,7 @@ async function deleteDrive(id) {
   await new Promise((res, rej) => { const t = d.transaction(["drives", "chunks"], "readwrite"); t.objectStore("drives").delete(id); keys.forEach(k => t.objectStore("chunks").delete(k)); t.oncomplete = res; t.onerror = () => rej(t.error); });
   await loadDrives();
 }
-const sessionMeta = () => ({ id: driveId, start: driveStart, build: BUILD_ID, codes, monitor, mode06, supported: supported ? [...supported] : [], fpChanged: !!truck.fpChanged, ecus: truck.ecus || [] });
+const sessionMeta = () => ({ id: driveId, start: driveStart, build: BUILD_ID, codes, monitor, mode06, supported: supported ? [...supported] : [], fpChanged: !!truck.fpChanged, fp: { cal: truck.calSet || null, cvn: truck.cvn || null, was: truck.fpWas || null }, ecus: truck.ecus || [] });
 let saving = false;
 async function saveDrive(final) {
   if (!driveId || saving) return;

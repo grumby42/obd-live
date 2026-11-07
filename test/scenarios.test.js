@@ -3,7 +3,7 @@ const fs = require("fs"), assert = require("assert");
 const html = fs.readFileSync("index.html", "utf8");
 const src = html.split("/*PURE-START*/")[1].split("/*PURE-END*/")[0];
 new Function(html.split("<script>")[1].split("</script>")[0]); // whole page script must parse
-const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,shiftCatalog,transShopReport,tccApplySpeed,rpmEvents,eventWindows,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom,inferGears};")();
+const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,shiftCatalog,transShopReport,tccApplySpeed,rpmEvents,eventWindows,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom,inferGears,toMessagesByEcu};")();
 const m = id => api.METRICS.find(x => x.id === id);
 
 // ---- Safety allowlist
@@ -253,4 +253,18 @@ assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
   const rep4 = api.analyzeDrive({ rows: ok.rows, meta: { codes: { stored: [], pending: [], permanent: [] } }, vehicle: {}, history: [] }); assert(rep4.findings.some(f => /normal band/.test(f.title) && f.level === "good")); assert(!rep4.theses.find(t => /EVAP vent/.test(t.name)).evidence.some(e => e.verdict === "for" && /P0446 reported/.test(e.text))); }
 // Code history from odometer counters.
 { const d = { rows: drive("city") }; d.rows.forEach(r => { r.mildist = 672; r.clrdist = 734; r.warmups = 78; }); const rep = api.analyzeDrive({ rows: d.rows, meta: {}, vehicle: {}, history: [] }); const f = rep.findings.find(f => /Light on for 672/.test(f.title)); assert(f && /within 62 miles/.test(f.evidence), f && f.evidence); }
+
+// Header-on ISO-TP reassembly per computer: two ECUs interleaving multi-frame answers must not mix.
+{ const raw = "7E81014490401343132\r7E91014490401353637\r7E8213334353637383940\r7E9213839404142434445\r7E8223132333435363738\r7E9223939393939393939\r7EA0749040141424344\r";
+  const msgs = api.toMessagesByEcu(raw); assert.strictEqual(msgs.length, 3, JSON.stringify(msgs));
+  const e8 = msgs.find(m => m.ecu === "7E8"), e9 = msgs.find(m => m.ecu === "7E9"), ea = msgs.find(m => m.ecu === "7EA");
+  assert.strictEqual(e8.msg.length, 40); assert(e8.msg.startsWith("490401343132") && e8.msg.endsWith("3536"), e8.msg); assert(e9.msg.startsWith("490401353637") && e9.msg.endsWith("3939")); assert.strictEqual(ea.msg, "49040141424344");
+  // Reversed arrival order gives the same sorted set.
+  const rev = raw.split("\r").filter(Boolean).map((l, i, a) => a[a.length - 1 - i]).join("\r"); const set = r => api.toMessagesByEcu(r).map(m => m.ecu + ":" + m.msg).sort().join("|");
+  assert.notStrictEqual(set(raw), ""); }
+// A GM request that answers zero forever is dead, not a zero reading.
+{ const d = drive("city"); d.forEach(r => { r.oilp = 0; }); const rep = api.analyzeDrive({ rows: d.slice(0, 40), meta: {}, vehicle: {}, history: [] }); assert(!rep.findings.some(f => /Low oil pressure/.test(f.title)), "dead oilp alarmed"); assert.strictEqual(rep.validation.oilp, "suspect"); }
+// Module voltage after shutdown (0 V) is not "battery low before start".
+{ const d = drive("city"); d.push({ t: d[d.length - 1].t + 5000, rpm: 0, volt: 0.02 }, { t: d[d.length - 1].t + 10000, rpm: 0, volt: 0 }, { t: d[d.length - 1].t + 15000, rpm: 0, volt: 0 });
+  const rep = api.analyzeDrive({ rows: d, meta: {}, vehicle: {}, history: [] }); assert(!rep.findings.some(f => /Battery was low before start/.test(f.title)), "shutdown zero alarmed"); }
 console.log("all tests passed");
