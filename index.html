@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261107-1253Z">
-<meta name="build-timestamp-utc" content="2026-11-07T12:53:41Z">
+<meta name="build-id" content="OBD-20261107-1257Z">
+<meta name="build-timestamp-utc" content="2026-11-07T12:57:43Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -118,7 +118,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261107-1253Z", BUILD_UTC = "2026-11-07T12:53:41Z";
+const BUILD_ID = "OBD-20261107-1257Z", BUILD_UTC = "2026-11-07T12:57:43Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1668,7 +1668,7 @@ function nextMetric(now) {
   if (labBuf) { const f = ["volt", "atrv", "rpm"].map(i => byId[i]).filter(m => mstate[m.id].status !== "unsupported" && mstate[m.id].status !== "failed").sort((a, b) => mstate[a.id].last - mstate[b.id].last); return f[0] || null; }
   const vis = visibleIds(); let best = null, bestScore = 1;
   for (const m of METRICS) {
-    if (!m.cmd) continue; const s = mstate[m.id];
+    if (!m.cmd) continue; const s = mstate[m.id]; if (s.parked) continue;
     if (s.status === "unsupported") continue;
     const focused = now < focusUntil && FOCUS_IDS.has(m.id);
     const iv = s.status === "failed" ? 60000 : focused ? 1000 : INTERVAL[m.tier][vis.has(m.id) ? 0 : 1];
@@ -1711,11 +1711,11 @@ async function runLoop(s) {
       catch (e) {
         if (!/timed out/.test(e.message) || session !== s) throw e;
         // One silent request is not a lost adapter: count it against that metric, resync the prompt, and carry on. Three in a row is.
-        s.timeouts = (s.timeouts || 0) + 1; const st = mstate[m.id]; if (st) { st.misses = (st.misses || 0) + 1; st.last = now; if (st.misses >= 3) { st.status = "failed"; st.misses = 0; } }
-        setStatus("Adapter slow on " + m.cmd + " (" + s.timeouts + "/3)…", "warn");
-        try { await exclusive(() => ask("ATI", 2500)); } catch (e2) {} // a bare CR would repeat the last command on an ELM; ATI is a harmless prompt check
-        if (s.timeouts >= 3) throw new Error("Adapter stopped answering (last: " + m.cmd + ")");
-        if (session === s) setStatus("Live: " + (s.label || "") , "ok");
+        // A request the module never finishes answering is that request's problem: park it for the session. The adapter itself is judged by whether it still answers ATI.
+        const st = mstate[m.id]; if (st) { st.silent = (st.silent || 0) + 1; st.last = now; st.status = "failed"; st.misses = 0; if (st.silent >= 2) st.parked = true; }
+        let alive = false; try { const r = await exclusive(() => ask("ATI", 2500)); alive = /ELM|STN|OBD/i.test(r) || r.includes(">"); } catch (e2) {} // a bare CR would repeat the last command on an ELM; ATI is a harmless prompt check
+        if (alive) { s.timeouts = 0; if (session === s) setStatus("Live: " + (s.label || "") + " (skipped " + m.cmd + ")", "ok"); }
+        else { s.timeouts = (s.timeouts || 0) + 1; setStatus("Adapter not answering (" + s.timeouts + "/3)…", "warn"); if (s.timeouts >= 3) throw new Error("Adapter stopped answering (last: " + m.cmd + ")"); }
       }
     } else await new Promise(r => setTimeout(r, 40));
     if (!s.link.sim && editMode && latest.mph > 3) { setEdit(false); toast("Layout editing locked while moving."); }
