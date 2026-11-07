@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261107-0510Z">
-<meta name="build-timestamp-utc" content="2026-11-07T05:10:14Z">
+<meta name="build-id" content="OBD-20261107-0518Z">
+<meta name="build-timestamp-utc" content="2026-11-07T05:18:35Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -118,7 +118,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261107-0510Z", BUILD_UTC = "2026-11-07T05:10:14Z";
+const BUILD_ID = "OBD-20261107-0518Z", BUILD_UTC = "2026-11-07T05:18:35Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1505,9 +1505,9 @@ const PRESETS = {
    W("line",["trans"],[4,4],[6,5],{win:15}), W("share",[],[4,4],[4,4],{share:"gear",view:"bars"}), W("share",[],[4,4],[4,4],{share:"temp",view:"donut"}),
    W("share",[],[4,4],[4,4],{share:"drive",view:"donut"}), W("number",["sh12"],[2,3],[3,3]), W("number",["sh23"],[2,3],[3,3]), W("number",["sh34"],[2,3],[3,3]), W("number",["ratio"],[2,3],[3,3]), W("number",["geari"],[2,3],[3,3]), W("history",["trans"],[4,4],[12,4],{stat:"max"}) ],
  Electrical: [ W("elab",[],[4,3],[4,3]), W("needle",["volt"],[2,4],[4,4]), W("number",["atrv"],[2,4],[4,4]), W("line",["volt","atrv"],[4,4],[12,4],{win:15}), W("history",["volt"],[4,4],[12,4],{stat:"min"}) ],
- Trip: [ W("needle",["mph"],[2,5],[3,5]), W("gearbox",[],[2,5],[3,5]), W("tires",[],[4,3],[6,3]),
-   W("number",["ratio"],[2,3],[2,3]), W("number",["fuelgal"],[2,3],[2,3]), W("number",["range"],[2,3],[2,3]), W("number",["endur"],[2,3],[2,3]),
-   W("number",["mpg10"],[2,3],[2,3]), W("number",["trans"],[2,3],[2,3]), W("number",["oilt"],[2,3],[2,3]), W("number",["ect"],[2,3],[2,3]) ],
+ Trip: [ W("needle",["mph"],[2,5],[3,5]), W("gearbox",[],[2,5],[3,5]),
+   W("number",["fuelgal"],[2,3],[3,3]), W("needle",["trans"],[2,4],[3,4]), W("number",["range"],[2,3],[3,3]), W("needle",["oilt"],[2,4],[3,4]),
+   W("number",["endur"],[2,3],[3,3]), W("needle",["ect"],[2,4],[3,4]), W("number",["mpg10"],[2,3],[3,3]), W("tires",[],[4,3],[6,3]) ],
  "System map": [ W("sysmap",[],[4,12],[12,10]) ],
  Phone: [ W("phone",[],[4,3],[4,3]), W("number",["speedo"],[2,3],[4,3]), W("number",["grade"],[2,3],[4,3]), W("line",["mph","gmph"],[4,4],[6,4],{win:5}), W("line",["vib"],[4,4],[6,4],{win:5}), W("line",["noise"],[4,4],[6,4],{win:5}), W("scatter",["mph","vib"],[4,5],[6,5]) ],
  Engine: [ W("misfire",[],[4,4],[6,4]), W("line",["ect","oilt","trans"],[4,4],[6,4],{win:15}), W("line",["stft1","stft2","ltft1","ltft2"],[4,4],[6,4],{win:5}),
@@ -1558,7 +1558,7 @@ function loadVehicle(id) {
   Object.keys(PRESETS).forEach(k => { if (!Array.isArray(dash[k])) dash[k] = buildDash(k); });
   if (store.get(vkey("glancev"), 0) !== 2) { dash.Glance = buildDash("Glance"); store.set(vkey("glancev"), 2); }
   fits = store.get(vkey("fits"), {}); if (!("Trip" in fits)) { fits.Trip = true; store.set(vkey("fits"), fits); }
-  if (store.get(vkey("tripv"), 0) !== 3) { dash.Trip = buildDash("Trip"); store.set(vkey("tripv"), 3); }
+  if (store.get(vkey("tripv"), 0) !== 4) { dash.Trip = buildDash("Trip"); store.set(vkey("tripv"), 4); }
   rules = store.get(vkey("rules"), {}); customs = store.get(vkey("customs"), []); rawDids = store.get(vkey("rawdids"), []);
   customs.forEach(registerCustom); rawDids.forEach(registerRawDid);
   tab = store.get(vkey("tab"), "Health check"); if (!dash[tab] && tab !== EV) tab = "Health check";
@@ -1904,7 +1904,11 @@ R.needle = (w, box) => {
     const a0 = Math.PI * .8, a1 = Math.PI * 2.2, cx = W / 2, rad = Math.max(10, Math.min(W / 2, H * .62) - 10), cy = Math.min(H - 4, rad + 12);
     const ang = x => a0 + (Math.min(m.max, Math.max(m.min, x)) - m.min) / (m.max - m.min) * (a1 - a0);
     const arc = (x0, x1, col) => { if (x1 <= x0) return; g.strokeStyle = col; g.lineWidth = 6; g.beginPath(); g.arc(cx, cy, rad, ang(x0) + .012, ang(x1) - .012); g.stroke(); };
-    if (rule && (rule.lo !== undefined || rule.hi !== undefined)) {
+    if (m.unit === "°F") {
+      // Temperature scale: cold (blue) until the engine is warm, green through the normal band, amber approaching the limit, red past it.
+      const warm = Math.max(m.min, Math.min(160, (rule && rule.hi) ?? 160)), hi = rule && rule.hi !== undefined && rule.hi !== null ? rule.hi : null;
+      arc(m.min, warm, "#3b7dd8"); if (hi === null) arc(warm, m.max, "#0ca30c"); else { arc(warm, hi, "#0ca30c"); arc(hi, Math.min(m.max, hi + 15), "#e0a100"); arc(Math.min(m.max, hi + 15), m.max, "#d03b3b"); }
+    } else if (rule && (rule.lo !== undefined || rule.hi !== undefined)) {
       const lo = rule.lo ?? m.min, hi = rule.hi ?? m.max;
       arc(m.min, lo, "#d03b3b"); arc(lo, hi, "#0ca30c"); arc(hi, m.max, "#d03b3b");
     } else arc(m.min, m.max, "#55544f");
