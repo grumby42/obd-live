@@ -32,3 +32,9 @@ Readings tagged **Unverified** come from community reports for other GM vehicles
 - Tire pressures: request header 241, response 641, DIDs 5005–5008, 16-bit kPa ÷ 16. The adapter receive filter (ATCRA) is set for the body module and cleared afterwards. A "Tire pressures" tile is on the Trip page.
 - Oil pressure moved to DID 2345 (×4 kPa); 1470 answers zero on this platform. Added: transmission input speed (7E2 1941), cooling fan command (13AF), active grille shutter (2366), ECM ignition voltage (1141), A/C high-side pressure (1564, scaling single-source). Converter slip from input speed is derived as engine rpm minus input speed and can be compared with the reported slip request.
 - All of these remain tagged Unverified until they pass the app's physics checks on this truck.
+
+### Equinox and Lucerne parity
+- GM cylinder balance rates (7E0 DIDs 162F–1636, recorded on a 2014 Equinox and 2016 Silverado in OBDb) are polled on every vehicle; the review names a cylinder that runs consistently weak at warm idle, checks that the rates roughly cancel before trusting them, and feeds the one-cylinder ignition thesis.
+- Requests can carry an alternate route: tire pressures fall back from the body module (241) to the older engine-module DIDs (248E–2491) when the first never answers.
+- Vehicles without a gear request get an inferred converter slip (engine rpm minus the speed-implied rpm for the inferred gear).
+- The raw-request scan covers more ranges (0000, 0100, 1600, 2300 added) for vehicles like the 2006 Lucerne whose transmission data lives at addresses the newer lists don't cover.

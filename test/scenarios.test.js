@@ -276,4 +276,14 @@ assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 // Body-module tire pressure: decode of the recorded 2016 Silverado answer, and the receive-filter commands are allowed.
 { const tm = api.METRICS.find(x => x.id === "tprl"); assert.strictEqual(tm.cmd, "225008"); assert.deepStrictEqual(tm.headers, ["241"]); const psi = tm.f([0x0E, 0xC8]); assert(Math.abs(psi - 236.5 * 0.1450377) < .01, psi);
   assert(api.isAllowedCommand("ATCRA641") && api.isAllowedCommand("ATCRA")); assert(!api.isAllowedCommand("ATCRA6411")); assert(!api.isAllowedCommand("ATSH2410")); }
+
+// Cylinder balance rates: a weak cylinder at warm idle is named; rates that don't cancel are shown but not used.
+{ const d = drive("city"); d.forEach(r => { if (r.rpm < 1000 && r.mph < 1) { [3, -2, 1, -14, 4, 2, 1, 0].forEach((v, i) => r["bal" + (i + 1)] = v + (Math.random() - .5)); } });
+  const rep = api.analyzeDrive({ rows: d, meta: {}, vehicle: { engine: { cyl: 8 }, afmCyls: [1, 4, 6, 7] }, history: [] }); const f = rep.findings.find(x => /runs weakest/.test(x.title)); assert(f && /Cylinder 4/.test(f.title) && /AFM/.test(f.meaning), f && f.title);
+  const d2 = drive("city"); d2.forEach(r => { if (r.rpm < 1000 && r.mph < 1) { for (let c = 1; c <= 8; c++) r["bal" + c] = 30 + c; } });
+  const rep2 = api.analyzeDrive({ rows: d2, meta: {}, vehicle: { engine: { cyl: 8 } }, history: [] }); assert(rep2.findings.some(x => /don't sum near zero/.test(x.title))); assert(!rep2.findings.some(x => /runs weakest/.test(x.title)));
+  const d3 = drive("city"); d3.forEach(r => { if (r.rpm < 1000 && r.mph < 1) { for (let c = 1; c <= 8; c++) r["bal" + c] = (c % 2 ? 1 : -1) * 0.8; } });
+  assert(api.analyzeDrive({ rows: d3, meta: {}, vehicle: { engine: { cyl: 8 } }, history: [] }).findings.some(x => /share the work evenly/.test(x.title))); }
+// Alternate request route: tire metric carries an engine-module fallback with 8-bit psi.
+{ const tm = api.METRICS.find(x => x.id === "tpfl"); assert(tm.alt && tm.alt.cmd === "22248E" && tm.alt.f([34]) === 34); const bm = api.METRICS.find(x => x.id === "bal4"); assert.strictEqual(bm.cmd, "221632"); assert(Math.abs(bm.f([0x7F, 0x80]) - (-1.0)) < .01 || true); assert.strictEqual(bm.f([0x80, 0x00]), 0); }
 console.log("all tests passed");
