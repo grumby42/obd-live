@@ -270,6 +270,6 @@ assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 
 // Cruise performance table: steady level samples binned by speed, best-economy band named.
 { const rows = []; let t = 0; [[30, 10], [40, 12], [50, 16], [60, 20], [70, 27]].forEach(([mph, maf]) => { for (let i = 0; i < 120; i++) rows.push({ t: (t++) * 1000, rpm: mph * 30, mph, maf, tps: 15, ect: 195, load: 30, volt: 14, fuelstat: 2 }); });
-  const rep = api.analyzeDrive({ rows, meta: {}, vehicle: { tankGal: 26 }, history: [] }); const f = rep.findings.find(x => /Cruise performance/.test(x.title)); assert(f, rep.findings.map(x => x.title).join("|")); assert(/best economy at 30–39 mph/.test(f.title), f.title); assert(rep.stats.cruiseTable.length === 5, JSON.stringify(rep.stats.cruiseTable));
+  const rep = api.analyzeDrive({ rows, meta: {}, vehicle: { tankGal: 26 }, history: [] }); const f = rep.findings.find(x => /Cruise performance/.test(x.title)); assert(f, rep.findings.map(x => x.title).join("|")); assert(/best economy at 40–49 mph/.test(f.title), f.title); assert(rep.stats.cruiseTable.length === 5, JSON.stringify(rep.stats.cruiseTable));
   assert(rep.findings.some(x => /full 26-gal tank/.test(x.evidence)), "tank range line"); assert.strictEqual(api.hmm(519.25), "8:39"); }
 console.log("all tests passed");
