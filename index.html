@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261107-1257Z">
-<meta name="build-timestamp-utc" content="2026-11-07T12:57:43Z">
+<meta name="build-id" content="OBD-20261107-1306Z">
+<meta name="build-timestamp-utc" content="2026-11-07T13:06:58Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -118,7 +118,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261107-1257Z", BUILD_UTC = "2026-11-07T12:57:43Z";
+const BUILD_ID = "OBD-20261107-1306Z", BUILD_UTC = "2026-11-07T13:06:58Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -133,7 +133,7 @@ function isAllowedCommand(cmd) {
   const c = String(cmd).toUpperCase().replace(/\s+/g, "");
   return /^AT(Z|E0|L0|S0|H0|H1|AT1|SP[06]|DPN|RV|I)$/.test(c)
     || /^ATSH[0-9A-F]{3}$/.test(c)
-    || /^ATCRA([0-9A-F]{3})?$/.test(c)
+    || /^ATCRA([0-9A-F]{3})?$/.test(c) || c === "ATAR"
     || /^01[0-9A-F]{2}$/.test(c)
     || /^02[0-9A-F]{2}00$/.test(c)
     || /^0[37A]$/.test(c)
@@ -1644,7 +1644,7 @@ async function ask(cmd, timeout) {
 // A module outside the 7E0–7E7 range (the body module answers 241 → 641) needs the adapter's receive filter set, then cleared again.
 const RX_FOR = { "241": "641" };
 async function askH(header, cmd) {
-  return exclusive(async () => { if (session && session.header !== header) { const rx = RX_FOR[header] || null; if (session.rx && !rx) { await ask("ATCRA"); session.rx = null; } await ask("ATSH" + header); session.header = header; if (rx && session.rx !== rx) { await ask("ATCRA" + rx); session.rx = rx; } } return ask(cmd); });
+  return exclusive(async () => { if (session && session.header !== header) { const rx = RX_FOR[header] || null; if (session.rx && !rx) { try { await ask("ATCRA"); } catch (e) {} try { await ask("ATAR"); } catch (e) {} session.rx = null; } await ask("ATSH" + header); session.header = header; if (rx && session.rx !== rx) { await ask("ATCRA" + rx); session.rx = rx; } } return ask(cmd); });
 }
 function visibleIds() {
   const ids = new Set(["rpm","mph","tps","ect"]);
@@ -1681,7 +1681,10 @@ function nextMetric(now) {
 async function pollOnce(m) {
   const s = mstate[m.id], headers = m.headers || ["7DF"];
   s.last = Date.now();
-  const raw = await askH(headers[s.headerIdx] || headers[0], m.cmd); s.raw = String(raw).replace(/[\r\n>]+/g, " ").trim();
+  let raw = await askH(headers[s.headerIdx] || headers[0], m.cmd);
+  // If replies arrive with CAN headers on (an identification read was interrupted before restoring ATH0), fix the adapter state and ask again.
+  if (!isNoData(raw) && /^(7E[89A-F]|641)[0-9A-F]{4,}/m.test(String(raw).replace(/\s/g, "")) && !toMessages(raw).some(x => x.startsWith(m.pre))) { try { await exclusive(() => ask("ATH0")); } catch (e) {} raw = await askH(headers[s.headerIdx] || headers[0], m.cmd); }
+  s.raw = String(raw).replace(/[\r\n>]+/g, " ").trim();
   if (m.rawHex) {
     const b = isNoData(raw) ? null : dataBytes(raw, m.pre);
     if (b && b.length) { latest[m.id] = b.map(x => x.toString(16).padStart(2, "0")).join(""); s.updated = Date.now(); s.status = "ok"; s.misses = 0; }
@@ -1761,7 +1764,7 @@ async function identifyVehicle() {
     // Several computers answer these broadcast requests in varying order, so the fingerprint is the sorted set of all answers.
     // Read with headers on so each computer's multi-frame answer is reassembled on its own (headers-off reads interleave and flap).
     const allOf = (raw, pre) => toMessagesByEcu(raw).filter(m => m.msg.startsWith(pre)).map(m => m.ecu + ":" + m.msg.slice(pre.length)).sort().join("|") || null;
-    try { const [calRaw, cvnRaw] = await exclusive(async () => { await ask("ATH1"); if (session.header !== "7DF") { await ask("ATSH7DF"); session.header = "7DF"; } const a = await ask("0904"), b = await ask("0906"); await ask("ATH0"); return [a, b]; });
+    try { const [calRaw, cvnRaw] = await exclusive(async () => { let a = "", b = ""; try { await ask("ATH1"); if (session.header !== "7DF") { await ask("ATSH7DF"); session.header = "7DF"; } a = await ask("0904", 6000); b = await ask("0906", 6000); } finally { try { await ask("ATH0"); } catch (e) {} } return [a, b]; });
       { const first = toMessagesByEcu(calRaw).find(m => m.msg.startsWith("4904")); truck.cal = first ? hexBytes(first.msg.slice(6)).filter(x => x >= 32 && x < 127).map(x => String.fromCharCode(x)).join("").trim() : null; } truck.calSet = allOf(calRaw, "4904"); truck.cvn = allOf(cvnRaw, "4906"); truck.ecuCount = toMessagesByEcu(calRaw).filter(m => m.msg.startsWith("4904")).length;
       const was = store.get(vkey("fp4"), null), now = { cal: truck.calSet || null, cvn: truck.cvn || null }; if ((now.cal || now.cvn) && !session.link.sim) { if (was && ["cal", "cvn"].some(k => was[k] && now[k] && was[k] !== now[k])) { truck.fpChanged = true; truck.fpWas = was; } store.set(vkey("fp4"), { cal: now.cal || (was && was.cal) || null, cvn: now.cvn || (was && was.cvn) || null, at: Date.now() }); } } catch (e) {}
     if (!vehicles[vid].engine && ENGINE_CHOICES[vid]) {
