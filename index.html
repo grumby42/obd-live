@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261107-0518Z">
-<meta name="build-timestamp-utc" content="2026-11-07T05:18:35Z">
+<meta name="build-id" content="OBD-20261107-0520Z">
+<meta name="build-timestamp-utc" content="2026-11-07T05:20:09Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -76,12 +76,12 @@ table{width:100%;border-collapse:collapse;font-size:.8rem}th,td{padding:4px 6px;
 body.fit,html.fit{overflow:hidden;height:100%}
 body.fit main{height:100vh;height:100dvh;display:flex;flex-direction:column;padding:6px 8px}
 body.fit footer,body.fit #unsupported{display:none}
-body.fit:not(.showctl) header,body.fit:not(.showctl) main>.bar{display:none}
+body.fit.live:not(.showctl) header,body.fit.live:not(.showctl) main>.bar{display:none}
 body.fit .tabs{margin:0 0 6px;flex:none}body.fit .tabs button{min-height:36px}
 body.fit #grid{flex:1;min-height:0;grid-auto-rows:unset;grid-template-rows:repeat(var(--rows),minmax(0,1fr));gap:6px}
 .tires{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;height:100%;min-height:0}.tire{display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid var(--axis);border-radius:8px;padding:2px;min-height:0;overflow:hidden}.tire b{font-size:1.3em;line-height:1.1}.tire span{font-size:.7em;color:var(--muted);white-space:nowrap}.tire.good{border-color:var(--good)}.tire.bad{border-color:var(--bad)}
 body.fit .w{padding:5px 8px}body.fit .w .sub{display:none}
-#ctlBtn{display:none}body.fit #ctlBtn{display:block;margin-left:auto;position:sticky;right:0;background:var(--raised);color:var(--text)}
+#ctlBtn{display:none}body.fit.live #ctlBtn{display:block;margin-left:auto;position:sticky;right:0;background:var(--raised);color:var(--text)}
 .evhead{grid-column:1/-1;margin:10px 0 0;font-size:.95rem}.evhint{grid-column:1/-1;font-size:.82rem;color:var(--muted);margin:0}
 #grid.ev{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));grid-auto-rows:auto}
 .evt{display:flex;flex-direction:column;gap:3px;min-width:0}.evt .w{height:180px}.evt.big2{grid-column:span 2}.evt.big2 .w{height:250px}.evt p{margin:0;font-size:.72rem;color:var(--muted)}
@@ -118,7 +118,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261107-0518Z", BUILD_UTC = "2026-11-07T05:18:35Z";
+const BUILD_ID = "OBD-20261107-0520Z", BUILD_UTC = "2026-11-07T05:20:09Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -2182,9 +2182,9 @@ function renderGrid() {
     if (fn) painters.push(fn);
   });
 }
-function isFit() { return !!session && !editMode && tab !== EV && (tab === "Glance" || !!fits[tab]); }
+function isFit() { return !editMode && tab !== EV && (tab === "Glance" || !!fits[tab]); }
 function applyFit() {
-  const on = isFit(); document.body.classList.toggle("fit", on); document.documentElement.classList.toggle("fit", on); if (!on) document.body.classList.remove("showctl");
+  const on = isFit(); document.body.classList.toggle("fit", on); document.documentElement.classList.toggle("fit", on); document.body.classList.toggle("live", !!session); if (!on) document.body.classList.remove("showctl");
   if (on) { const rows = Math.max(1, ...dash[tab].map(w => { const p = posOf(w); return p.y + p.h; })); $("grid").style.setProperty("--rows", rows); }
 }
 function syncEditControls() { $("editBtn").disabled = tab === EV; const custom = dash[tab] && !PRESETS[tab]; $("resetBtn").textContent = custom ? "Clear screen" : "Reset tab"; }
