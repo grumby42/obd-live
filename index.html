@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261107-0520Z">
-<meta name="build-timestamp-utc" content="2026-11-07T05:20:09Z">
+<meta name="build-id" content="OBD-20261107-1253Z">
+<meta name="build-timestamp-utc" content="2026-11-07T12:53:41Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -118,7 +118,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261107-0520Z", BUILD_UTC = "2026-11-07T05:20:09Z";
+const BUILD_ID = "OBD-20261107-1253Z", BUILD_UTC = "2026-11-07T12:53:41Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1706,7 +1706,18 @@ async function runLoop(s) {
     const now = Date.now();
     if (now - lastTick >= 1000) { lastTick = now; tick(now); if (!s.link.sim && now - s.savedAt > 5000) { s.savedAt = now; saveDrive(); } }
     const m = nextMetric(now);
-    if (m) await pollOnce(m); else await new Promise(r => setTimeout(r, 40));
+    if (m) {
+      try { await pollOnce(m); s.timeouts = 0; }
+      catch (e) {
+        if (!/timed out/.test(e.message) || session !== s) throw e;
+        // One silent request is not a lost adapter: count it against that metric, resync the prompt, and carry on. Three in a row is.
+        s.timeouts = (s.timeouts || 0) + 1; const st = mstate[m.id]; if (st) { st.misses = (st.misses || 0) + 1; st.last = now; if (st.misses >= 3) { st.status = "failed"; st.misses = 0; } }
+        setStatus("Adapter slow on " + m.cmd + " (" + s.timeouts + "/3)…", "warn");
+        try { await exclusive(() => ask("ATI", 2500)); } catch (e2) {} // a bare CR would repeat the last command on an ELM; ATI is a harmless prompt check
+        if (s.timeouts >= 3) throw new Error("Adapter stopped answering (last: " + m.cmd + ")");
+        if (session === s) setStatus("Live: " + (s.label || "") , "ok");
+      }
+    } else await new Promise(r => setTimeout(r, 40));
     if (!s.link.sim && editMode && latest.mph > 3) { setEdit(false); toast("Layout editing locked while moving."); }
   }
 }
@@ -1732,7 +1743,7 @@ async function start(link, label) {
     METRICS.forEach(m => { if (m.pid && !supported.has(m.pid)) { mstate[m.id].status = "unsupported"; (m.kids || []).forEach(k => mstate[k.id].status = "unsupported"); } if (!s.can && m.cmd && (/^22/.test(m.cmd) || /^06/.test(m.cmd))) mstate[m.id].status = "unsupported"; });
     renderVehicleSelect(); syncEditControls(); renderTabs(); renderGrid();
     readCodes().then(() => s.can ? readMode06() : null).catch(() => {});
-    setStatus("Live: " + label, "ok"); applyFit();
+    s.label = label; setStatus("Live: " + label, "ok"); applyFit();
     $("stop").disabled = false; $("connect").disabled = $("sim").disabled = true; $("vehicle").disabled = true;
     try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
     runLoop(s).catch(e => { if (session === s) fail(e); });
