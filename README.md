@@ -27,3 +27,8 @@ Readings tagged **Unverified** come from community reports for other GM vehicles
 - Vehicle settings take the tank size (owner's manual) and a reserve you want to keep. From fuel level, airflow-based burn rate and a rolling 10-minute window the app shows fuel in tank, burn rate, specific range (mpg), range to empty, range to reserve, and endurance to reserve and to empty in h:mm, plus trip distance, fuel used, average mpg, engine time and moving average speed since connect.
 - The review tables cruise performance by 10-mph band from steady, level samples, like an aircraft cruise chart, and names the best-economy band.
 - A no-scroll "Trip" page shows speed, gear, rpm per mph, fuel/range/endurance, specific range, fluid, oil and coolant temperatures, and module voltage.
+
+### Body-module and extra GM requests (from OBDb recordings on a 2016 Silverado 1500)
+- Tire pressures: request header 241, response 641, DIDs 5005–5008, 16-bit kPa ÷ 16. The adapter receive filter (ATCRA) is set for the body module and cleared afterwards. A "Tire pressures" tile is on the Trip page.
+- Oil pressure moved to DID 2345 (×4 kPa); 1470 answers zero on this platform. Added: transmission input speed (7E2 1941), cooling fan command (13AF), active grille shutter (2366), ECM ignition voltage (1141), A/C high-side pressure (1564, scaling single-source). Converter slip from input speed is derived as engine rpm minus input speed and can be compared with the reported slip request.
+- All of these remain tagged Unverified until they pass the app's physics checks on this truck.

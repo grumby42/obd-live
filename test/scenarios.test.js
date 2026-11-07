@@ -272,4 +272,8 @@ assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 { const rows = []; let t = 0; [[30, 10], [40, 12], [50, 16], [60, 20], [70, 27]].forEach(([mph, maf]) => { for (let i = 0; i < 120; i++) rows.push({ t: (t++) * 1000, rpm: mph * 30, mph, maf, tps: 15, ect: 195, load: 30, volt: 14, fuelstat: 2 }); });
   const rep = api.analyzeDrive({ rows, meta: {}, vehicle: { tankGal: 26 }, history: [] }); const f = rep.findings.find(x => /Cruise performance/.test(x.title)); assert(f, rep.findings.map(x => x.title).join("|")); assert(/best economy at 40–49 mph/.test(f.title), f.title); assert(rep.stats.cruiseTable.length === 5, JSON.stringify(rep.stats.cruiseTable));
   assert(rep.findings.some(x => /full 26-gal tank/.test(x.evidence)), "tank range line"); assert.strictEqual(api.hmm(519.25), "8:39"); }
+
+// Body-module tire pressure: decode of the recorded 2016 Silverado answer, and the receive-filter commands are allowed.
+{ const tm = api.METRICS.find(x => x.id === "tprl"); assert.strictEqual(tm.cmd, "225008"); assert.deepStrictEqual(tm.headers, ["241"]); const psi = tm.f([0x0E, 0xC8]); assert(Math.abs(psi - 236.5 * 0.1450377) < .01, psi);
+  assert(api.isAllowedCommand("ATCRA641") && api.isAllowedCommand("ATCRA")); assert(!api.isAllowedCommand("ATCRA6411")); assert(!api.isAllowedCommand("ATSH2410")); }
 console.log("all tests passed");

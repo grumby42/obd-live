@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261107-0447Z">
-<meta name="build-timestamp-utc" content="2026-11-07T04:47:37Z">
+<meta name="build-id" content="OBD-20261107-0456Z">
+<meta name="build-timestamp-utc" content="2026-11-07T04:56:12Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -79,6 +79,7 @@ body.fit footer,body.fit #unsupported{display:none}
 body.fit:not(.showctl) header,body.fit:not(.showctl) main>.bar{display:none}
 body.fit .tabs{margin:0 0 6px;flex:none}body.fit .tabs button{min-height:36px}
 body.fit #grid{flex:1;min-height:0;grid-auto-rows:unset;grid-template-rows:repeat(var(--rows),minmax(0,1fr));gap:6px}
+.tires{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;height:100%;min-height:0}.tire{display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid var(--axis);border-radius:8px;padding:2px;min-height:0;overflow:hidden}.tire b{font-size:1.3em;line-height:1.1}.tire span{font-size:.7em;color:var(--muted);white-space:nowrap}.tire.good{border-color:var(--good)}.tire.bad{border-color:var(--bad)}
 body.fit .w{padding:5px 8px}body.fit .w .sub{display:none}
 #ctlBtn{display:none}body.fit #ctlBtn{display:block;margin-left:auto;position:sticky;right:0;background:var(--raised);color:var(--text)}
 .evhead{grid-column:1/-1;margin:10px 0 0;font-size:.95rem}.evhint{grid-column:1/-1;font-size:.82rem;color:var(--muted);margin:0}
@@ -117,7 +118,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261107-0447Z", BUILD_UTC = "2026-11-07T04:47:37Z";
+const BUILD_ID = "OBD-20261107-0456Z", BUILD_UTC = "2026-11-07T04:56:12Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -132,6 +133,7 @@ function isAllowedCommand(cmd) {
   const c = String(cmd).toUpperCase().replace(/\s+/g, "");
   return /^AT(Z|E0|L0|S0|H0|H1|AT1|SP[06]|DPN|RV|I)$/.test(c)
     || /^ATSH[0-9A-F]{3}$/.test(c)
+    || /^ATCRA([0-9A-F]{3})?$/.test(c)
     || /^01[0-9A-F]{2}$/.test(c)
     || /^02[0-9A-F]{2}00$/.test(c)
     || /^0[37A]$/.test(c)
@@ -310,12 +312,22 @@ const METRICS = [
  gm("sh23","2-3 shift time","Transmission","1994","s","slow",2,0,6,b=>b[0]/40),
  gm("sh34","3-4 shift time","Transmission","1995","s","slow",2,0,6,b=>b[0]/40),
  gm("oilt","Engine oil temp","Temperatures","1154","°F","med",0,-20,320,tempF),
- gm("oilp","Oil pressure","Engine","1470","psi","med",0,0,120,b=>b[0]*3.985/6.895),
+ gm("tpfl","Front left tire","Tires","5005","psi","slow",1,0,80,b=>((b[0]<<8)|b[1])/16*0.1450377,{headers:["241"],rule:{lo:28,note:"Starting guide; use the door-jamb placard pressure for your truck"},basis:"community (recorded on a 2016 Silverado 1500, OBDb)"}),
+ gm("tpfr","Front right tire","Tires","5006","psi","slow",1,0,80,b=>((b[0]<<8)|b[1])/16*0.1450377,{headers:["241"],rule:{lo:28,note:"Starting guide; use the door-jamb placard pressure for your truck"},basis:"community (recorded on a 2016 Silverado 1500, OBDb)"}),
+ gm("tprr","Rear right tire","Tires","5007","psi","slow",1,0,80,b=>((b[0]<<8)|b[1])/16*0.1450377,{headers:["241"],rule:{lo:28,note:"Starting guide; use the door-jamb placard pressure for your truck"},basis:"community (recorded on a 2016 Silverado 1500, OBDb)"}),
+ gm("tprl","Rear left tire","Tires","5008","psi","slow",1,0,80,b=>((b[0]<<8)|b[1])/16*0.1450377,{headers:["241"],rule:{lo:28,note:"Starting guide; use the door-jamb placard pressure for your truck"},basis:"community (recorded on a 2016 Silverado 1500, OBDb)"}),
+ gm("oilp","Oil pressure","Engine","2345","psi","med",0,0,120,b=>b[0]*4*0.1450377,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500, OBDb; 1470 answers zero on this platform)"}),
+ gm("tiss","Trans input speed","Transmission","1941","rpm","fast",0,0,7000,b=>((b[0]<<8)|b[1])/4,{headers:["7E2"],basis:"community (recorded on a 2016 Silverado 1500, OBDb)"}),
+ gm("fan","Cooling fan command","Temperatures","13AF","%","slow",0,0,100,b=>b[0]/2.55,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500, OBDb)"}),
+ gm("grille","Active grille shutter","Temperatures","2366","%","slow",0,0,100,b=>b[0]/2.55,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500, OBDb)"}),
+ gm("ignv","Ignition voltage (ECM)","Electrical","1141","V","med",1,0,20,b=>b[0]/10,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500, OBDb)"}),
+ gm("achp","A/C high-side pressure","HVAC","1564","psi","slow",0,0,450,b=>b[0]*2.0,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500, OBDb; scaling single-source)"}),
  gm("oill","Oil life","Engine","119F","%","slow",0,0,100,pct,{rule:{lo:15,note:GUIDE}}),
  gm("knock","Knock retard","Engine","11A6","°","med",1,0,30,b=>b[0]*0.0878906),
  ...[1,2,3,4,5,6,7,8].map(n => { const mid = (0xA1 + n).toString(16).toUpperCase();
    return { id:"mis"+n, label:"Cyl "+n+" misfires (counter C)", group:"Misfire", cmd:"06"+mid, unit:"count", tier:"slow", digits:0, min:0, max:50, basis:"standard", mid, raw:r=>parseMode06(r,mid)[0x0C], kids:[{ id:"misb"+n, label:"Cyl "+n+" misfires (counter B)", unit:"count", digits:0, min:0, max:50, raw:r=>parseMode06(r,mid)[0x0B] }], rule:{hi:0,note:"Misfire monitor counters. SAE defines one counter for the current or last drive cycle and one for the last ten cycles; published sources disagree on which is $0B and which is $0C, so both are logged and the review rates growth within a drive."} }; }),
  { id:"ratio",label:"Engine rpm per mph",group:"Transmission",unit:"rpm/mph",digits:1,min:0,max:200,basis:"derived",need:["rpm","mph"],calc:v=>v.mph>5&&v.rpm>0?v.rpm/v.mph:null },
+ { id:"slip2",label:"Converter slip from input speed",group:"Transmission",unit:"rpm",digits:0,min:-200,max:3000,basis:"derived",need:["rpm","tiss"],calc:v=>typeof v.tiss==="number"&&v.rpm>300?v.rpm-v.tiss:null },
  { id:"geari",label:"Gear (inferred from rpm per mph)",group:"Transmission",unit:"",digits:0,min:0,max:10,basis:"derived",need:["rpm","mph"],calc:v=>{ const veh=typeof vehicles==="object"&&vehicles[vid]; if(!veh||!veh.ratios||!veh.gearK||!(v.mph>8)||!(v.rpm>400)||(mstate.gear&&mstate.gear.status==="ok")) return null; const x=Math.log(v.rpm/v.mph/veh.gearK); let g=null,d=9; veh.ratios.forEach((r,i)=>{const e=Math.abs(x-Math.log(r)); if(e<d){d=e;g=i+1;}}); return d<=(v.mph>15?.05:.10)?g:null; } },
  { id:"fflow",label:"Estimated fuel flow",group:"Fuel",unit:"gal/h",digits:2,min:0,max:40,basis:"derived",need:["maf"],calc:v=>v.maf>0?v.maf/(14.7*(v.lambda>0?v.lambda:1))*3600/(6.17*454):null },
  { id:"alt",label:"Estimated altitude",group:"Driving",unit:"ft",digits:0,min:-500,max:12000,basis:"derived",need:["baro"],calc:v=>v.baro>0?(1-Math.pow(v.baro/101.325,0.1903))*145366:null },
@@ -421,7 +433,7 @@ function simulatorReply(cmd, t) {
    "0600":"460000000001","0620":"462080000001","0640":"464000000001","0660":"466000000001","0680":"468000000001","06A0":"46A07FC00000","0621":"46218024006400000258","0151":"415101","0142":"4142"+hex(13900,4),"0106":"4106"+hex(128+w*4),"0107":"4107"+hex(131),
    "0108":"4108"+hex(127-w*4),"0109":"4109"+hex(130),"0144":"4144"+hex(32768,4),"015E":"415E"+hex(70+w*40,4),"012F":"412F"+hex(150),
    "011F":"411F"+hex(t/1000%3600,4),"0131":"4131"+hex(800,4),"0130":"413012","0121":"41210000","0163":"4163"+hex(520,4),"0101":"4101"+"82"+"07"+"E5"+"20",
-   "221940":"621940"+hex(125+w*12),"22199A":"62199A"+hex(g),"221991":"621991"+hex(slip*8,4),"221993":"621993"+hex(22),"221994":"621994"+hex(26),"221995":"621995"+hex(28),
+   "225005":"625005"+hex(Math.round(238*16),4),"225006":"625006"+hex(Math.round(241*16),4),"225007":"625007"+hex(Math.round(190*16),4),"225008":"625008"+hex(Math.round(236*16),4),"222345":"622345"+hex(Math.round((35+w*5)/0.58)),"221941":"621941"+hex(Math.round((rpm-slip)*4),4),"2213AF":"6213AF"+hex(w>.7?128:0),"222366":"622366"+hex(255),"221141":"621141"+hex(139),"221564":"621564"+hex(53),"221940":"621940"+hex(125+w*12),"22199A":"62199A"+hex(g),"221991":"621991"+hex(slip*8,4),"221993":"621993"+hex(22),"221994":"621994"+hex(26),"221995":"621995"+hex(28),
    "221154":"621154"+hex(135),"221470":"621470"+hex(70+w*20),"22119F":"62119F"+hex(170),"2211A6":"6211A600","03":"4302030001710000","07":"4700","0A":"4A00","0902":"490201"+[..."SIMULATOR00000000"].map(c=>hex(c.charCodeAt(0))).join("") };
   for (let c = 1; c <= 8; c++) { const mid = (0xA1 + c).toString(16).toUpperCase(); map["06"+mid] = "46"+mid+"0B24000000000064"+mid+"0C24"+hex(c===4?2:0,4)+"00000064"; }
   return map[cmd] || "NO DATA";
@@ -1473,9 +1485,9 @@ const PRESETS = {
    W("line",["trans"],[4,4],[6,5],{win:15}), W("share",[],[4,4],[4,4],{share:"gear",view:"bars"}), W("share",[],[4,4],[4,4],{share:"temp",view:"donut"}),
    W("share",[],[4,4],[4,4],{share:"drive",view:"donut"}), W("number",["sh12"],[2,3],[3,3]), W("number",["sh23"],[2,3],[3,3]), W("number",["sh34"],[2,3],[3,3]), W("number",["ratio"],[2,3],[3,3]), W("number",["geari"],[2,3],[3,3]), W("history",["trans"],[4,4],[12,4],{stat:"max"}) ],
  Electrical: [ W("elab",[],[4,3],[4,3]), W("needle",["volt"],[2,4],[4,4]), W("number",["atrv"],[2,4],[4,4]), W("line",["volt","atrv"],[4,4],[12,4],{win:15}), W("history",["volt"],[4,4],[12,4],{stat:"min"}) ],
- Trip: [ W("needle",["mph"],[2,5],[3,5]), W("gearbox",[],[2,5],[3,5]), W("number",["ratio"],[2,3],[2,3]), W("number",["rpm"],[2,3],[2,3]),
-   W("number",["fuelgal"],[2,3],[2,3]), W("number",["range"],[2,3],[2,3]), W("number",["endur"],[2,3],[2,3]), W("number",["mpg10"],[2,3],[2,3]),
-   W("number",["trans"],[2,3],[2,3]), W("number",["oilt"],[2,3],[2,3]), W("number",["ect"],[2,3],[2,3]), W("number",["volt"],[2,3],[2,3]) ],
+ Trip: [ W("needle",["mph"],[2,5],[3,5]), W("gearbox",[],[2,5],[3,5]), W("tires",[],[4,3],[6,3]),
+   W("number",["ratio"],[2,3],[2,3]), W("number",["fuelgal"],[2,3],[2,3]), W("number",["range"],[2,3],[2,3]), W("number",["endur"],[2,3],[2,3]),
+   W("number",["mpg10"],[2,3],[2,3]), W("number",["trans"],[2,3],[2,3]), W("number",["oilt"],[2,3],[2,3]), W("number",["ect"],[2,3],[2,3]) ],
  "System map": [ W("sysmap",[],[4,12],[12,10]) ],
  Phone: [ W("phone",[],[4,3],[4,3]), W("number",["speedo"],[2,3],[4,3]), W("number",["grade"],[2,3],[4,3]), W("line",["mph","gmph"],[4,4],[6,4],{win:5}), W("line",["vib"],[4,4],[6,4],{win:5}), W("line",["noise"],[4,4],[6,4],{win:5}), W("scatter",["mph","vib"],[4,5],[6,5]) ],
  Engine: [ W("misfire",[],[4,4],[6,4]), W("line",["ect","oilt","trans"],[4,4],[6,4],{win:15}), W("line",["stft1","stft2","ltft1","ltft2"],[4,4],[6,4],{win:5}),
@@ -1526,6 +1538,7 @@ function loadVehicle(id) {
   Object.keys(PRESETS).forEach(k => { if (!Array.isArray(dash[k])) dash[k] = buildDash(k); });
   if (store.get(vkey("glancev"), 0) !== 2) { dash.Glance = buildDash("Glance"); store.set(vkey("glancev"), 2); }
   fits = store.get(vkey("fits"), {}); if (!("Trip" in fits)) { fits.Trip = true; store.set(vkey("fits"), fits); }
+  if (store.get(vkey("tripv"), 0) !== 3) { dash.Trip = buildDash("Trip"); store.set(vkey("tripv"), 3); }
   rules = store.get(vkey("rules"), {}); customs = store.get(vkey("customs"), []); rawDids = store.get(vkey("rawdids"), []);
   customs.forEach(registerCustom); rawDids.forEach(registerRawDid);
   tab = store.get(vkey("tab"), "Health check"); if (!dash[tab] && tab !== EV) tab = "Health check";
@@ -1608,14 +1621,17 @@ async function ask(cmd, timeout) {
   if (!session) throw new Error("Not connected");
   return session.link.send(cmd, timeout);
 }
+// A module outside the 7E0–7E7 range (the body module answers 241 → 641) needs the adapter's receive filter set, then cleared again.
+const RX_FOR = { "241": "641" };
 async function askH(header, cmd) {
-  return exclusive(async () => { if (session && session.header !== header) { await ask("ATSH" + header); session.header = header; } return ask(cmd); });
+  return exclusive(async () => { if (session && session.header !== header) { const rx = RX_FOR[header] || null; if (session.rx && !rx) { await ask("ATCRA"); session.rx = null; } await ask("ATSH" + header); session.header = header; if (rx && session.rx !== rx) { await ask("ATCRA" + rx); session.rx = rx; } } return ask(cmd); });
 }
 function visibleIds() {
   const ids = new Set(["rpm","mph","tps","ect"]);
   if (tab === EV) METRICS.forEach(m => { if (m.cmd) ids.add(m.id); });
   (dash[tab] || []).forEach(w => { (w.metrics || []).forEach(i => ids.add(i));
     if (w.type === "gearbox") ["gear","slip","gratio"].forEach(i => ids.add(i));
+    if (w.type === "tires") ["tpfl","tpfr","tprr","tprl"].forEach(i => ids.add(i));
     if (w.type === "misfire") for (let c = 1; c <= 8; c++) ids.add("mis" + c);
     if (w.type === "status" || w.type === "readiness") ids.add("mon");
     if (w.type === "allsensors") METRICS.forEach(m => { if (m.cmd && m.tier !== "slow") ids.add(m.id); });
@@ -1945,6 +1961,11 @@ R.share = (w, box) => {
     if (view === "donut" && key !== lastKey) { lastKey = key; leg.textContent = ""; e.forEach((x, i) => leg.append(el("span", {}, el("span", { class: "key", style: "background:" + COLORS[i] }), label(x[0]) + " " + Math.round(x[1] / tot * 100) + "%"))); }
     if (view !== "donut") leg.textContent = "";
   };
+};
+R.tires = (w, box) => {
+  const cells = {}, grid = el("div", { class: "tires" }); ["tpfl","tpfr","tprr","tprl"].forEach(i => { const c = el("div", { class: "tire" }, el("b"), el("span", { textContent: byId[i].label.replace(" tire", "") })); cells[i] = c; grid.append(c); });
+  box.append(header(w, "Tire pressures", "Unverified"), el("div", { class: "body" }, grid));
+  return () => { let worst = "none"; ["tpfl","tpfr","tprl","tprr"].forEach(i => { const v = latest[i] ?? null, r = ratingOf(byId[i], v); cells[i].querySelector("b").textContent = v === null ? "--" : v.toFixed(0); cells[i].className = "tire " + r.state; if (r.state === "bad") worst = "bad"; else if (r.state === "good" && worst === "none") worst = "good"; }); box.className = "w " + (worst === "none" ? "" : worst); };
 };
 R.gearbox = (w, box) => {
   const big = el("div", { class: "gear" }), a = el("div", { class: "sub" }), pill = el("div", { class: "pill" }), b = el("div", { class: "sub" });
@@ -2385,7 +2406,7 @@ function aboutOf(m) { if (ABOUT[m.id]) return ABOUT[m.id]; if (m.basis === "phon
 function evWidgets() {
   const F = (type, about, extra = {}, big = true) => ({ w: { id: "ev" + type + (extra.share || (extra.metrics || []).join("")), type, metrics: [], ...extra }, about, big });
   const views = [
-    ["Vehicle status", [F("status", "Whether the check-engine light is on, and code counts."), F("gearbox", "Current gear and converter slip together."), F("misfire", "Recent misfires per cylinder, which shows whether a problem is localized."), F("readiness", "Which emissions self-tests have finished."), F("codes", "Stored, pending, and permanent trouble codes, plus freeze frame."), F("mode06", "Computer self-test results against the vehicle's own limits."), F("truck", "VIN, software fingerprint, and which computers answer. It stays on this device."), F("crosscheck", "Whether related sensors move together."), F("sysmap", "A schematic of where each sensor sits in the air, fuel, exhaust, coolant, oil, and transmission paths, colored by its live value. Exact in order, approximate in position."), F("phone", "Opt-in GPS, motion, and microphone capture."), F("elab", "Parked tests for starting voltage and accessory load.")]],
+    ["Vehicle status", [F("status", "Whether the check-engine light is on, and code counts."), F("gearbox", "Current gear and converter slip together."), F("tires", "Four tire pressures from the body module (GM trucks)."), F("misfire", "Recent misfires per cylinder, which shows whether a problem is localized."), F("readiness", "Which emissions self-tests have finished."), F("codes", "Stored, pending, and permanent trouble codes, plus freeze frame."), F("mode06", "Computer self-test results against the vehicle's own limits."), F("truck", "VIN, software fingerprint, and which computers answer. It stays on this device."), F("crosscheck", "Whether related sensors move together."), F("sysmap", "A schematic of where each sensor sits in the air, fuel, exhaust, coolant, oil, and transmission paths, colored by its live value. Exact in order, approximate in position."), F("phone", "Opt-in GPS, motion, and microphone capture."), F("elab", "Parked tests for starting voltage and accessory load.")]],
     ["Gauges", ["rpm","mph","trans","ect","volt","fuel"].map(i => F("needle", "Needle gauge. Colors show its limit, if one exists.", { metrics: [i] }, false))],
     ["Graphs and pies", [F("line", "Fuel corrections over time.", { metrics: ["stft1","ltft1","stft2","ltft2"], win: 5 }), F("line", "All major heat readings together.", { metrics: ["ect","oilt","trans"], win: 15 }), F("line", "Converter slip over time.", { metrics: ["slip"], win: 5 }), F("scatter", "Each point is engine speed against road speed. Each locked gear forms a straight ray.", { metrics: ["mph","rpm"] }), F("share", "Time in each gear.", { share: "gear", view: "bars" }), F("share", "Time in each transmission temperature band.", { share: "temp", view: "donut" }), F("share", "Time stopped, cruising, accelerating, and slowing.", { share: "drive", view: "donut" }), F("history", "Transmission temperature peak on each saved drive.", { metrics: ["trans"], stat: "max" }), F("history", "Estimated fuel economy on each saved drive.", { metrics: ["mpg"], stat: "avg" })]],
     ["Health", [F("healthcheck", "The guided steps that exercise more of the vehicle."), F("healthcard", "System-by-system status for this session.")]]
