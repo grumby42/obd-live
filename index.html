@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261107-1335Z">
-<meta name="build-timestamp-utc" content="2026-11-07T13:35:42Z">
+<meta name="build-id" content="OBD-20261107-1512Z">
+<meta name="build-timestamp-utc" content="2026-11-07T15:12:36Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -118,7 +118,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261107-1335Z", BUILD_UTC = "2026-11-07T13:35:42Z";
+const BUILD_ID = "OBD-20261107-1512Z", BUILD_UTC = "2026-11-07T15:12:36Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -333,7 +333,7 @@ const METRICS = [
  gm("inj6","Injector pulse width, cyl 6","Engine","1198","ms","med",2,0,30,b=>((b[0]<<8)|b[1])/65.535,{headers:["7E0"],basis:"community (OBDb definition for the Silverado 1500, unrecorded; zero vs non-zero is what the V4 detector uses)"}),
  gm("inj7","Injector pulse width, cyl 7","Engine","1199","ms","med",2,0,30,b=>((b[0]<<8)|b[1])/65.535,{headers:["7E0"],basis:"community (OBDb definition for the Silverado 1500, unrecorded; zero vs non-zero is what the V4 detector uses)"}),
  gm("inj8","Injector pulse width, cyl 8","Engine","129A","ms","med",2,0,30,b=>((b[0]<<8)|b[1])/65.535,{headers:["7E0"],basis:"community (OBDb definition for the Silverado 1500, unrecorded; zero vs non-zero is what the V4 detector uses)"}),
- gm("tiss","Trans input speed","Transmission","1941","rpm","fast",0,0,7000,b=>((b[0]<<8)|b[1])/4,{headers:["7E2"],basis:"community (recorded on a 2016 Silverado 1500, OBDb)"}),
+ gm("tiss","Trans input speed","Transmission","1941","rpm","fast",0,0,7000,b=>((b[0]<<8)|b[1])/8,{headers:["7E2"],basis:"community (OBDb lists ÷4; on this truck the value equals engine rpm at lock-up only at ÷8, so ÷8 is used and the app checks it every drive)"}),
  gm("fan","Cooling fan command","Temperatures","13AF","%","slow",0,0,100,b=>b[0]/2.55,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500, OBDb)"}),
  gm("grille","Active grille shutter","Temperatures","2366","%","slow",0,0,100,b=>b[0]/2.55,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500, OBDb)"}),
  gm("ignv","Ignition voltage (ECM)","Electrical","1141","V","med",1,0,20,b=>b[0]/10,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500, OBDb)"}),
@@ -572,6 +572,8 @@ function validateSignals(rows, meta, vehicle = {}) {
     else if (cold && amb !== undefined && Math.abs(first - amb) > 50) out[k] = "suspect";
     else out[k] = mins >= 8 && Math.max(...a) - Math.min(...a) >= 5 ? "ok" : "unknown";
   }
+  // Input speed must equal engine speed whenever the converter is locked; any other ratio means the scaling or address is wrong.
+  if (has("tiss")) { const r = drive.filter(x => typeof x.tiss === "number" && typeof x.rpm === "number" && x.rpm > 800 && x.mph > 30 && typeof x.slip === "number" && Math.abs(x.slip) < 40).map(x => x.tiss / x.rpm); out.tiss = r.length >= 20 ? (Math.abs(pctl(r, .5) - 1) <= .05 ? "ok" : "suspect") : "unknown"; }
   // A request that only ever answers zero is a dead or mis-mapped address, not a reading of zero.
   if (has("oilp")) { const a = nums(drive, "oilp"); out.oilp = flat("oilp") || (a.length >= 5 && a.every(x => x === 0)) ? "suspect" : a.length >= 20 && Math.max(...a) - Math.min(...a) >= 3 ? "ok" : "unknown"; }
   if (has("knock")) out.knock = flat("knock") && nums(drive, "knock")[0] !== 0 ? "suspect" : "unknown";
@@ -1885,7 +1887,7 @@ async function saveDrive(final) {
   try {
     const summary = {}; for (const id in stats) { const s = stats[id]; if (s.n) summary[id] = { min: s.min, max: s.max, avg: s.sum / s.n, n: s.n }; }
     const end = rows.length, fresh = rows.slice(flushed, end), chunks = fresh.length ? [{ id: driveId + ":" + chunkSeq, drive: driveId, seq: chunkSeq, rows: fresh }] : [];
-    const rec = { ...sessionMeta(), vehicle: vid, end: Date.now(), summary };
+    const rec = { ...sessionMeta(), vehicle: vid, end: Date.now(), summary }; rec.xlog = (lastXlog || []).slice(0, 60).concat((lastXlog || []).length > 120 ? (lastXlog || []).slice(-60) : (lastXlog || []).slice(60));
     rec.codes = codes;
     if (final) { const rv = analyzeDrive({ rows, meta: rec, vehicle: vehicles[vid], history: drives }); rec.review = { stats: rv.stats, verdict: rv.verdict, kind: rv.trip.kind }; }
     await putDrives([rec], chunks); flushed = end; if (fresh.length) chunkSeq++;
