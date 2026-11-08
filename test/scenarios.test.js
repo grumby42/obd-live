@@ -3,7 +3,7 @@ const fs = require("fs"), assert = require("assert");
 const html = fs.readFileSync("index.html", "utf8");
 const src = html.split("/*PURE-START*/")[1].split("/*PURE-END*/")[0];
 new Function(html.split("<script>")[1].split("</script>")[0]); // whole page script must parse
-const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,shiftCatalog,transShopReport,tccApplySpeed,rpmEvents,eventWindows,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom,inferGears,toMessagesByEcu,hmm,learningState};")();
+const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,shiftCatalog,transShopReport,tccApplySpeed,rpmEvents,eventWindows,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom,inferGears,toMessagesByEcu,hmm,learningState,markedShifts};")();
 const m = id => api.METRICS.find(x => x.id === id);
 
 // ---- Safety allowlist
@@ -300,4 +300,8 @@ assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
   const settled = api.learningState({ sh12: .50, sh23: .45, sh34: .40, shifts: pairsOf(0, 120) }, [{ sh12: .50, sh23: .46, sh34: .40, shifts: pairsOf(1, 130) }, { sh12: .51, sh23: .45, sh34: .41, shifts: pairsOf(0, 110) }, { sh12: .50, sh23: .45, sh34: .40, shifts: pairsOf(1, 120) }, { sh12: .50, sh23: .45, sh34: .40, shifts: pairsOf(0, 120) }]);
   assert.strictEqual(settled.state, "settled", JSON.stringify(settled)); assert.strictEqual(settled.confidence, "High");
   assert.strictEqual(api.learningState({}, []).state, "unknown"); }
+
+// Driver marks are matched to the shifts just before them; slipping and hard-locked upshifts are counted.
+{ const sh = [{ t: 10000, from: 3, to: 4, kind: "up", feel: "slipping (slip 200 rpm)", mph: 30, jump: -200, slipPeak: 200, tps: 35 }, { t: 30000, from: 5, to: 4, kind: "coast-down", feel: "cushioned, converter released", mph: 29, jump: 120 }];
+  const ms = api.markedShifts(sh, [{ t: 13000, mph: 31 }, { t: 60000, mph: 20 }]); assert.strictEqual(ms[0].prime.from, 3); assert.strictEqual(ms[1].prime, null); }
 console.log("all tests passed");
