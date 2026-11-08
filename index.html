@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261108-1447Z">
-<meta name="build-timestamp-utc" content="2026-11-08T14:47:14Z">
+<meta name="build-id" content="OBD-20261108-1503Z">
+<meta name="build-timestamp-utc" content="2026-11-08T15:03:48Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -118,7 +118,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261108-1447Z", BUILD_UTC = "2026-11-08T14:47:14Z";
+const BUILD_ID = "OBD-20261108-1503Z", BUILD_UTC = "2026-11-08T15:03:48Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1496,7 +1496,7 @@ function shiftCatalog(rowsIn, gearOk = true) {
     const jump = (down ? rpmAfterMax : rpmAfterMin) - a.rpm, overshoot = expected !== null ? (down ? rpmAfterMax - expected : expected - rpmAfterMin) : null;
     let feel = "unclassified";
     // Rpm sag right after a downshift toward a stop: the engine being dragged down (late converter release or late 2-1) is the stop-sign clunk.
-    const sag = down && coast && rpmAfterMin < 650 && a.rpm >= 800;
+    const sag = down && coast && rpmAfterMin < 500 && a.rpm >= 800; // warm idle on this family sits near 550–600, so only a dip well below idle counts
     if (down && coast) feel = overshoot !== null && overshoot >= 200 ? "flare" : sag ? "engine dragged down (rpm " + Math.round(rpmAfterMin) + ")" : !slipKnown ? (Math.abs(jump) >= 250 ? "firm (converter state unknown)" : "mild") : lockedThrough && Math.abs(jump) >= 250 ? "firm, converter locked through" : !lockedThrough && Math.abs(jump) >= 300 ? "firm, converter released" : !lockedThrough ? "cushioned, converter released" : "mild";
     else if (down) feel = overshoot !== null && overshoot >= 250 ? "flare" : "power downshift";
     // An upshift under throttle with a converter-slip spike is a slipping shift even when rpm never overshoots the target.
