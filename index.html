@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261108-1503Z">
-<meta name="build-timestamp-utc" content="2026-11-08T15:03:48Z">
+<meta name="build-id" content="OBD-20261109-0009Z">
+<meta name="build-timestamp-utc" content="2026-11-09T00:09:14Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -118,7 +118,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261108-1503Z", BUILD_UTC = "2026-11-08T15:03:48Z";
+const BUILD_ID = "OBD-20261109-0009Z", BUILD_UTC = "2026-11-09T00:09:14Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1487,9 +1487,11 @@ function gearRatios(rows) { const g = {}; rows.forEach(r => { if (Number.isInteg
 function shiftCatalog(rowsIn, gearOk = true) {
   const rows = rowsIn, ratios = gearRatios(rows), out = [];
   if (!gearOk) return { shifts: out, ratios, pairs: {} };
-  for (let i = 1; i < rows.length; i++) {
-    const a = rows[i - 1], b = rows[i];
-    if (!Number.isInteger(a.gear) || !Number.isInteger(b.gear) || a.gear === b.gear || !(b.mph > 2) || b.t - a.t > 2500) continue;
+  // Pair each gear sample with the previous gear sample (gear can skip a second when other requests crowd the poll), up to 4 s apart.
+  let prevG = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const b = rows[i]; if (!Number.isInteger(b.gear)) continue; const pi = prevG; prevG = i; if (pi < 0) continue; const a = rows[pi];
+    if (a.gear === b.gear || !(b.mph > 2) || b.t - a.t > 4000) continue;
     const win = rows.slice(i, Math.min(rows.length, i + 4)).filter(x => x.t - b.t <= 3500), rpmAfterMax = Math.max(...win.map(x => x.rpm).filter(Number.isFinite)), rpmAfterMin = Math.min(...win.map(x => x.rpm).filter(Number.isFinite));
     const slips = [a, ...win].map(x => x.slip).filter(x => typeof x === "number"), slipKnown = slips.length >= 3, lockedThrough = slipKnown && slips.every(s => Math.abs(s) < 60), slipPeak = slips.length ? Math.max(...slips.map(Math.abs)) : null;
     const down = b.gear < a.gear, coast = (b.tps ?? 100) < 22 && (b._acc ?? 0) <= .5, expected = ratios[a.gear] && ratios[b.gear] ? a.rpm * ratios[b.gear] / ratios[a.gear] : null;
@@ -2563,8 +2565,8 @@ function renderEverything(g) {
 /* ---------- Marks ---------- */
 function addMark() {
   if (!session) return toast("Connect first.");
-  if (movingNow()) { markPending = "Marked while driving"; focusEvap(); toast("Marked."); return; }
-  $("dlg").classList.remove("wide"); const put = t => { markPending = t; focusEvap(); $("dlg").close(); toast("Marked: " + t); }, txt = el("input", { placeholder: "Your note", maxLength: 60, "aria-label": "Note" });
+  if (movingNow()) { markPending = "Marked while driving"; toast("Marked."); return; } // no EVAP focus while driving: it would crowd out gear and slip sampling right when a mark needs them
+  $("dlg").classList.remove("wide"); const put = t => { markPending = t; if (/cap|evap|fuel/i.test(t) || !movingNow()) focusEvap(); $("dlg").close(); toast("Marked: " + t); }, txt = el("input", { placeholder: "Your note", maxLength: 60, "aria-label": "Note" });
   showDlg("Mark this moment", el("p", { textContent: "This pins a note to the log with what the vehicle was doing." }), el("div", { class: "bar" }, ["Cap loose", "Cap tight", "Blower noise", "Blower speed changed", "Blower stopped", "Lights dimmed", "Shudder", "Slip feeling", "Rough running"].map(t => el("button", { textContent: t, onclick: () => put(t) }))), txt, el("div", { class: "bar" }, el("button", { class: "primary", textContent: "Save note", onclick: () => txt.value.trim() && put(txt.value.trim()) })));
 }
 /* ---------- Gauge drill-in ---------- */
