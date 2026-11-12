@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261112-1929Z">
-<meta name="build-timestamp-utc" content="2026-11-12T19:29:30Z">
+<meta name="build-id" content="OBD-20261112-1939Z">
+<meta name="build-timestamp-utc" content="2026-11-12T19:39:21Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -90,22 +90,22 @@ body.live main{padding-bottom:calc(100px + env(safe-area-inset-bottom))}
 body.fit.live main{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 .ck{display:flex;flex-direction:column;height:100%;min-height:0;text-align:center;font-variant-numeric:tabular-nums}
 .ck small{display:block;font-size:clamp(.58rem,1.5vh,.8rem);font-weight:700;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;line-height:1.15;white-space:nowrap}
-.ck .ckn{font-weight:800;line-height:1;font-size:clamp(1.5rem,5.6vh,3rem);white-space:nowrap}
+.ck .ckn{font-weight:800;line-height:1;font-size:clamp(1.3rem,4.6vh,2.6rem);white-space:nowrap}
 .ck .ckn.dev,.ck .ckn.warn{color:#e0a100}.ck .ckn.bad{color:#ff8a80}.ck .ckn.off{color:var(--faint)}
 .ck-tires .tv.warn{border-color:#e0a100;color:#e0a100}
-.ck-top{position:relative;flex:3.2 1 0;min-height:0}.ck-top canvas{width:100%;height:100%;display:block}
-.ck-ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;pointer-events:none;padding-top:6%}
+.ck-top{position:relative;flex:3.6 1 0;min-height:0}.ck-top canvas{width:100%;height:100%;display:block}
+.ck-ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
 .ck-spd{font-size:clamp(2.4rem,min(12vh,19cqw),6.5rem);font-weight:900;line-height:.95}
-.ck-spdw{text-align:center}.ck-gear{text-align:center;pointer-events:none;align-self:flex-start;margin-top:4%}.ck-gear b{display:block;font-size:clamp(1.4rem,min(5.5vh,8cqw),3rem);font-weight:900;line-height:1}
-.ck-row{flex:1 1 0;display:flex;align-items:center;justify-content:space-evenly;border-top:1px solid var(--line);min-height:0;gap:6px}
+.ck-spdw{text-align:center}.ck-gear{text-align:center;pointer-events:none;margin-top:1.2vh}.ck-gear b{display:block;font-size:clamp(1.3rem,min(4.8vh,8cqw),2.6rem);font-weight:900;line-height:1}
+.ck-row{flex:1 1 0;display:flex;align-items:center;justify-content:space-evenly;border-top:1px solid var(--line);min-height:0;gap:4px;padding:2px 0}.ck-row.r4>div{flex:1 1 0}.ck-row.r4 .ckn{font-size:clamp(1.15rem,4vh,2.3rem)}.ck-row.r4 small{letter-spacing:.03em}
 .ck-row>div{min-width:0}
 .ck-cyl{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;flex:0 0 52%}
-.ck-cyl div{border-radius:4px;background:var(--good);color:#fff;font-size:clamp(.55rem,1.4vh,.78rem);font-weight:700;line-height:1.15;padding:2px 0}
+.ck-cyl div{border-radius:4px;background:var(--good);color:#fff;font-size:clamp(.55rem,1.3vh,.75rem);font-weight:700;line-height:1.1;padding:1px 0}
 .ck-cyl div.mis{background:var(--bad)}.ck-cyl div.offc{opacity:.4}.ck-cyl div.unk{background:var(--axis);color:var(--muted)}
-.ck-tires{display:flex;gap:6px;justify-content:center;align-items:center}.ck-tires .tv{border:2px solid var(--text);border-radius:5px;padding:1px 7px;font-weight:800;font-size:clamp(.9rem,2.6vh,1.3rem);line-height:1.2}.ck-tires .tv.bad{border-color:var(--bad);color:#ff8a80}.ck-tires .tv.off{border-color:var(--axis);color:var(--faint)}
+.ck-tires{display:flex;gap:6px;justify-content:center;align-items:center}.ck-tires{gap:10px}.ck-tires .tv{border:2px solid var(--text);border-radius:5px;padding:1px 8px;font-weight:800;font-size:clamp(.9rem,2.6vh,1.3rem);line-height:1.2}.ck-tires .tv.bad{border-color:var(--bad);color:#ff8a80}.ck-tires .tv.off{border-color:var(--axis);color:var(--faint)}
 body.fit .w.ckw{padding:4px 8px}
 .w.ckw{container-type:size}
-@container (min-aspect-ratio: 5/4){.ck{display:grid;grid-template-columns:1.1fr 1fr;grid-template-rows:repeat(5,minmax(0,1fr)) auto;column-gap:12px}.ck-top{grid-row:1/6;grid-column:1}.ck-row{grid-column:2;border-top:none}.ck-row+.ck-row{border-top:1px solid var(--line)}.ck-foot{grid-column:1/-1}.ck-cyl{flex:0 0 58%}}
+@container (min-aspect-ratio: 5/4){.ck{display:grid;grid-template-columns:1.1fr 1fr;grid-template-rows:auto repeat(4,minmax(0,1fr));column-gap:12px}.cas{grid-column:1/-1}.ck-top{grid-row:2/6;grid-column:1}.ck-row{grid-column:2;border-top:none}.ck-row+.ck-row{border-top:1px solid var(--line)}.ck-foot{grid-column:1/-1}.ck-cyl{flex:0 0 58%}}
 .cas{flex:none;display:flex;flex-wrap:wrap;gap:4px;padding:0 0 4px;cursor:pointer}.cas:empty{display:none}
 .cas span{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:3px 8px;font-weight:800;font-size:clamp(.72rem,2vh,.95rem);letter-spacing:.05em;text-transform:uppercase;line-height:1.1}
 .cas span svg{width:1.25em;height:1.25em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -151,7 +151,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261112-1929Z", BUILD_UTC = "2026-11-12T19:29:30Z";
+const BUILD_ID = "OBD-20261112-1939Z", BUILD_UTC = "2026-11-12T19:39:21Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -2211,17 +2211,18 @@ R.cockpit = (w, box) => {
   const veh = vehicles[vid] || {}, c = el("canvas"), spd = el("div", { class: "ck-spd" }), gearB = el("b");
   c.setAttribute("role", "img");
   const num = label => { const n = el("div", { class: "ckn" }); return { n, d: el("div", {}, n, el("small", { textContent: label })) }; };
-  const ect = num("coolant"), trans = num("trans fluid"), oil = num("oil °F / psi"), fuel = num("fuel rem"), evap = num("evap vapor Pa");
+  const ect = num("coolant"), trans = num("trans fluid"), oilt = num("oil °F"), oilp = num("oil psi"), fuel = num("fuel rem"), evap = num("evap vapor Pa");
   const afm = el("div", { class: "ckn", style: "flex:0 0 28%" }), cyl = el("div", { class: "ck-cyl" }), cells = {};
   [1,3,5,7,2,4,6,8].forEach(n => { const v = el("span"); cells[n] = { d: el("div", {}, el("span", { textContent: String(n) }), el("br"), v), v }; cyl.append(cells[n].d); });
   const tires = el("div", { class: "ck-tires" }), tc = {}; [["tpfl","DF"],["tprl","DR"],["tpfr","PF"],["tprr","PR"]].forEach(([id, l]) => { const d = el("div", { class: "tv", textContent: "--" }); tc[id] = d; tires.append(el("div", {}, d, el("small", { textContent: l }))); });
-  const foot = el("div", { class: "ck-foot", textContent: "" }), cas = el("div", { class: "cas", role: "alert", "aria-live": "assertive", title: "Tap to acknowledge" }), ck = el("div", { class: "ck" });
+  const cas = el("div", { class: "cas", role: "alert", "aria-live": "assertive", title: "Tap to acknowledge" }), ck = el("div", { class: "ck" });
   cas.onclick = () => { casAck(); };
   box.classList.add("ckw");
   const rowTop = el("div", { class: "ck-top" }, c, el("div", { class: "ck-ov" }, el("div", { class: "ck-spdw" }, spd, el("small", { textContent: "speed" })), el("div", { class: "ck-gear" }, gearB, el("small", { textContent: "gear" }))));
-  const rowTemp = el("div", { class: "ck-row" }, ect.d, trans.d), rowOil = el("div", { class: "ck-row" }, oil.d), rowCyl = el("div", { class: "ck-row" }, afm, cyl), rowFuel = el("div", { class: "ck-row" }, fuel.d, evap.d), rowTire = el("div", { class: "ck-row" }, tires);
-  const rowFor = { ect: rowTemp, trans: rowTemp, oilp: rowOil, oilt: rowOil, volt: rowTop, link: rowTop, slip: rowTop, mil: rowCyl, mis: rowCyl, fuel: rowFuel, evapp: rowFuel, tire: rowTire };
-  ck.append(cas, rowTop, rowTemp, rowOil, rowCyl, rowFuel, rowTire, foot); box.append(ck);
+  const rowTemp = el("div", { class: "ck-row r4" }, ect.d, trans.d, oilt.d, oilp.d), rowCyl = el("div", { class: "ck-row" }, afm, cyl), rowFuel = el("div", { class: "ck-row" }, fuel.d, evap.d), rowTire = el("div", { class: "ck-row" }, tires);
+  const rowFor = { ect: rowTemp, trans: rowTemp, oilp: rowTemp, oilt: rowTemp, volt: rowTop, link: rowTop, slip: rowTop, mil: rowCyl, mis: rowCyl, fuel: rowFuel, evapp: rowFuel, tire: rowTire };
+  const ov = rowTop.querySelector(".ck-ov");
+  ck.append(cas, rowTop, rowTemp, rowCyl, rowFuel, rowTire); box.append(ck);
   const ZONES = [[0, 4000, "#0ca30c"], [4000, 5500, "#e0a100"], [5500, 6500, "#d03b3b"]]; // visual zones for the dial only; no published limit is implied
   return () => {
     const rpm = latest.rpm ?? null, mph = latest.mph ?? null, gv = latest.gear ?? null, sl = latest.slip ?? null, cmp = liveBandCompare(), outKeys = new Set(cmp ? cmp.out.map(r => r.key.split(".")[0]) : []);
@@ -2236,7 +2237,7 @@ R.cockpit = (w, box) => {
     g.font = Math.max(9, rad * .09) + "px system-ui"; g.fillStyle = "#8f8e85"; g.textAlign = "left"; g.textBaseline = "top"; g.fillText("rpm ×1000", 4, 3); g.textAlign = "center"; g.textBaseline = "middle";
     // Pointer: a triangle inside the band, tip on the band's inner edge.
     if (rpm !== null) { const t = ang(rpm), tip = rad - bw / 2 - 1, base = tip - Math.max(14, rad * .2), hw = Math.max(5, rad * .055), px = Math.cos(t), py = Math.sin(t); g.fillStyle = "#f0efec"; g.beginPath(); g.moveTo(cx + px * tip, cy + py * tip); g.lineTo(cx + px * base - py * hw, cy + py * base + px * hw); g.lineTo(cx + px * base + py * hw, cy + py * base - px * hw); g.closePath(); g.fill(); }
-    spd.textContent = mph === null ? "--" : mph.toFixed(0);
+    spd.textContent = mph === null ? "--" : mph.toFixed(0); ov.style.paddingTop = Math.max(0, 2 * (cy + rad * .12 - H / 2)) + "px";
     const sr = ratingOf(byId.slip, sl); gearB.textContent = gv !== null ? gv.toFixed(0) : (latest.gratio ?? null) !== null ? latest.gratio.toFixed(1) : "--"; gearB.style.color = sr.state === "bad" ? "#ff8a80" : "";
     c.setAttribute("aria-label", "Speed " + spd.textContent + " mph, " + (rpm === null ? "no rpm" : rpm.toFixed(0) + " rpm") + ", gear " + gearB.textContent);
     // Numbers: red when a rule is broken, amber when outside this vehicle's usual band, grey when the vehicle isn't answering.
@@ -2246,8 +2247,8 @@ R.cockpit = (w, box) => {
     const put = (o, id, text, extra) => { const v = latest[id] ?? null, r = v === null ? { state: "none" } : ratingOf(byId[id], v); o.n.textContent = text; o.n.className = "ckn " + (v === null ? "off" : r.state === "bad" ? "bad" : nearLimit(id, v) ? "warn" : outKeys.has(id) || (extra && outKeys.has(extra)) ? "dev" : ""); };
     put(ect, "ect", (latest.ect ?? null) === null ? "--" : latest.ect.toFixed(0));
     put(trans, "trans", (latest.trans ?? null) === null ? "--" : latest.trans.toFixed(0));
-    put(oil, "oilt", ((latest.oilt ?? null) === null ? "--" : latest.oilt.toFixed(0)) + " / " + ((latest.oilp ?? null) === null ? "--" : latest.oilp.toFixed(0)), "oilp");
-    if ((latest.oilp ?? null) !== null && ratingOf(byId.oilp, latest.oilp).state === "bad") oil.n.className = "ckn bad";
+    put(oilt, "oilt", (latest.oilt ?? null) === null ? "--" : latest.oilt.toFixed(0));
+    put(oilp, "oilp", (latest.oilp ?? null) === null ? "--" : latest.oilp.toFixed(0));
     put(fuel, "fuel", (latest.fuel ?? null) === null ? "--" : latest.fuel.toFixed(0) + "%"); if ((latest.fuel ?? null) !== null) fuel.n.className = "ckn " + (latest.fuel <= 15 ? "bad" : latest.fuel <= 30 ? "warn" : "");
     put(evap, "evapp", (latest.evapp ?? null) === null ? "--" : latest.evapp.toFixed(0));
     const mode = latest.afm ?? null, v4 = mode === "V4"; afm.textContent = mode === null ? "V?" : /V4/.test(mode) ? "V4" : "V8"; afm.className = "ckn" + (mode === null ? " off" : ""); afm.title = mode === null ? "Cylinder mode needs the injector pulse-width requests; this vehicle hasn't answered them" : mode;
@@ -2257,11 +2258,7 @@ R.cockpit = (w, box) => {
     // Annunciators (crew-alerting style): red flashes until tapped, amber stays steady; unrelated rows dim while a red one is up.
     const msgs = casMessages(); renderCas(cas, msgs); const red = msgs.some(m => m.level === "alert");
     ck.classList.toggle("declutter", red); [rowTop, rowTemp, rowOil, rowCyl, rowFuel, rowTire].forEach(r => r.classList.remove("keep")); if (red) msgs.filter(m => m.level === "alert").forEach(m => { const r = rowFor[m.row]; if (r) r.classList.add("keep"); });
-    // Footer: the live band verdict
-    if (!baseline || !Object.keys(baseline.bands).length) { foot.textContent = "No usual bands yet: needs 5 saved drives of 5+ minutes"; foot.className = "ck-foot"; }
-    else if (!cmp || !cmp.rows.length) { foot.textContent = "Usual bands from " + baseline.label + " · comparing after 5 min"; foot.className = "ck-foot"; }
-    else if (cmp.out.length) { foot.textContent = "Outside usual: " + cmp.out.slice(0, 3).map(r => r.label.replace(/,.*$/, "") + " " + r.value.toFixed(r.digits) + (r.state === "in" ? "" : " (" + r.lo.toFixed(r.digits) + "–" + r.hi.toFixed(r.digits) + ")")).join(" · ") + (cmp.out.length > 3 ? " +" + (cmp.out.length - 3) : ""); foot.className = "ck-foot dev"; }
-    else { foot.textContent = "Within usual bands · " + cmp.rows.length + " measure" + (cmp.rows.length === 1 ? "" : "s") + " · " + baseline.label; foot.className = "ck-foot"; }
+    box.title = cmp && cmp.out.length ? "Outside usual: " + cmp.out.map(r => r.label.replace(/,.*$/, "") + " " + r.value.toFixed(r.digits) + " (" + r.lo.toFixed(r.digits) + "–" + r.hi.toFixed(r.digits) + ")").join(" · ") : "";
     box.className = "w ckw" + (cmp && cmp.out.length ? " watch" : "") + (tbad || red ? " bad" : "");
   };
 };
