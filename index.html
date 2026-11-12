@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261112-1946Z">
-<meta name="build-timestamp-utc" content="2026-11-12T19:46:32Z">
+<meta name="build-id" content="OBD-20261112-2026Z">
+<meta name="build-timestamp-utc" content="2026-11-12T20:26:24Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -151,7 +151,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261112-1946Z", BUILD_UTC = "2026-11-12T19:46:32Z";
+const BUILD_ID = "OBD-20261112-2026Z", BUILD_UTC = "2026-11-12T20:26:24Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -349,7 +349,8 @@ const METRICS = [
  gm("tpfr","Front right tire","Tires","5006","psi","slow",1,0,80,b=>((b[0]<<8)|b[1])/16*0.1450377,{headers:["241"],rule:{lo:28,note:"Starting guide; use the door-jamb placard pressure for your truck"},basis:"community (recorded on a 2016 Silverado 1500, OBDb)",alt:{cmd:"22248F",pre:"62248F",headers:["7E0"],f:b=>b[0],basis:"community (older GM route via the engine module, OBDb definition, unrecorded)"}}),
  gm("tprr","Rear right tire","Tires","5007","psi","slow",1,0,80,b=>((b[0]<<8)|b[1])/16*0.1450377,{headers:["241"],rule:{lo:28,note:"Starting guide; use the door-jamb placard pressure for your truck"},basis:"community (recorded on a 2016 Silverado 1500, OBDb)",alt:{cmd:"222490",pre:"622490",headers:["7E0"],f:b=>b[0],basis:"community (older GM route via the engine module, OBDb definition, unrecorded)"}}),
  gm("tprl","Rear left tire","Tires","5008","psi","slow",1,0,80,b=>((b[0]<<8)|b[1])/16*0.1450377,{headers:["241"],rule:{lo:28,note:"Starting guide; use the door-jamb placard pressure for your truck"},basis:"community (recorded on a 2016 Silverado 1500, OBDb)",alt:{cmd:"222491",pre:"622491",headers:["7E0"],f:b=>b[0],basis:"community (older GM route via the engine module, OBDb definition, unrecorded)"}}),
- gm("oilp","Oil pressure","Engine","2345","psi","med",0,0,120,b=>b[0]*4*0.1450377,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500, OBDb; 1470 answers zero on this platform)",rule:{lo:10,when:"running",sustainMs:3000,note:GUIDE+" Hot idle on a healthy 5.3L sits well above this; the review rates hot idle separately."}}),
+ gm("oilp","Oil pressure","Engine","2345","psi","med",0,0,120,b=>b[0]*4*0.1450377,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500, OBDb; 1470 answers zero on this platform)",rule:{lo:10,when:"running",sustainMs:3000,note:GUIDE+" Hot idle on a healthy 5.3L sits well above this; the review rates hot idle separately."},deadZero:true,
+   alts:[{cmd:"22115C",pre:"62115C",headers:["7E0"],f:b=>b[0]*0.6-21.6,basis:"community (OBDb 2014 Equinox / 2016 Silverado DID 115C: raw×0.6−21.6 psi, raw 36 = 0 psi; slope not yet checked against a gauge)"},{cmd:"222344",pre:"622344",headers:["7E0"],f:b=>Math.max(0,b[0]*4-(latest.baro??101.3))*0.1450377,basis:"community (OBDb DID 2344, absolute oil pressure ×4 kPa, minus barometric pressure)"}]}),
  gm("bal1","Cylinder 1 balance rate","Engine","162F","","med",1,-200,200,b=>(((b[0]<<8)|b[1])/64)-512,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500 and 2014 Equinox, OBDb; scaling single-source)"}),
  gm("bal2","Cylinder 2 balance rate","Engine","1630","","med",1,-200,200,b=>(((b[0]<<8)|b[1])/64)-512,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500 and 2014 Equinox, OBDb; scaling single-source)"}),
  gm("bal3","Cylinder 3 balance rate","Engine","1631","","med",1,-200,200,b=>(((b[0]<<8)|b[1])/64)-512,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500 and 2014 Equinox, OBDb; scaling single-source)"}),
@@ -1860,12 +1861,15 @@ async function pollOnce(m) {
   if (m.kids) m.kids.forEach(k => { const cs = mstate[k.id]; if (v === null) { record(k.id, null, Date.now()); return; } let kv; if (k.raw) kv = k.raw(raw); else { const b = dataBytes(raw, m.pre); kv = b && b.length ? k.f(b) : null; } record(k.id, kv !== null && kv !== undefined && Number.isFinite(kv) ? kv : null, Date.now()); if (cs) cs.status = "ok"; });
   if (m.id === "mon" && v !== null) { const b = dataBytes(raw, "4101"); if (b && b.length >= 4) monitor = parseMonitor(b); }
   if (v !== null && !plausible(m, v)) v = null;
+  // A request that answers but always with zero while the engine runs (oil pressure at 2345 on the Equinox, 1470 on the Sierra) is a dead address, not a reading: treat it as a miss so the next route is tried and nothing alarms on it.
+  if (m.deadZero && v !== null) { if (v === 0 && latest.rpm > 400) { s.zeros = (s.zeros || 0) + 1; if (s.zeros >= 10) { v = null; s.misses = 2; } } else s.zeros = 0; }
   if (v === null) {
     s.misses++;
-    if (s.status !== "ok" && s.headerIdx < headers.length - 1) { s.headerIdx++; s.misses = 0; }
-    else if (s.misses >= 3) { s.status = "failed"; s.headerIdx = 0; s.misses = 0;
-      // Some data lives at a different address on other GM generations: fall back to the alternate request once the first is exhausted.
-      if (m.alt && !s.altTried) { s.altTried = true; if (!m.orig) m.orig = { cmd: m.cmd, pre: m.pre, headers: m.headers, f: m.f, basis: m.basis }; Object.assign(m, m.alt); s.status = "unknown"; } }
+    if (s.status !== "ok" && s.headerIdx < headers.length - 1 && !s.zeros) { s.headerIdx++; s.misses = 0; }
+    else if (s.misses >= 3) { s.status = "failed"; s.headerIdx = 0; s.misses = 0; s.zeros = 0;
+      // Some data lives at a different address on other GM generations: fall back to the next alternate request once this one is exhausted.
+      const alts = m.alts || (m.alt ? [m.alt] : []); s.altIdx = s.altIdx || 0;
+      if (s.altIdx < alts.length) { if (!m.orig) m.orig = { cmd: m.cmd, pre: m.pre, headers: m.headers, f: m.f, basis: m.basis, label: m.label }; Object.assign(m, alts[s.altIdx++]); s.status = "unknown"; if (session) logX(session, "route " + m.id, "→ " + m.cmd + " " + (m.basis || ""), Date.now()); } }
   } else { s.misses = 0; s.status = "ok"; }
   record(m.id, v, Date.now());
 }

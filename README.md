@@ -38,7 +38,7 @@ Readings tagged **Unverified** come from community reports for other GM vehicles
 
 ### Body-module and extra GM requests (from OBDb recordings on a 2016 Silverado 1500)
 - Tire pressures: request header 241, response 641, DIDs 5005–5008, 16-bit kPa ÷ 16. The adapter receive filter (ATCRA) is set for the body module and cleared afterwards. A "Tire pressures" tile is on the Trip page.
-- Oil pressure moved to DID 2345 (×4 kPa); 1470 answers zero on this platform. Added: transmission input speed (7E2 1941), cooling fan command (13AF), active grille shutter (2366), ECM ignition voltage (1141), A/C high-side pressure (1564, scaling single-source). Converter slip from input speed is derived as engine rpm minus input speed and can be compared with the reported slip request.
+- Oil pressure: DID 2345 (×4 kPa) first. A request that answers zero for 10 samples with the engine running is treated as a dead address (the 2014 Equinox answers 2345 with 0): the app then tries 115C (OBDb Equinox/Silverado: raw×0.6−21.6 psi, raw 36 = 0 psi, slope unverified), then 2344 (absolute ×4 kPa minus barometric), and parks the reading if none responds, so a dead address never shows 0 psi or raises the oil-pressure alert. 1470 answers zero on the Sierra. Added: transmission input speed (7E2 1941), cooling fan command (13AF), active grille shutter (2366), ECM ignition voltage (1141), A/C high-side pressure (1564, scaling single-source). Converter slip from input speed is derived as engine rpm minus input speed and can be compared with the reported slip request.
 - All of these remain tagged Unverified until they pass the app's physics checks on this truck.
 
 ### Equinox and Lucerne parity
