@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261112-1939Z">
-<meta name="build-timestamp-utc" content="2026-11-12T19:39:21Z">
+<meta name="build-id" content="OBD-20261112-1946Z">
+<meta name="build-timestamp-utc" content="2026-11-12T19:46:32Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -95,7 +95,7 @@ body.fit.live main{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 .ck-tires .tv.warn{border-color:#e0a100;color:#e0a100}
 .ck-top{position:relative;flex:3.6 1 0;min-height:0}.ck-top canvas{width:100%;height:100%;display:block}
 .ck-ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
-.ck-spd{font-size:clamp(2.4rem,min(12vh,19cqw),6.5rem);font-weight:900;line-height:.95}
+.ck-spd{font-size:clamp(2.6rem,min(15vh,24cqw),8rem);font-weight:900;line-height:.95}
 .ck-spdw{text-align:center}.ck-gear{text-align:center;pointer-events:none;margin-top:1.2vh}.ck-gear b{display:block;font-size:clamp(1.3rem,min(4.8vh,8cqw),2.6rem);font-weight:900;line-height:1}
 .ck-row{flex:1 1 0;display:flex;align-items:center;justify-content:space-evenly;border-top:1px solid var(--line);min-height:0;gap:4px;padding:2px 0}.ck-row.r4>div{flex:1 1 0}.ck-row.r4 .ckn{font-size:clamp(1.15rem,4vh,2.3rem)}.ck-row.r4 small{letter-spacing:.03em}
 .ck-row>div{min-width:0}
@@ -151,7 +151,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261112-1939Z", BUILD_UTC = "2026-11-12T19:39:21Z";
+const BUILD_ID = "OBD-20261112-1946Z", BUILD_UTC = "2026-11-12T19:46:32Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -2227,17 +2227,17 @@ R.cockpit = (w, box) => {
   return () => {
     const rpm = latest.rpm ?? null, mph = latest.mph ?? null, gv = latest.gear ?? null, sl = latest.slip ?? null, cmp = liveBandCompare(), outKeys = new Set(cmp ? cmp.out.map(r => r.key.split(".")[0]) : []);
     // Dial
-    const { g, W, H } = canvasCtx(c), a0 = Math.PI * .8, a1 = Math.PI * 2.2, cx = W / 2, fitR = Math.min(W / 2, H * .6), pad = Math.max(16, fitR * .2), rad = Math.max(10, fitR - pad), cy = Math.min(H - 6, rad + pad), MAX = 6500;
+    const { g, W, H } = canvasCtx(c), a0 = Math.PI * .8, a1 = Math.PI * 2.2, cx = W / 2, fitR = Math.min(W / 2, H * .62), pad = Math.max(8, fitR * .06), rad = Math.max(10, fitR - pad), cy = Math.min(H - 6, rad + pad), MAX = 6500;
     const ang = x => a0 + Math.min(MAX, Math.max(0, x)) / MAX * (a1 - a0);
     const bw = Math.max(5, rad * .07); g.lineWidth = bw; ZONES.forEach(([x0, x1, col]) => { g.strokeStyle = col; g.beginPath(); g.arc(cx, cy, rad, ang(x0) + .01, ang(x1) - .01); g.stroke(); });
     // Ticks every 250 rpm on the inside of the band, longer every 1,000.
     g.strokeStyle = "#f0efec"; for (let r = 0; r <= MAX; r += 250) { const t = ang(r), major = r % 1000 === 0, r0 = rad - bw / 2 - 1, r1 = r0 - (major ? Math.max(7, rad * .11) : Math.max(4, rad * .055)); g.lineWidth = major ? 2 : 1; g.beginPath(); g.moveTo(cx + Math.cos(t) * r0, cy + Math.sin(t) * r0); g.lineTo(cx + Math.cos(t) * r1, cy + Math.sin(t) * r1); g.stroke(); }
-    g.fillStyle = "#c3c2b7"; g.font = "700 " + Math.max(10, rad * .13) + "px system-ui"; g.textAlign = "center"; g.textBaseline = "middle";
-    for (let k = 1; k <= 6; k++) { const t = ang(k * 1000), r2 = rad + Math.max(9, rad * .17); g.fillText(String(k), cx + Math.cos(t) * r2, cy + Math.sin(t) * r2); }
-    g.font = Math.max(9, rad * .09) + "px system-ui"; g.fillStyle = "#8f8e85"; g.textAlign = "left"; g.textBaseline = "top"; g.fillText("rpm ×1000", 4, 3); g.textAlign = "center"; g.textBaseline = "middle";
+    // Scale numbers sit inside the band, just past the major ticks, so the speed digits get the rest of the dial.
+    g.fillStyle = "#c3c2b7"; g.font = "700 " + Math.max(9, rad * .085) + "px system-ui"; g.textAlign = "center"; g.textBaseline = "middle";
+    for (let k = 1; k <= 6; k++) { const t = ang(k * 1000), r2 = rad - bw / 2 - Math.max(7, rad * .11) - Math.max(7, rad * .075); g.fillText(String(k), cx + Math.cos(t) * r2, cy + Math.sin(t) * r2); }
     // Pointer: a triangle inside the band, tip on the band's inner edge.
-    if (rpm !== null) { const t = ang(rpm), tip = rad - bw / 2 - 1, base = tip - Math.max(14, rad * .2), hw = Math.max(5, rad * .055), px = Math.cos(t), py = Math.sin(t); g.fillStyle = "#f0efec"; g.beginPath(); g.moveTo(cx + px * tip, cy + py * tip); g.lineTo(cx + px * base - py * hw, cy + py * base + px * hw); g.lineTo(cx + px * base + py * hw, cy + py * base - px * hw); g.closePath(); g.fill(); }
-    spd.textContent = mph === null ? "--" : mph.toFixed(0); ov.style.paddingTop = Math.max(0, 2 * (cy + rad * .12 - H / 2)) + "px";
+    if (rpm !== null) { const t = ang(rpm), tip = rad - bw / 2 - 1, base = tip - Math.max(10, rad * .12), hw = Math.max(5, rad * .06), px = Math.cos(t), py = Math.sin(t); g.fillStyle = "#f0efec"; g.beginPath(); g.moveTo(cx + px * tip, cy + py * tip); g.lineTo(cx + px * base - py * hw, cy + py * base + px * hw); g.lineTo(cx + px * base + py * hw, cy + py * base - px * hw); g.closePath(); g.fill(); }
+    spd.textContent = mph === null ? "--" : mph.toFixed(0); ov.style.paddingTop = Math.max(0, 2 * (cy + rad * .18 - H / 2)) + "px";
     const sr = ratingOf(byId.slip, sl); gearB.textContent = gv !== null ? gv.toFixed(0) : (latest.gratio ?? null) !== null ? latest.gratio.toFixed(1) : "--"; gearB.style.color = sr.state === "bad" ? "#ff8a80" : "";
     c.setAttribute("aria-label", "Speed " + spd.textContent + " mph, " + (rpm === null ? "no rpm" : rpm.toFixed(0) + " rpm") + ", gear " + gearB.textContent);
     // Numbers: red when a rule is broken, amber when outside this vehicle's usual band, grey when the vehicle isn't answering.
@@ -2276,6 +2276,17 @@ const CAS_ICON = {
 };
 const casSeen = {}; let casAckAt = 0, audioCtx = null;
 function casAck() { casAckAt = Date.now(); }
+// Tap an annunciator: codes → Diagnostics screen; a metric → its drill-in (or its screen while moving); no-data → the connection log.
+function casGo(m) {
+  const go = (t) => { if (!dash[t]) return; tab = t; store.set(vkey("tab"), t); syncEditControls(); renderTabs(); renderGrid(); };
+  const metric = { oilp: "oilp", ect: "ect", trans: "trans", oilt: "oilt", volt: "volt", fuel: "fuel", evapp: "evapp", slip: "slip" }[m.key], screen = { oilp: "Engine", ect: "Engine", trans: "Transmission", oilt: "Engine", volt: "Electrical", fuel: "Fuel", evapp: "Fuel", slip: "Transmission" }[m.key];
+  if (m.go === "codes" || m.key === "mil" || m.key === "newcode") return go("Diagnostics");
+  if (m.key === "link") { $("dlg").classList.remove("wide"); return openMore(); }
+  if (m.key === "tire") return movingNow() ? go("Transmission") : openDrill("tpfl");
+  if (/^mis\d$/.test(m.key)) return movingNow() ? go("Engine") : openDrill(m.key);
+  if (m.key === "band") return go("Health check");
+  if (metric) return movingNow() ? go(screen) : openDrill(metric);
+}
 function casMessages() {
   const out = [], now = Date.now(), running = latest.rpm > 400;
   const bad = id => { const v = latest[id] ?? null; return v !== null && ratingOf(byId[id], v).state === "bad"; };
@@ -2285,7 +2296,10 @@ function casMessages() {
   if (bad("trans") && latest.trans > (ruleOf(byId.trans) || {}).hi) out.push({ key: "trans", level: "alert", icon: "temp", text: "Trans hot " + latest.trans.toFixed(0), say: "Transmission fluid hot", row: "trans" });
   if (bad("oilt")) out.push({ key: "oilt", level: "alert", icon: "temp", text: "Oil hot " + latest.oilt.toFixed(0), say: "Oil temperature high", row: "oilt" });
   if (bad("volt")) out.push({ key: "volt", level: latest.volt < 12 ? "alert" : "warn", icon: "batt", text: "Volts " + latest.volt.toFixed(1), say: "Voltage " + (latest.volt < 12.3 ? "low" : "high"), row: "volt" });
-  if (monitor && monitor.mil) out.push({ key: "mil", level: "warn", icon: "engine", text: "Check engine" + (monitor.dtcCount ? " · " + monitor.dtcCount + " code" + (monitor.dtcCount > 1 ? "s" : "") : ""), say: "Check engine light is on", row: "mil" });
+  // Check-engine: amber for a light that was already on when we connected; red (flash + three beeps) when the code count rises during this drive, with the new code named once re-read.
+  if (monitor) { const n = monitor.dtcCount || 0; if (casSeen.dtc0 === undefined) { casSeen.dtc0 = n; casSeen.codes0 = new Set(codes ? [...codes.stored, ...codes.pending] : []); }
+    if (n > casSeen.dtc0) { if (!casSeen.reread || now - casSeen.reread > 60000) { casSeen.reread = now; readCodes().catch(() => {}); } const fresh = codes ? [...codes.stored, ...codes.pending].filter(c => !casSeen.codes0.has(c)) : []; out.push({ key: "newcode", level: "alert", icon: "engine", text: "New code" + (fresh.length ? " " + fresh.slice(0, 2).join(" ") : " (+" + (n - casSeen.dtc0) + ")"), say: "New trouble code" + (fresh.length ? " " + fresh[0].split("").join(" ") : ""), row: "mil", go: "codes" }); }
+    else if (monitor.mil) out.push({ key: "mil", level: "warn", icon: "engine", text: "Check engine" + (n ? " · " + n + " code" + (n > 1 ? "s" : "") : ""), say: "Check engine light is on", row: "mil", go: "codes" }); }
   for (let c = 1; c <= 8; c++) { const v = latest["mis" + c]; const base = casSeen["mis0" + c]; if (typeof v !== "number") continue; if (base === undefined) casSeen["mis0" + c] = v; else if (v > base) out.push({ key: "mis" + c, level: "warn", icon: "engine", text: "Misfire cyl " + c + " +" + (v - base), say: "Misfire cylinder " + c, row: "mis" }); }
   const low = ["tpfl","tprl","tpfr","tprr"].filter(bad); if (low.length) out.push({ key: "tire", level: "warn", icon: "tire", text: "Tire low " + low.map(i => ({ tpfl: "DF", tprl: "DR", tpfr: "PF", tprr: "PR" })[i]).join(" "), say: "Tire pressure low", row: "tire" });
   if ((latest.fuel ?? null) !== null && latest.fuel <= 15) out.push({ key: "fuel", level: "warn", icon: "fuel", text: "Fuel " + latest.fuel.toFixed(0) + "%", say: "Fuel low", row: "fuel" });
@@ -2298,7 +2312,7 @@ function casMessages() {
 }
 function renderCas(host, msgs) {
   const sig = msgs.map(m => m.key + m.text + m.flash).join("|"); if (host.dataset.sig === sig) return; host.dataset.sig = sig; host.textContent = "";
-  msgs.sort((a, b) => (a.level === "alert" ? 0 : 1) - (b.level === "alert" ? 0 : 1)).forEach(m => { const sp = el("span", { class: (m.level === "alert" ? "alertm" : "warnm") + (m.flash ? " flash" : "") }); sp.innerHTML = CAS_ICON[m.icon] || ""; sp.append(document.createTextNode(m.text)); host.append(sp); });
+  msgs.sort((a, b) => (a.level === "alert" ? 0 : 1) - (b.level === "alert" ? 0 : 1)).forEach(m => { const sp = el("span", { class: (m.level === "alert" ? "alertm" : "warnm") + (m.flash ? " flash" : ""), role: "button", title: "Open the source", onclick: e => { e.stopPropagation(); casAck(); casGo(m); } }); sp.innerHTML = CAS_ICON[m.icon] || ""; sp.append(document.createTextNode(m.text)); host.append(sp); });
 }
 function unlockAudio() { if (phonePrefs.chime === false) return; try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === "suspended") audioCtx.resume(); } catch (e) {} }
 function chime(level) {
