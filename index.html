@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261112-1909Z">
-<meta name="build-timestamp-utc" content="2026-11-12T19:09:28Z">
+<meta name="build-id" content="OBD-20261112-1929Z">
+<meta name="build-timestamp-utc" content="2026-11-12T19:29:30Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -91,11 +91,12 @@ body.fit.live main{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 .ck{display:flex;flex-direction:column;height:100%;min-height:0;text-align:center;font-variant-numeric:tabular-nums}
 .ck small{display:block;font-size:clamp(.58rem,1.5vh,.8rem);font-weight:700;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;line-height:1.15;white-space:nowrap}
 .ck .ckn{font-weight:800;line-height:1;font-size:clamp(1.5rem,5.6vh,3rem);white-space:nowrap}
-.ck .ckn.dev{color:#e0a100}.ck .ckn.bad{color:#ff8a80}.ck .ckn.off{color:var(--faint)}
+.ck .ckn.dev,.ck .ckn.warn{color:#e0a100}.ck .ckn.bad{color:#ff8a80}.ck .ckn.off{color:var(--faint)}
+.ck-tires .tv.warn{border-color:#e0a100;color:#e0a100}
 .ck-top{position:relative;flex:3.2 1 0;min-height:0}.ck-top canvas{width:100%;height:100%;display:block}
-.ck-ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;padding-top:6%}
-.ck-spd{font-size:clamp(2.6rem,13vh,6.5rem);font-weight:900;line-height:.95}
-.ck-spdw{position:relative}.ck-gear{position:absolute;left:100%;top:-4%;margin-left:10px;text-align:center;pointer-events:none}.ck-gear b{display:block;font-size:clamp(1.5rem,5.5vh,3rem);font-weight:900;line-height:1}
+.ck-ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;pointer-events:none;padding-top:6%}
+.ck-spd{font-size:clamp(2.4rem,min(12vh,19cqw),6.5rem);font-weight:900;line-height:.95}
+.ck-spdw{text-align:center}.ck-gear{text-align:center;pointer-events:none;align-self:flex-start;margin-top:4%}.ck-gear b{display:block;font-size:clamp(1.4rem,min(5.5vh,8cqw),3rem);font-weight:900;line-height:1}
 .ck-row{flex:1 1 0;display:flex;align-items:center;justify-content:space-evenly;border-top:1px solid var(--line);min-height:0;gap:6px}
 .ck-row>div{min-width:0}
 .ck-cyl{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;flex:0 0 52%}
@@ -105,6 +106,12 @@ body.fit.live main{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 body.fit .w.ckw{padding:4px 8px}
 .w.ckw{container-type:size}
 @container (min-aspect-ratio: 5/4){.ck{display:grid;grid-template-columns:1.1fr 1fr;grid-template-rows:repeat(5,minmax(0,1fr)) auto;column-gap:12px}.ck-top{grid-row:1/6;grid-column:1}.ck-row{grid-column:2;border-top:none}.ck-row+.ck-row{border-top:1px solid var(--line)}.ck-foot{grid-column:1/-1}.ck-cyl{flex:0 0 58%}}
+.cas{flex:none;display:flex;flex-wrap:wrap;gap:4px;padding:0 0 4px;cursor:pointer}.cas:empty{display:none}
+.cas span{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:3px 8px;font-weight:800;font-size:clamp(.72rem,2vh,.95rem);letter-spacing:.05em;text-transform:uppercase;line-height:1.1}
+.cas span svg{width:1.25em;height:1.25em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.cas .warnm{background:#e0a100;color:#141300}.cas .alertm{background:var(--bad);color:#fff}.cas .alertm.flash{animation:casflash .6s steps(1) infinite}
+@keyframes casflash{50%{background:#5a1a1a;color:#ffb3ad}}
+.ck.declutter .ck-row:not(.keep),.ck.declutter .ck-top:not(.keep){opacity:.35}
 .ck-foot{flex:none;font-size:clamp(.62rem,1.6vh,.8rem);color:var(--muted);padding-top:3px;border-top:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ck-foot.dev{color:#e0a100}
 .bandlist{font-size:.82rem;line-height:1.35;white-space:normal}.bandlist div{padding:2px 0;border-top:1px solid var(--line)}.bandlist .k{color:#e0a100}.bandlist .nk{color:#ff8a80}
 #ctlBtn{display:none}body.fit.live #ctlBtn{display:block;margin-left:auto;position:sticky;right:0;background:var(--raised);color:var(--text)}
@@ -144,7 +151,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261112-1909Z", BUILD_UTC = "2026-11-12T19:09:28Z";
+const BUILD_ID = "OBD-20261112-1929Z", BUILD_UTC = "2026-11-12T19:29:30Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -287,7 +294,7 @@ const METRICS = [
  std("inj","Injection timing","Fuel","5D","°","slow",1,-210,302,b=>u16(b[0],b[1])/128-210),
  std("ethanol","Ethanol content","Fuel","52","%","slow",0,0,100,pct),
  std("purge","Commanded purge","Fuel","2E","%","med",0,0,100,pct),
- std("evapp","Evap vapor pressure","Fuel","32","Pa","slow",0,-8192,8192,b=>s16(b[0],b[1])/4),
+ std("evapp","Evap vapor pressure","Fuel","32","Pa","slow",0,-8192,8192,b=>s16(b[0],b[1])/4,{rule:{lo:-1000,hi:1000,note:"GM P0446 chart sets the vent-restriction code below about -7.5 mmHg (-1000 Pa) of tank vacuum; the positive side is a starting guide."}}),
  std("evapa","Evap absolute pressure","Fuel","53","kPa","slow",0,0,330,b=>u16(b[0],b[1])/200),
  std("evapw","Evap pressure (wide)","Fuel","54","Pa","slow",0,-32768,32767,b=>s16(b[0],b[1])),
  std("egrc","Commanded EGR","Engine","2C","%","med",0,0,100,pct),
@@ -337,12 +344,12 @@ const METRICS = [
  gm("sh12","1-2 shift time","Transmission","1993","s","slow",2,0,6,b=>b[0]/40),
  gm("sh23","2-3 shift time","Transmission","1994","s","slow",2,0,6,b=>b[0]/40),
  gm("sh34","3-4 shift time","Transmission","1995","s","slow",2,0,6,b=>b[0]/40),
- gm("oilt","Engine oil temp","Temperatures","1154","°F","med",0,-20,320,tempF),
+ gm("oilt","Engine oil temp","Temperatures","1154","°F","med",0,-20,320,tempF,{rule:{hi:250,when:"running",note:GUIDE}}),
  gm("tpfl","Front left tire","Tires","5005","psi","slow",1,0,80,b=>((b[0]<<8)|b[1])/16*0.1450377,{headers:["241"],rule:{lo:28,note:"Starting guide; use the door-jamb placard pressure for your truck"},basis:"community (recorded on a 2016 Silverado 1500, OBDb)",alt:{cmd:"22248E",pre:"62248E",headers:["7E0"],f:b=>b[0],basis:"community (older GM route via the engine module, OBDb definition, unrecorded)"}}),
  gm("tpfr","Front right tire","Tires","5006","psi","slow",1,0,80,b=>((b[0]<<8)|b[1])/16*0.1450377,{headers:["241"],rule:{lo:28,note:"Starting guide; use the door-jamb placard pressure for your truck"},basis:"community (recorded on a 2016 Silverado 1500, OBDb)",alt:{cmd:"22248F",pre:"62248F",headers:["7E0"],f:b=>b[0],basis:"community (older GM route via the engine module, OBDb definition, unrecorded)"}}),
  gm("tprr","Rear right tire","Tires","5007","psi","slow",1,0,80,b=>((b[0]<<8)|b[1])/16*0.1450377,{headers:["241"],rule:{lo:28,note:"Starting guide; use the door-jamb placard pressure for your truck"},basis:"community (recorded on a 2016 Silverado 1500, OBDb)",alt:{cmd:"222490",pre:"622490",headers:["7E0"],f:b=>b[0],basis:"community (older GM route via the engine module, OBDb definition, unrecorded)"}}),
  gm("tprl","Rear left tire","Tires","5008","psi","slow",1,0,80,b=>((b[0]<<8)|b[1])/16*0.1450377,{headers:["241"],rule:{lo:28,note:"Starting guide; use the door-jamb placard pressure for your truck"},basis:"community (recorded on a 2016 Silverado 1500, OBDb)",alt:{cmd:"222491",pre:"622491",headers:["7E0"],f:b=>b[0],basis:"community (older GM route via the engine module, OBDb definition, unrecorded)"}}),
- gm("oilp","Oil pressure","Engine","2345","psi","med",0,0,120,b=>b[0]*4*0.1450377,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500, OBDb; 1470 answers zero on this platform)"}),
+ gm("oilp","Oil pressure","Engine","2345","psi","med",0,0,120,b=>b[0]*4*0.1450377,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500, OBDb; 1470 answers zero on this platform)",rule:{lo:10,when:"running",sustainMs:3000,note:GUIDE+" Hot idle on a healthy 5.3L sits well above this; the review rates hot idle separately."}}),
  gm("bal1","Cylinder 1 balance rate","Engine","162F","","med",1,-200,200,b=>(((b[0]<<8)|b[1])/64)-512,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500 and 2014 Equinox, OBDb; scaling single-source)"}),
  gm("bal2","Cylinder 2 balance rate","Engine","1630","","med",1,-200,200,b=>(((b[0]<<8)|b[1])/64)-512,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500 and 2014 Equinox, OBDb; scaling single-source)"}),
  gm("bal3","Cylinder 3 balance rate","Engine","1631","","med",1,-200,200,b=>(((b[0]<<8)|b[1])/64)-512,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500 and 2014 Equinox, OBDb; scaling single-source)"}),
@@ -2208,50 +2215,101 @@ R.cockpit = (w, box) => {
   const afm = el("div", { class: "ckn", style: "flex:0 0 28%" }), cyl = el("div", { class: "ck-cyl" }), cells = {};
   [1,3,5,7,2,4,6,8].forEach(n => { const v = el("span"); cells[n] = { d: el("div", {}, el("span", { textContent: String(n) }), el("br"), v), v }; cyl.append(cells[n].d); });
   const tires = el("div", { class: "ck-tires" }), tc = {}; [["tpfl","DF"],["tprl","DR"],["tpfr","PF"],["tprr","PR"]].forEach(([id, l]) => { const d = el("div", { class: "tv", textContent: "--" }); tc[id] = d; tires.append(el("div", {}, d, el("small", { textContent: l }))); });
-  const foot = el("div", { class: "ck-foot", textContent: "" });
+  const foot = el("div", { class: "ck-foot", textContent: "" }), cas = el("div", { class: "cas", role: "alert", "aria-live": "assertive", title: "Tap to acknowledge" }), ck = el("div", { class: "ck" });
+  cas.onclick = () => { casAck(); };
   box.classList.add("ckw");
-  box.append(el("div", { class: "ck" },
-    el("div", { class: "ck-top" }, c, el("div", { class: "ck-ov" }, el("div", { class: "ck-spdw" }, spd, el("small", { textContent: "speed" }), el("div", { class: "ck-gear" }, gearB, el("small", { textContent: "gear" }))))),
-    el("div", { class: "ck-row" }, ect.d, trans.d),
-    el("div", { class: "ck-row" }, oil.d),
-    el("div", { class: "ck-row" }, afm, cyl),
-    el("div", { class: "ck-row" }, fuel.d, evap.d),
-    el("div", { class: "ck-row" }, tires),
-    foot));
+  const rowTop = el("div", { class: "ck-top" }, c, el("div", { class: "ck-ov" }, el("div", { class: "ck-spdw" }, spd, el("small", { textContent: "speed" })), el("div", { class: "ck-gear" }, gearB, el("small", { textContent: "gear" }))));
+  const rowTemp = el("div", { class: "ck-row" }, ect.d, trans.d), rowOil = el("div", { class: "ck-row" }, oil.d), rowCyl = el("div", { class: "ck-row" }, afm, cyl), rowFuel = el("div", { class: "ck-row" }, fuel.d, evap.d), rowTire = el("div", { class: "ck-row" }, tires);
+  const rowFor = { ect: rowTemp, trans: rowTemp, oilp: rowOil, oilt: rowOil, volt: rowTop, link: rowTop, slip: rowTop, mil: rowCyl, mis: rowCyl, fuel: rowFuel, evapp: rowFuel, tire: rowTire };
+  ck.append(cas, rowTop, rowTemp, rowOil, rowCyl, rowFuel, rowTire, foot); box.append(ck);
   const ZONES = [[0, 4000, "#0ca30c"], [4000, 5500, "#e0a100"], [5500, 6500, "#d03b3b"]]; // visual zones for the dial only; no published limit is implied
   return () => {
     const rpm = latest.rpm ?? null, mph = latest.mph ?? null, gv = latest.gear ?? null, sl = latest.slip ?? null, cmp = liveBandCompare(), outKeys = new Set(cmp ? cmp.out.map(r => r.key.split(".")[0]) : []);
     // Dial
     const { g, W, H } = canvasCtx(c), a0 = Math.PI * .8, a1 = Math.PI * 2.2, cx = W / 2, fitR = Math.min(W / 2, H * .6), pad = Math.max(16, fitR * .2), rad = Math.max(10, fitR - pad), cy = Math.min(H - 6, rad + pad), MAX = 6500;
     const ang = x => a0 + Math.min(MAX, Math.max(0, x)) / MAX * (a1 - a0);
-    g.lineWidth = Math.max(5, rad * .07); ZONES.forEach(([x0, x1, col]) => { g.strokeStyle = col; g.beginPath(); g.arc(cx, cy, rad, ang(x0) + .01, ang(x1) - .01); g.stroke(); });
+    const bw = Math.max(5, rad * .07); g.lineWidth = bw; ZONES.forEach(([x0, x1, col]) => { g.strokeStyle = col; g.beginPath(); g.arc(cx, cy, rad, ang(x0) + .01, ang(x1) - .01); g.stroke(); });
+    // Ticks every 250 rpm on the inside of the band, longer every 1,000.
+    g.strokeStyle = "#f0efec"; for (let r = 0; r <= MAX; r += 250) { const t = ang(r), major = r % 1000 === 0, r0 = rad - bw / 2 - 1, r1 = r0 - (major ? Math.max(7, rad * .11) : Math.max(4, rad * .055)); g.lineWidth = major ? 2 : 1; g.beginPath(); g.moveTo(cx + Math.cos(t) * r0, cy + Math.sin(t) * r0); g.lineTo(cx + Math.cos(t) * r1, cy + Math.sin(t) * r1); g.stroke(); }
     g.fillStyle = "#c3c2b7"; g.font = "700 " + Math.max(10, rad * .13) + "px system-ui"; g.textAlign = "center"; g.textBaseline = "middle";
     for (let k = 1; k <= 6; k++) { const t = ang(k * 1000), r2 = rad + Math.max(9, rad * .17); g.fillText(String(k), cx + Math.cos(t) * r2, cy + Math.sin(t) * r2); }
     g.font = Math.max(9, rad * .09) + "px system-ui"; g.fillStyle = "#8f8e85"; g.textAlign = "left"; g.textBaseline = "top"; g.fillText("rpm ×1000", 4, 3); g.textAlign = "center"; g.textBaseline = "middle";
-    if (rpm !== null) { const t = ang(rpm); g.strokeStyle = "#f0efec"; g.lineWidth = Math.max(2.5, rad * .035); g.beginPath(); g.moveTo(cx + Math.cos(t) * (rad * .72), cy + Math.sin(t) * (rad * .72)); g.lineTo(cx + Math.cos(t) * (rad - 2), cy + Math.sin(t) * (rad - 2)); g.stroke(); }
+    // Pointer: a triangle inside the band, tip on the band's inner edge.
+    if (rpm !== null) { const t = ang(rpm), tip = rad - bw / 2 - 1, base = tip - Math.max(14, rad * .2), hw = Math.max(5, rad * .055), px = Math.cos(t), py = Math.sin(t); g.fillStyle = "#f0efec"; g.beginPath(); g.moveTo(cx + px * tip, cy + py * tip); g.lineTo(cx + px * base - py * hw, cy + py * base + px * hw); g.lineTo(cx + px * base + py * hw, cy + py * base - px * hw); g.closePath(); g.fill(); }
     spd.textContent = mph === null ? "--" : mph.toFixed(0);
     const sr = ratingOf(byId.slip, sl); gearB.textContent = gv !== null ? gv.toFixed(0) : (latest.gratio ?? null) !== null ? latest.gratio.toFixed(1) : "--"; gearB.style.color = sr.state === "bad" ? "#ff8a80" : "";
     c.setAttribute("aria-label", "Speed " + spd.textContent + " mph, " + (rpm === null ? "no rpm" : rpm.toFixed(0) + " rpm") + ", gear " + gearB.textContent);
     // Numbers: red when a rule is broken, amber when outside this vehicle's usual band, grey when the vehicle isn't answering.
-    const put = (o, id, text, extra) => { const v = latest[id] ?? null, r = v === null ? { state: "none" } : ratingOf(byId[id], v); o.n.textContent = text; o.n.className = "ckn " + (v === null ? "off" : r.state === "bad" ? "bad" : outKeys.has(id) || (extra && outKeys.has(extra)) ? "dev" : ""); };
+    // Colour: red past the limit, amber within the approach margin of it or outside this vehicle's usual band, grey when unanswered.
+    const MARGIN = { ect: 5, trans: 5, oilt: 10, oilp: 5, evapp: 300, volt: .3 };
+    const nearLimit = (id, v) => { const rule = ruleOf(byId[id]), mg = MARGIN[id]; if (!rule || v === null || !mg) return false; if (rule.when === "running" && !(latest.rpm > 400)) return false; return (rule.hi != null && v >= rule.hi - mg) || (rule.lo != null && v <= rule.lo + mg); };
+    const put = (o, id, text, extra) => { const v = latest[id] ?? null, r = v === null ? { state: "none" } : ratingOf(byId[id], v); o.n.textContent = text; o.n.className = "ckn " + (v === null ? "off" : r.state === "bad" ? "bad" : nearLimit(id, v) ? "warn" : outKeys.has(id) || (extra && outKeys.has(extra)) ? "dev" : ""); };
     put(ect, "ect", (latest.ect ?? null) === null ? "--" : latest.ect.toFixed(0));
     put(trans, "trans", (latest.trans ?? null) === null ? "--" : latest.trans.toFixed(0));
     put(oil, "oilt", ((latest.oilt ?? null) === null ? "--" : latest.oilt.toFixed(0)) + " / " + ((latest.oilp ?? null) === null ? "--" : latest.oilp.toFixed(0)), "oilp");
     if ((latest.oilp ?? null) !== null && ratingOf(byId.oilp, latest.oilp).state === "bad") oil.n.className = "ckn bad";
-    put(fuel, "fuel", (latest.fuel ?? null) === null ? "--" : latest.fuel.toFixed(0) + "%");
+    put(fuel, "fuel", (latest.fuel ?? null) === null ? "--" : latest.fuel.toFixed(0) + "%"); if ((latest.fuel ?? null) !== null) fuel.n.className = "ckn " + (latest.fuel <= 15 ? "bad" : latest.fuel <= 30 ? "warn" : "");
     put(evap, "evapp", (latest.evapp ?? null) === null ? "--" : latest.evapp.toFixed(0));
     const mode = latest.afm ?? null, v4 = mode === "V4"; afm.textContent = mode === null ? "V?" : /V4/.test(mode) ? "V4" : "V8"; afm.className = "ckn" + (mode === null ? " off" : ""); afm.title = mode === null ? "Cylinder mode needs the injector pulse-width requests; this vehicle hasn't answered them" : mode;
     let misAny = false; for (let n = 1; n <= 8; n++) { const mv = latest["mis" + n]; const known = typeof mv === "number"; if (known) misAny = true; cells[n].v.textContent = known ? String(mv) : "–"; cells[n].d.className = (known ? (mv > 0 ? "mis" : "") : "unk") + (v4 && (veh.afmCyls || []).includes(n) ? " offc" : ""); }
     cyl.title = misAny ? "Misfire counter per cylinder (current or last drive cycle). Dimmed cylinders are deactivated in V4." : "Misfire counters not read yet";
-    let tbad = false; ["tpfl","tprl","tpfr","tprr"].forEach(id => { const v = latest[id] ?? null, r = v === null ? { state: "none" } : ratingOf(byId[id], v); tc[id].textContent = v === null ? "--" : v.toFixed(0); tc[id].className = "tv " + (v === null ? "off" : r.state === "bad" ? "bad" : ""); if (r.state === "bad") tbad = true; });
+    let tbad = false; ["tpfl","tprl","tpfr","tprr"].forEach(id => { const v = latest[id] ?? null, r = v === null ? { state: "none" } : ratingOf(byId[id], v); tc[id].textContent = v === null ? "--" : v.toFixed(0); tc[id].className = "tv " + (v === null ? "off" : r.state === "bad" ? "bad" : v !== null && v <= (ruleOf(byId[id]) || {}).lo + 2 ? "warn" : ""); if (r.state === "bad") tbad = true; });
+    // Annunciators (crew-alerting style): red flashes until tapped, amber stays steady; unrelated rows dim while a red one is up.
+    const msgs = casMessages(); renderCas(cas, msgs); const red = msgs.some(m => m.level === "alert");
+    ck.classList.toggle("declutter", red); [rowTop, rowTemp, rowOil, rowCyl, rowFuel, rowTire].forEach(r => r.classList.remove("keep")); if (red) msgs.filter(m => m.level === "alert").forEach(m => { const r = rowFor[m.row]; if (r) r.classList.add("keep"); });
     // Footer: the live band verdict
     if (!baseline || !Object.keys(baseline.bands).length) { foot.textContent = "No usual bands yet: needs 5 saved drives of 5+ minutes"; foot.className = "ck-foot"; }
     else if (!cmp || !cmp.rows.length) { foot.textContent = "Usual bands from " + baseline.label + " · comparing after 5 min"; foot.className = "ck-foot"; }
     else if (cmp.out.length) { foot.textContent = "Outside usual: " + cmp.out.slice(0, 3).map(r => r.label.replace(/,.*$/, "") + " " + r.value.toFixed(r.digits) + (r.state === "in" ? "" : " (" + r.lo.toFixed(r.digits) + "–" + r.hi.toFixed(r.digits) + ")")).join(" · ") + (cmp.out.length > 3 ? " +" + (cmp.out.length - 3) : ""); foot.className = "ck-foot dev"; }
-    else { foot.textContent = "Within usual bands · " + cmp.rows.length + " measures · " + baseline.label; foot.className = "ck-foot"; }
-    box.className = "w ckw" + (cmp && cmp.out.length ? " watch" : "") + (tbad ? " bad" : "");
+    else { foot.textContent = "Within usual bands · " + cmp.rows.length + " measure" + (cmp.rows.length === 1 ? "" : "s") + " · " + baseline.label; foot.className = "ck-foot"; }
+    box.className = "w ckw" + (cmp && cmp.out.length ? " watch" : "") + (tbad || red ? " bad" : "");
   };
 };
+/* ---------- Annunciators: which conditions are up right now, with a chime and (optionally) a spoken line when one appears ---------- */
+const CAS_ICON = {
+  temp: "<svg viewBox='0 0 24 24'><path d='M10 4a2 2 0 0 1 4 0v9.3a4 4 0 1 1-4 0z'/><path d='M12 9v6'/></svg>",
+  oil: "<svg viewBox='0 0 24 24'><path d='M4 14h11l4-4 3 3-3 3v3H4z'/><path d='M8 14v-3h4v3'/><path d='M2 11l3 1'/></svg>",
+  batt: "<svg viewBox='0 0 24 24'><rect x='3' y='7' width='18' height='12' rx='2'/><path d='M8 5v2M16 5v2M7 13h4M15 13h2M16 12v2'/></svg>",
+  engine: "<svg viewBox='0 0 24 24'><path d='M7 8h4V6h3v2h3l2 3h2v6h-2l-2 2H8l-2-2H4v-6h2z'/><path d='M9 4h5'/></svg>",
+  tire: "<svg viewBox='0 0 24 24'><path d='M5 8c0-2 3-3 7-3s7 1 7 3v8c0 2-3 3-7 3s-7-1-7-3z'/><path d='M12 9v4M12 16h.01'/></svg>",
+  fuel: "<svg viewBox='0 0 24 24'><path d='M5 20V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v15M5 20h9M7 7h5v4H7z'/><path d='M14 10h2a2 2 0 0 1 2 2v4a1.5 1.5 0 0 0 3 0V9l-3-3'/></svg>",
+  link: "<svg viewBox='0 0 24 24'><path d='M4 12a8 8 0 0 1 16 0M8 12a4 4 0 0 1 8 0'/><circle cx='12' cy='15' r='1'/><path d='M3 3l18 18'/></svg>",
+  gear: "<svg viewBox='0 0 24 24'><circle cx='12' cy='12' r='3'/><path d='M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1'/></svg>",
+  band: "<svg viewBox='0 0 24 24'><path d='M4 18l5-7 4 4 7-9'/><path d='M14 6h6v6'/></svg>"
+};
+const casSeen = {}; let casAckAt = 0, audioCtx = null;
+function casAck() { casAckAt = Date.now(); }
+function casMessages() {
+  const out = [], now = Date.now(), running = latest.rpm > 400;
+  const bad = id => { const v = latest[id] ?? null; return v !== null && ratingOf(byId[id], v).state === "bad"; };
+  const upd = mstate.rpm && mstate.rpm.updated; if (session && upd && now - upd > 8000) out.push({ key: "link", level: "alert", icon: "link", text: "No data " + Math.round((now - upd) / 1000) + " s", say: "No data from the adapter", row: "link" });
+  if (bad("oilp")) out.push({ key: "oilp", level: "alert", icon: "oil", text: "Oil press " + latest.oilp.toFixed(0), say: "Oil pressure low", row: "oilp" });
+  if (bad("ect") && latest.ect > (ruleOf(byId.ect) || {}).hi) out.push({ key: "ect", level: "alert", icon: "temp", text: "Coolant hot " + latest.ect.toFixed(0), say: "Coolant hot", row: "ect" });
+  if (bad("trans") && latest.trans > (ruleOf(byId.trans) || {}).hi) out.push({ key: "trans", level: "alert", icon: "temp", text: "Trans hot " + latest.trans.toFixed(0), say: "Transmission fluid hot", row: "trans" });
+  if (bad("oilt")) out.push({ key: "oilt", level: "alert", icon: "temp", text: "Oil hot " + latest.oilt.toFixed(0), say: "Oil temperature high", row: "oilt" });
+  if (bad("volt")) out.push({ key: "volt", level: latest.volt < 12 ? "alert" : "warn", icon: "batt", text: "Volts " + latest.volt.toFixed(1), say: "Voltage " + (latest.volt < 12.3 ? "low" : "high"), row: "volt" });
+  if (monitor && monitor.mil) out.push({ key: "mil", level: "warn", icon: "engine", text: "Check engine" + (monitor.dtcCount ? " · " + monitor.dtcCount + " code" + (monitor.dtcCount > 1 ? "s" : "") : ""), say: "Check engine light is on", row: "mil" });
+  for (let c = 1; c <= 8; c++) { const v = latest["mis" + c]; const base = casSeen["mis0" + c]; if (typeof v !== "number") continue; if (base === undefined) casSeen["mis0" + c] = v; else if (v > base) out.push({ key: "mis" + c, level: "warn", icon: "engine", text: "Misfire cyl " + c + " +" + (v - base), say: "Misfire cylinder " + c, row: "mis" }); }
+  const low = ["tpfl","tprl","tpfr","tprr"].filter(bad); if (low.length) out.push({ key: "tire", level: "warn", icon: "tire", text: "Tire low " + low.map(i => ({ tpfl: "DF", tprl: "DR", tpfr: "PF", tprr: "PR" })[i]).join(" "), say: "Tire pressure low", row: "tire" });
+  if ((latest.fuel ?? null) !== null && latest.fuel <= 15) out.push({ key: "fuel", level: "warn", icon: "fuel", text: "Fuel " + latest.fuel.toFixed(0) + "%", say: "Fuel low", row: "fuel" });
+  if (bad("evapp")) out.push({ key: "evapp", level: "warn", icon: "fuel", text: "EVAP " + latest.evapp.toFixed(0) + " Pa", say: "EVAP tank pressure outside limits", row: "evapp" });
+  if (bad("slip")) out.push({ key: "slip", level: "warn", icon: "gear", text: "TCC slip " + latest.slip.toFixed(0), say: "Converter slip at cruise", row: "slip" });
+  const cmp = running ? liveBandCompare() : null; if (cmp && cmp.out.some(r => /new/.test(r.state))) { const r = cmp.out.find(x => /new/.test(x.state)); out.push({ key: "band", level: "warn", icon: "band", text: r.label.replace(/,.*$/, "") + " " + r.state, say: r.label.replace(/,.*$/, "") + " beyond anything logged", row: "band" }); }
+  // First appearance (or a return after 60 s clear) chimes and speaks; red ones flash until acknowledged.
+  out.forEach(m => { const seen = casSeen[m.key]; if (!seen || now - seen.last > 60000) { chime(m.level); if (phonePrefs.speak) speak(m.say); casSeen[m.key] = { first: now, last: now }; } else seen.last = now; m.flash = m.level === "alert" && casSeen[m.key].first > casAckAt; });
+  return out;
+}
+function renderCas(host, msgs) {
+  const sig = msgs.map(m => m.key + m.text + m.flash).join("|"); if (host.dataset.sig === sig) return; host.dataset.sig = sig; host.textContent = "";
+  msgs.sort((a, b) => (a.level === "alert" ? 0 : 1) - (b.level === "alert" ? 0 : 1)).forEach(m => { const sp = el("span", { class: (m.level === "alert" ? "alertm" : "warnm") + (m.flash ? " flash" : "") }); sp.innerHTML = CAS_ICON[m.icon] || ""; sp.append(document.createTextNode(m.text)); host.append(sp); });
+}
+function unlockAudio() { if (phonePrefs.chime === false) return; try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === "suspended") audioCtx.resume(); } catch (e) {} }
+function chime(level) {
+  if (phonePrefs.chime === false || !audioCtx) return;
+  try { const t0 = audioCtx.currentTime, beeps = level === "alert" ? [[880, 0], [880, .18], [880, .36]] : [[660, 0], [520, .22]];
+    beeps.forEach(([f, dt]) => { const o = audioCtx.createOscillator(), gn = audioCtx.createGain(); o.type = "sine"; o.frequency.value = f; gn.gain.setValueAtTime(0, t0 + dt); gn.gain.linearRampToValueAtTime(.4, t0 + dt + .02); gn.gain.linearRampToValueAtTime(0, t0 + dt + .15); o.connect(gn); gn.connect(audioCtx.destination); o.start(t0 + dt); o.stop(t0 + dt + .16); }); } catch (e) {}
+}
+function speak(text) { if (!("speechSynthesis" in window)) return; try { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(text)); } catch (e) {} }
 R.bands = (w, box) => {
   const head = el("div", { class: "big", style: "font-size:1.2rem" }), sub = el("div", { class: "sub", style: "white-space:normal" }), list = el("div", { class: "bandlist" });
   box.append(header(w, "Vs. this vehicle's usual bands", "Estimate"), el("div", { class: "body" }, head, sub, list));
@@ -2823,13 +2881,15 @@ function applyPhonePrefs() { if (phonePrefs.gps) startGps(); else stopGps(); if 
 function openPhone() {
   $("dlg").classList.remove("wide");
   const row = (key, label, note) => el("label", { class: "check", style: "align-items:flex-start" }, el("input", { type: "checkbox", checked: !!phonePrefs[key], onchange: e => { phonePrefs[key] = e.target.checked; store.set("phone", phonePrefs); applyPhonePrefs(); } }), el("span", {}, label, el("div", { class: "sub", style: "white-space:normal", textContent: note })));
+  const rowOn = (key, label, note) => el("label", { class: "check", style: "align-items:flex-start" }, el("input", { type: "checkbox", checked: phonePrefs[key] !== false, onchange: e => { phonePrefs[key] = e.target.checked; store.set("phone", phonePrefs); } }), el("span", {}, label, el("div", { class: "sub", style: "white-space:normal", textContent: note })));
   showDlg("Phone sensors", el("p", { textContent: "Uses this phone's own sensors alongside the vehicle data. Everything stays on the device. These settings are per phone, not per vehicle, and need the page served over HTTPS." }),
     row("gps", "GPS: speed, altitude, grade", "Checks the speedometer and separates hills from faults. Keep the phone where it can see the sky."),
     row("route", "Also record position", "Saves latitude and longitude in the drive log on this device. Off by default."),
     row("exportPosition", "Include position in exports", "Off by default, so exported files never show where you drove unless you choose this."),
     row("motion", "Motion: vibration level and frequency", "Mount the phone firmly. A loose phone measures itself, not the vehicle."),
     row("mic", "Microphone: cabin noise level and pitch", "Relative level only. Useful with marks: tap Mark when a noise appears."),
-    row("speak", "Speak transmission-learning changes", "Uses the phone's own voice to say when the learning estimate changes state. Nothing is recorded."),
+    row("speak", "Speak alerts and transmission-learning changes", "Uses the phone's own voice to say an annunciator when it first appears (oil pressure, coolant, voltage, misfire, tire, and so on) and when the learning estimate changes state. Nothing is recorded."),
+    rowOn("chime", "Alert chime", "Three fast beeps for a red annunciator, two tones for an amber one, once when it first appears. On by default."),
     el("p", { textContent: "Not available: tire pressure, steering angle, or anything on networks the LX can't reach." }));
 }
 /* ---------- Electrical Lab ---------- */
@@ -2910,11 +2970,11 @@ function openVehicle() {
 }
 
 /* ---------- Wiring ---------- */
-$("connect").onclick = async () => {
+$("connect").onclick = async () => { unlockAudio(); for (const k in casSeen) delete casSeen[k];
   try { const port = await navigator.serial.requestPort({ filters: [{ bluetoothServiceClassId: SPP_UUID }], allowedBluetoothServiceClassIds: [SPP_UUID] }); await start(new SerialLink(port), "OBDLink LX"); }
   catch (e) { if (e.name !== "NotFoundError") setStatus(e.message, "bad"); }
 };
-$("sim").onclick = () => start(new SimLink(), "simulator (not vehicle data)");
+$("sim").onclick = () => { unlockAudio(); for (const k in casSeen) delete casSeen[k]; start(new SimLink(), "simulator (not vehicle data)"); };
 $("stop").onclick = () => stop(false);
 $("editBtn").onclick = () => setEdit(!editMode);
 $("addBtn").onclick = openAdd;
