@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261109-0009Z">
-<meta name="build-timestamp-utc" content="2026-11-09T00:09:14Z">
+<meta name="build-id" content="OBD-20261112-1909Z">
+<meta name="build-timestamp-utc" content="2026-11-12T19:09:28Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -81,6 +81,32 @@ body.fit .tabs{margin:0 0 6px;flex:none}body.fit .tabs button{min-height:36px}
 body.fit #grid{flex:1;min-height:0;grid-auto-rows:unset;grid-template-rows:repeat(var(--rows),minmax(0,1fr));gap:6px}
 .tires{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;height:100%;min-height:0}.tire{display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid var(--axis);border-radius:8px;padding:2px;min-height:0;overflow:hidden}.tire b{font-size:1.3em;line-height:1.1}.tire span{font-size:.7em;color:var(--muted);white-space:nowrap}.tire.good{border-color:var(--good)}.tire.bad{border-color:var(--bad)}
 body.fit .w{padding:5px 8px}body.fit .w .sub{display:none}
+.w.watch{border-color:#e0a100}
+#markBar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:20;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:var(--bg);border-top:1px solid var(--line)}
+body.live #markBar{display:block}
+#markBar button{width:100%;min-height:68px;font-size:1.4rem;font-weight:800;letter-spacing:.1em;background:var(--accent);color:#fff;border:none;border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+#markBar button:active{background:#1f5fb0;transform:scale(.98)}
+body.live main{padding-bottom:calc(100px + env(safe-area-inset-bottom))}
+body.fit.live main{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
+.ck{display:flex;flex-direction:column;height:100%;min-height:0;text-align:center;font-variant-numeric:tabular-nums}
+.ck small{display:block;font-size:clamp(.58rem,1.5vh,.8rem);font-weight:700;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;line-height:1.15;white-space:nowrap}
+.ck .ckn{font-weight:800;line-height:1;font-size:clamp(1.5rem,5.6vh,3rem);white-space:nowrap}
+.ck .ckn.dev{color:#e0a100}.ck .ckn.bad{color:#ff8a80}.ck .ckn.off{color:var(--faint)}
+.ck-top{position:relative;flex:3.2 1 0;min-height:0}.ck-top canvas{width:100%;height:100%;display:block}
+.ck-ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;padding-top:6%}
+.ck-spd{font-size:clamp(2.6rem,13vh,6.5rem);font-weight:900;line-height:.95}
+.ck-spdw{position:relative}.ck-gear{position:absolute;left:100%;top:-4%;margin-left:10px;text-align:center;pointer-events:none}.ck-gear b{display:block;font-size:clamp(1.5rem,5.5vh,3rem);font-weight:900;line-height:1}
+.ck-row{flex:1 1 0;display:flex;align-items:center;justify-content:space-evenly;border-top:1px solid var(--line);min-height:0;gap:6px}
+.ck-row>div{min-width:0}
+.ck-cyl{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;flex:0 0 52%}
+.ck-cyl div{border-radius:4px;background:var(--good);color:#fff;font-size:clamp(.55rem,1.4vh,.78rem);font-weight:700;line-height:1.15;padding:2px 0}
+.ck-cyl div.mis{background:var(--bad)}.ck-cyl div.offc{opacity:.4}.ck-cyl div.unk{background:var(--axis);color:var(--muted)}
+.ck-tires{display:flex;gap:6px;justify-content:center;align-items:center}.ck-tires .tv{border:2px solid var(--text);border-radius:5px;padding:1px 7px;font-weight:800;font-size:clamp(.9rem,2.6vh,1.3rem);line-height:1.2}.ck-tires .tv.bad{border-color:var(--bad);color:#ff8a80}.ck-tires .tv.off{border-color:var(--axis);color:var(--faint)}
+body.fit .w.ckw{padding:4px 8px}
+.w.ckw{container-type:size}
+@container (min-aspect-ratio: 5/4){.ck{display:grid;grid-template-columns:1.1fr 1fr;grid-template-rows:repeat(5,minmax(0,1fr)) auto;column-gap:12px}.ck-top{grid-row:1/6;grid-column:1}.ck-row{grid-column:2;border-top:none}.ck-row+.ck-row{border-top:1px solid var(--line)}.ck-foot{grid-column:1/-1}.ck-cyl{flex:0 0 58%}}
+.ck-foot{flex:none;font-size:clamp(.62rem,1.6vh,.8rem);color:var(--muted);padding-top:3px;border-top:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ck-foot.dev{color:#e0a100}
+.bandlist{font-size:.82rem;line-height:1.35;white-space:normal}.bandlist div{padding:2px 0;border-top:1px solid var(--line)}.bandlist .k{color:#e0a100}.bandlist .nk{color:#ff8a80}
 #ctlBtn{display:none}body.fit.live #ctlBtn{display:block;margin-left:auto;position:sticky;right:0;background:var(--raised);color:var(--text)}
 .evhead{grid-column:1/-1;margin:10px 0 0;font-size:.95rem}.evhint{grid-column:1/-1;font-size:.82rem;color:var(--muted);margin:0}
 #grid.ev{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));grid-auto-rows:auto}
@@ -103,7 +129,6 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
  <button id="editBtn">Edit layout</button>
  <button id="addBtn" hidden>+ Add widget</button>
  <button id="resetBtn" hidden>Reset tab</button>
- <button id="markBtn">Mark</button>
  <button id="phoneBtn">Phone sensors</button>
  <button id="reviewBtn" class="primary">Drive review</button>
  <button id="screensBtn">Screens</button>
@@ -114,11 +139,12 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="grid"></div>
 <footer><p>Read-only: only allowlisted read requests can reach the truck. Layout editing locks while moving. Set up before driving.</p><p id="stamp"></p></footer>
 </main>
+<div id="markBar"><button id="markBtn" aria-label="Mark this moment">MARK</button></div>
 <dialog id="dlg"></dialog>
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261109-0009Z", BUILD_UTC = "2026-11-09T00:09:14Z";
+const BUILD_ID = "OBD-20261112-1909Z", BUILD_UTC = "2026-11-12T19:09:28Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -900,7 +926,7 @@ function analyzeDrive(input) {
       const kinds = {}; ms.forEach(x => { if (x.prime) { const k = x.prime.kind + " / " + x.prime.feel.replace(/ \(.*\)| \d+ rpm.*/g, ""); kinds[k] = (kinds[k] || 0) + 1; } });
       add("Transmission", "watch", ms.length + " driver marks while moving: " + (Object.keys(kinds).length ? Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([k, n]) => n + "× " + k).join(", ") : "no catalogued shift near them"), stats.markedShifts.map(x => Math.round(x.mph) + " mph: " + x.prime).join("; ") + ".", "Each mark is matched to the shifts in the 15 s before it, firm, flaring, slipping or dragged shifts first. What the driver felt is tied to what the transmission reported.", [], [], "Driver marks and the shift catalogue"); } }
   { const ls = learningState({ sh12: stats.sh12, sh23: stats.sh23, sh34: stats.sh34, shifts: cat.pairs }, (history || []).map(h => h && h.review && h.review.stats ? h.review.stats : h && h.stats ? h.stats : h).filter(Boolean).reverse());
-    if (ls.state !== "unknown") { stats.learning = ls.state; stats.learningConfidence = ls.confidence; add("Transmission", ls.state === "active" ? "info" : "good", ls.label + " (" + ls.confidence + " confidence)", ls.why.join("; ") + ".", "No readable learning flag exists; this is inferred from shift-time values across drives, upshift flares, and coast-down firmness. " + (ls.state === "active" ? "Expect it to settle over a few hundred miles of mixed driving." : ls.state === "settled" ? "Shift behaviour has stopped changing drive to drive; what remains is what you have." : "Changing, but slowing."), [], [], "Inference from this vehicle's own drives"); } } stats.shifts = cat.pairs; stats.tccApply = tccApplySpeed(rows); const hr = heatRate(rows); if (hr !== null) stats.transHeatRate = hr;
+    if (ls.state !== "unknown") { stats.learning = ls.state; stats.learningConfidence = ls.confidence; add("Transmission", ls.state === "active" ? "info" : "good", ls.label + " (" + ls.confidence + " confidence)", ls.why.join("; ") + ".", "No readable learning flag exists; this is inferred from shift-time values across drives, upshift flares, and coast-down firmness. " + (ls.state === "active" ? "Expect it to settle over a few hundred miles of mixed driving." : ls.state === "settled" ? "Shift behaviour has stopped changing drive to drive; what remains is what you have." : "Changing, but slowing."), [], [], "Inference from this vehicle's own drives"); } } stats.shifts = cat.pairs; Object.assign(stats, shiftQuality(cat.shifts)); stats.tccApply = tccApplySpeed(rows); const hr = heatRate(rows); if (hr !== null) stats.transHeatRate = hr;
   ["sh12","sh23","sh34"].forEach(k => { const v = nums(rows, k); if (v.length) stats[k] = Number(pctl(v, .5).toFixed(2)); });
   { const ups = cat.shifts.filter(s => s.kind === "up"), slp = ups.filter(s => /slipping/.test(s.feel)), lockedUp = ups.filter(s => s.feel === "locked" && (s.tps ?? 0) >= 30 && Math.abs(s.jump) >= 300);
     if (ups.length >= 10 && (slp.length >= 3 || lockedUp.length >= 3)) add("Transmission", "watch", slp.length + " slipping and " + lockedUp.length + " hard locked upshifts of " + ups.length, (slp.length ? "Slipping: " + slp.slice(0, 5).map(s => s.from + "→" + s.to + " at " + s.mph + " mph, slip " + s.slipPeak + " rpm").join("; ") + ". " : "") + (lockedUp.length ? "Locked under throttle: " + lockedUp.slice(0, 5).map(s => s.from + "→" + s.to + " at " + s.mph + " mph, " + s.jump + " rpm, " + Math.round(s.tps) + "% throttle").join("; ") + "." : ""), "A converter-slip spike of 150 rpm or more during an upshift under throttle is a clutch handing over late or soft; an upshift completed with the converter locked at 30%+ throttle lands hard. Both are shift-feel complaints a shop can reproduce by the speeds listed.", ["Clutch apply pressure or timing (valve body, line pressure)", "TCC release timing around upshifts"], ["Have the shop watch converter slip and the shift at the listed speeds and throttle on its own tool."], "Shift catalogue; slip is an unverified GM request checked against stalled stops"); }
@@ -985,6 +1011,13 @@ function analyzeDrive(input) {
   notes.forEach(t => add("Weighing the evidence", "info", "Evidence that pulls in different directions", t, "Stated so the reasoning can be checked, not to settle it.", [], [], "Cross-signal reasoning"));
   F.forEach(f => { if (!f.chain) return; const sup = f.chain.hypotheses.filter(h => h.verdict === "supported" || h.verdict === "partly supported"); f.bestGuess = sup.length ? sup.sort((a, b) => (b.hits / Math.max(1, b.testable)) - (a.hits / Math.max(1, a.testable)) || b.hits - a.hits)[0].name : (f.chain.hypotheses.some(h => h.verdict === "untested") ? "Not decidable from this drive" : f.causes[0] || null); f.alsoPossible = f.chain.hypotheses.filter(h => h.name !== f.bestGuess && h.verdict !== "weakened").map(h => h.name); f.ruledOut = f.chain.hypotheses.filter(h => h.verdict === "weakened").map(h => h.name); });
   // Verdict
+  // Compared with this vehicle's own usual bands (frozen at the last logged repair once 5+ drives precede it).
+  { const prior = (history || []).filter(d => d && d.id !== meta.id), bs = baselineSet(prior, vehicle.repairs), cmp = compareBands(bs.bands, driveBandValues({ summary: meta.summary, stats }));
+    const out = cmp.filter(r => r.state !== "in"), newExt = out.filter(r => /new/.test(r.state));
+    stats.bandCompared = cmp.length; stats.bandOutside = out.map(r => r.key);
+    if (cmp.length >= 5 && !/Short|Stationary/.test(trip.kind)) {
+      if (out.length) add("Trend", newExt.length >= 2 || out.length >= 4 ? "watch" : "info", out.length + " of " + cmp.length + " measures outside this vehicle's usual band", out.map(r => r.state + ": " + bandText(r)).join("; ") + ".", "Each band is the 10th–90th percentile of the same measure across " + bs.label + "; 'new high' or 'new low' means beyond anything logged in that set. One drive outside a band can be weather, route or load. Several, or the same one on consecutive drives, is a change.", [], newExt.length ? ["Watch the same measures on the next drive; if they stay outside, something changed."] : [], "Your own history");
+      else add("Trend", "good", "Within this vehicle's usual bands on " + cmp.length + " measures", "Compared against " + bs.label + ".", "Averages and peaks of this drive sit inside the 10th–90th percentile of the drives in the baseline.", [], [], "Your own history"); } }
   const att = F.filter(f => f.level === "attention"), wat = F.filter(f => f.level === "watch");
   const level = att.length ? "attention" : wat.length ? "watch" : tested.length >= 3 ? "good" : "limited";
   const top = (att.length ? att : wat).slice(0, 3).map(f => f.title.toLowerCase());
@@ -1029,7 +1062,9 @@ const SYSTEMS = [
  { id: "trans", name: "Transmission", from: ["Transmission"], plain: "Whether gears and the torque converter behave smoothly without excess heat.",
    loop: "Speed and load → transmission computer commands hydraulic pressure → speed sensors confirm the shift.", trust: "Comparing engine speed against road speed is an independent physics check, even when a GM data request is unverified." },
  { id: "emissions", name: "Emissions system", from: ["Emissions", "Emissions controls"], plain: "Whether the exhaust cleanup hardware looks healthy.",
-   loop: "Upstream and downstream oxygen sensors compare exhaust before and after the catalyst.", trust: "Catalyst temperature is often modeled rather than measured, so a displayed value may not be a sensor reading." }
+   loop: "Upstream and downstream oxygen sensors compare exhaust before and after the catalyst.", trust: "Catalyst temperature is often modeled rather than measured, so a displayed value may not be a sensor reading." },
+ { id: "trend", name: "Compared with this vehicle's history", from: ["Trend"], plain: "Whether this drive sits inside the bands this vehicle has set for itself.",
+   loop: "Every finished drive adds one value per measure (peaks, averages, shift quality). The 10th–90th percentile of those values is the usual band; a logged repair freezes the band at the drives before it.", trust: "The band is this vehicle's own history, not a published limit. It catches change, not absolute faults: a measure can sit inside its band and still be wrong if it was wrong all along." }
 ];
 const STATUS_RANK = { attention: 3, watch: 2, good: 1, info: 0 };
 function systemCard(findings, tested) {
@@ -1530,6 +1565,61 @@ function transShopReport(drives, vehicle) {
   return L.join("\n");
 }
 
+/* ---------- Usual bands: what this vehicle normally does, drive by drive, so a change after a repair shows at once ---------- */
+// Rough upshift = slip spike, flare, or completing hard with the converter locked at 30%+ throttle. Firm coast-down = rpm step 250/300+, a flare, or the engine dragged below 500 rpm. Same rule as the shop-report classifier.
+const roughShift = s => /slipping|flare|firm|dragged/.test(s.feel) || (s.kind === "up" && s.feel === "locked" && (s.tps ?? 0) >= 30 && Math.abs(s.jump) >= 300);
+function shiftQuality(shifts) {
+  const up = shifts.filter(s => s.kind === "up"), cd = shifts.filter(s => s.kind === "coast-down");
+  return { upN: up.length, cdN: cd.length, upRough: up.length >= 5 ? up.filter(roughShift).length / up.length * 100 : null, cdFirm: cd.length >= 5 ? cd.filter(roughShift).length / cd.length * 100 : null };
+}
+// [key, label, unit, digits, kind, id, stat]. kind "sum" reads the per-drive summary (min/avg/max of a live metric); "stat" reads the drive review's computed stats.
+const BAND_DEFS = [
+  ["upRough", "Rough upshifts", "%", 0, "stat", "upRough"], ["cdFirm", "Firm coast-down shifts", "%", 0, "stat", "cdFirm"],
+  ["slip.avg", "Converter slip, average", "rpm", 0, "sum", "slip", "avg"], ["slipCruise", "Converter slip at cruise", "rpm", 0, "stat", "slipCruise"],
+  ["sh12.avg", "1-2 shift time", "s", 2, "sum", "sh12", "avg"], ["sh23.avg", "2-3 shift time", "s", 2, "sum", "sh23", "avg"], ["sh34.avg", "3-4 shift time", "s", 2, "sum", "sh34", "avg"],
+  ["trans.max", "Trans fluid peak", "°F", 0, "sum", "trans", "max"], ["transCruise", "Trans fluid at cruise", "°F", 0, "stat", "transCruise"], ["transHeatRate", "Trans fluid warm-up rate", "°F/min", 1, "stat", "transHeatRate"],
+  ["ect.max", "Coolant peak", "°F", 0, "sum", "ect", "max"], ["ectPlateau", "Coolant at cruise", "°F", 0, "stat", "ectPlateau"],
+  ["oilt.max", "Oil temperature peak", "°F", 0, "sum", "oilt", "max"], ["oilp.avg", "Oil pressure, average", "psi", 0, "sum", "oilp", "avg"], ["oilIdle", "Oil pressure at hot idle", "psi", 0, "stat", "oilIdle"],
+  ["volt.avg", "Voltage, running average", "V", 2, "sum", "volt", "avg"], ["voltMed", "Running voltage (median)", "V", 2, "stat", "voltMed"],
+  ["ltft1.avg", "Bank 1 long-term trim", "%", 1, "sum", "ltft1", "avg"], ["ltft2.avg", "Bank 2 long-term trim", "%", 1, "sum", "ltft2", "avg"],
+  ["stft1.avg", "Bank 1 short-term trim", "%", 1, "sum", "stft1", "avg"], ["stft2.avg", "Bank 2 short-term trim", "%", 1, "sum", "stft2", "avg"],
+  ["misTotal", "Misfires, all cylinders", "count", 0, "stat", "misTotal"], ["misPerKrev", "Misfire rate", "per 1,000 revs", 2, "stat", "misPerKrev"],
+  ["knock", "Knock retard (98th pct)", "°", 1, "stat", "knock"], ["timing.avg", "Timing advance, average", "°", 1, "sum", "timing", "avg"],
+  ["idleMafPerL", "Idle airflow per liter", "g/s/L", 2, "stat", "idleMafPerL"], ["mpg", "Estimated mpg", "mpg", 1, "stat", "mpg"],
+  ["evapp.avg", "EVAP tank pressure, average", "Pa", 0, "sum", "evapp", "avg"],
+  ["cat1.max", "Catalyst 1 peak", "°F", 0, "sum", "cat1", "max"], ["cat2.max", "Catalyst 2 peak", "°F", 0, "sum", "cat2", "max"],
+  ["tpfl.avg", "Tire LF", "psi", 0, "sum", "tpfl", "avg"], ["tpfr.avg", "Tire RF", "psi", 0, "sum", "tpfr", "avg"], ["tprl.avg", "Tire LR", "psi", 0, "sum", "tprl", "avg"], ["tprr.avg", "Tire RR", "psi", 0, "sum", "tprr", "avg"]
+];
+const bandDef = key => BAND_DEFS.find(d => d[0] === key);
+// One value per drive for a band definition; null when that drive didn't carry it.
+function bandValueOf(d, def) {
+  const [, , , , kind, id, stat] = def;
+  if (kind === "sum") { const s = d.summary && d.summary[id]; if (!s || typeof s[stat] !== "number" || s.n < 30) return null; if (id === "oilp" && s.max === 0) return null; /* dead oil-pressure request (DID 1470 answered 0 on every row) */ return s[stat]; }
+  const st = d.review && d.review.stats ? d.review.stats : d.stats; const v = st ? st[id] : null; return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+// Bands are built from drives of 5+ minutes (averages and peaks on a 2-minute hop say little). Band = 10th–90th percentile of the per-drive values; at least 5 drives.
+function usualBands(drives) {
+  const use = (drives || []).filter(d => d.summary && d.summary.rpm && d.summary.rpm.n >= 300), out = {};
+  BAND_DEFS.forEach(def => { const v = use.map(d => bandValueOf(d, def)).filter(x => x !== null); if (v.length >= 5) out[def[0]] = { lo: pctl(v, .1), hi: pctl(v, .9), med: pctl(v, .5), min: Math.min(...v), max: Math.max(...v), n: v.length }; });
+  return { bands: out, drives: use.length };
+}
+// The baseline freezes at the most recent logged repair once 5+ drives sit before it; otherwise it rolls over every drive. Post-repair drives never feed the band they are judged against.
+function baselineSet(history, repairs) {
+  const sp = repairSplit(history || [], repairs), frozen = !!(sp.last && sp.before.length >= 5), use = frozen ? sp.before : (history || []), ub = usualBands(use);
+  return { bands: ub.bands, drives: ub.drives, frozen, repair: frozen ? sp.last : null, label: ub.drives + " drive" + (ub.drives === 1 ? "" : "s") + (frozen ? " before the " + new Date(sp.last.t).toLocaleDateString() + " repair" : ", rolling") };
+}
+// cur: {key: value}. Only keys with a band are compared. Outside the 10–90% band = "above"/"below"; beyond anything ever logged = "new high"/"new low".
+function compareBands(bands, cur) {
+  const out = [];
+  for (const key in cur) { const b = bands[key], def = bandDef(key), v = cur[key]; if (!b || !def || typeof v !== "number" || !Number.isFinite(v)) continue;
+    const state = v > b.max ? "new high" : v < b.min ? "new low" : v > b.hi ? "above" : v < b.lo ? "below" : "in";
+    out.push({ key, label: def[1], unit: def[2], digits: def[3], value: v, lo: b.lo, hi: b.hi, med: b.med, min: b.min, max: b.max, n: b.n, state }); }
+  return out;
+}
+const bandText = r => { const f = x => x.toFixed(r.digits); return r.label + " " + f(r.value) + (r.unit && r.unit !== "count" ? " " + r.unit : "") + " (usual " + f(r.lo) + "–" + f(r.hi) + ", " + r.n + " drives)"; };
+// Values of a finished drive, from its summary and review stats, for compareBands.
+function driveBandValues(d) { const o = {}; BAND_DEFS.forEach(def => { const v = bandValueOf(d, def); if (v !== null) o[def[0]] = v; }); return o; }
+
 function matchVehicle(vin, vehicles) {
   if (!vin || vin.length !== 17) return null;
   for (const id in vehicles) if (vehicles[id].vin === vin) return id;
@@ -1562,16 +1652,12 @@ function toast(t) { const n = $("toast"); n.textContent = t; n.hidden = false; c
 /* ---------- Presets: the recommended combinations ---------- */
 const W = (type, metrics, p, d, o = {}) => ({ type, metrics, p, d, ...o });
 const PRESETS = {
- "Health check": [ W("healthcheck",[],[4,9],[6,8]), W("healthcard",[],[4,8],[6,8]), W("needle",["rpm"],[4,4],[4,4]), W("number",["ect"],[2,3],[4,4]), W("number",["volt"],[2,3],[4,4]) ],
- Glance: [ W("needle",["rpm"],[2,5],[4,5]), W("needle",["mph"],[2,5],[4,5]), W("gearbox",[],[4,3],[4,5]),
-   W("number",["trans"],[2,3],[3,3]), W("number",["ect"],[2,3],[3,3]), W("number",["volt"],[2,3],[3,3]), W("number",["slip"],[2,3],[3,3]), W("status",[],[4,2],[12,2]) ],
- Transmission: [ W("learn",[],[4,3],[6,3]), W("gearbox",[],[4,3],[3,4]), W("needle",["trans"],[4,4],[3,4]), W("line",["slip"],[4,4],[6,4],{win:5}), W("scatter",["mph","rpm"],[4,5],[6,5]),
+ "Health check": [ W("healthcheck",[],[4,9],[6,8]), W("healthcard",[],[4,8],[6,8]), W("bands",[],[4,6],[6,6]), W("needle",["rpm"],[4,4],[4,4]), W("number",["ect"],[2,3],[4,4]), W("number",["volt"],[2,3],[4,4]) ],
+ Glance: [ W("cockpit",[],[4,12],[12,12]) ],
+ Transmission: [ W("learn",[],[4,3],[6,3]), W("bands",[],[4,5],[6,5]), W("gearbox",[],[4,3],[3,4]), W("needle",["trans"],[4,4],[3,4]), W("line",["slip"],[4,4],[6,4],{win:5}), W("scatter",["mph","rpm"],[4,5],[6,5]),
    W("line",["trans"],[4,4],[6,5],{win:15}), W("share",[],[4,4],[4,4],{share:"gear",view:"bars"}), W("share",[],[4,4],[4,4],{share:"temp",view:"donut"}),
    W("share",[],[4,4],[4,4],{share:"drive",view:"donut"}), W("number",["sh12"],[2,3],[3,3]), W("number",["sh23"],[2,3],[3,3]), W("number",["sh34"],[2,3],[3,3]), W("number",["ratio"],[2,3],[3,3]), W("number",["geari"],[2,3],[3,3]), W("history",["trans"],[4,4],[12,4],{stat:"max"}) ],
  Electrical: [ W("elab",[],[4,3],[4,3]), W("needle",["volt"],[2,4],[4,4]), W("number",["atrv"],[2,4],[4,4]), W("line",["volt","atrv"],[4,4],[12,4],{win:15}), W("history",["volt"],[4,4],[12,4],{stat:"min"}) ],
- Trip: [ W("needle",["mph"],[2,5],[3,5]), W("gearbox",[],[2,5],[3,5]),
-   W("number",["fuelgal"],[2,3],[3,3]), W("needle",["trans"],[2,4],[3,4]), W("number",["range"],[2,3],[3,3]), W("needle",["oilt"],[2,4],[3,4]),
-   W("number",["endur"],[2,3],[3,3]), W("needle",["ect"],[2,4],[3,4]), W("number",["mpg10"],[2,3],[3,3]), W("tires",[],[4,3],[6,3]) ],
  "System map": [ W("sysmap",[],[4,12],[12,10]) ],
  Phone: [ W("phone",[],[4,3],[4,3]), W("number",["speedo"],[2,3],[4,3]), W("number",["grade"],[2,3],[4,3]), W("line",["mph","gmph"],[4,4],[6,4],{win:5}), W("line",["vib"],[4,4],[6,4],{win:5}), W("line",["noise"],[4,4],[6,4],{win:5}), W("scatter",["mph","vib"],[4,5],[6,5]) ],
  Engine: [ W("misfire",[],[4,4],[6,4]), W("number",["afm"],[2,3],[3,3]), W("number",["bal1"],[2,3],[3,3]), W("line",["ect","oilt","trans"],[4,4],[6,4],{win:15}), W("line",["stft1","stft2","ltft1","ltft2"],[4,4],[6,4],{win:5}),
@@ -1620,10 +1706,10 @@ function loadVehicle(id) {
   vid = id; store.set("vid", vid); dropDynamic();
   const saved = store.get(vkey("dash"), null); dash = saved && typeof saved === "object" ? saved : {};
   Object.keys(PRESETS).forEach(k => { if (!Array.isArray(dash[k])) dash[k] = buildDash(k); });
-  if (store.get(vkey("glancev"), 0) !== 2) { dash.Glance = buildDash("Glance"); store.set(vkey("glancev"), 2); }
-  fits = store.get(vkey("fits"), {}); if (!("Trip" in fits)) { fits.Trip = true; store.set(vkey("fits"), fits); }
-  if (store.get(vkey("tripv"), 0) !== 4) { dash.Trip = buildDash("Trip"); store.set(vkey("tripv"), 4); }
-  if (!store.get(vkey("learnv"), 0)) { dash.Transmission = buildDash("Transmission"); store.set(vkey("learnv"), 1); }
+  fits = store.get(vkey("fits"), {});
+  // Glance v3 absorbs the old Trip screen (one cockpit tile); a Trip tab built by an earlier build is removed so the preset list stays the recommended set.
+  if (store.get(vkey("glancev"), 0) !== 3) { dash.Glance = buildDash("Glance"); store.set(vkey("glancev"), 3); if (store.get(vkey("tripv"), 0)) { delete dash.Trip; delete fits.Trip; store.set(vkey("fits"), fits); } save(); }
+  if (store.get(vkey("learnv"), 0) !== 2) { dash.Transmission = buildDash("Transmission"); dash["Health check"] = buildDash("Health check"); store.set(vkey("learnv"), 2); save(); }
   rules = store.get(vkey("rules"), {}); customs = store.get(vkey("customs"), []); rawDids = store.get(vkey("rawdids"), []);
   customs.forEach(registerCustom); rawDids.forEach(registerRawDid);
   tab = store.get(vkey("tab"), "Health check"); if (!dash[tab] && tab !== EV) tab = "Health check";
@@ -1722,6 +1808,8 @@ function visibleIds() {
   (dash[tab] || []).forEach(w => { (w.metrics || []).forEach(i => ids.add(i));
     if (w.type === "gearbox") ["gear","slip","gratio"].forEach(i => ids.add(i));
     if (w.type === "tires") ["tpfl","tpfr","tprr","tprl"].forEach(i => ids.add(i));
+    if (w.type === "cockpit") { ["gear","slip","gratio","trans","oilt","oilp","afm","fuel","evapp","tpfl","tpfr","tprr","tprl"].forEach(i => ids.add(i)); for (let c = 1; c <= 8; c++) ids.add("mis" + c); }
+    if (w.type === "bands") ["slip","trans","oilt","oilp","volt","ltft1","ltft2","stft1","stft2","timing"].forEach(i => ids.add(i));
     if (w.type === "misfire") for (let c = 1; c <= 8; c++) ids.add("mis" + c);
     if (w.type === "status" || w.type === "readiness") ids.add("mon");
     if (w.type === "allsensors") METRICS.forEach(m => { if (m.cmd && m.tier !== "slow") ids.add(m.id); });
@@ -1878,6 +1966,7 @@ function db() {
 async function loadDrives() {
   try { const d = await db(), all = await new Promise((res, rej) => { const q = d.transaction("drives").objectStore("drives").getAll(); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
     drives = all.filter(x => (x.vehicle || "sierra") === vid).sort((a, b) => a.start - b.start); } catch (e) { drives = []; }
+  rebuildBaseline(); if (!session) setTimeout(backfillShiftStats, 1500);
 }
 async function putDrives(list, chunks = []) {
   const d = await db();
@@ -1932,10 +2021,27 @@ function switchVehicle(id) { loadVehicle(id); resetLive(); syncEditControls(); r
 addEventListener("pagehide", () => { if (session && !session.link.sim) saveDrive(); });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && session && !session.link.sim) saveDrive(); });
 addEventListener("beforeunload", e => { if (session && !session.link.sim) { saveDrive(); e.preventDefault(); e.returnValue = ""; } });
-function usual(id) {
-  const a = drives.map(d => d.summary && d.summary[id]).filter(Boolean);
-  return a.length >= 3 ? { avg: median(a.map(x => x.avg)), max: median(a.map(x => x.max)), n: a.length } : null;
+// Usual band for a live metric's drive average: 10th–90th percentile across the baseline drives (frozen at the last logged repair).
+function usual(id) { const b = baseline && baseline.bands[id + ".avg"]; return b ? { lo: b.lo, hi: b.hi, n: b.n } : null; }
+let baseline = null, liveQ = { t: 0, v: null }, backfilling = false;
+function rebuildBaseline() { try { baseline = baselineSet(drives, (vehicles[vid] || {}).repairs); } catch (e) { baseline = null; } }
+// Drives saved by earlier builds lack the shift-quality stats; fill them in from the stored rows once, in the background, when no session is live.
+async function backfillShiftStats() {
+  if (backfilling || session) return; backfilling = true;
+  try { for (const d of drives) { if (session) break; if (!d.review || !d.review.stats || d.review.stats.upRough !== undefined) continue;
+      const rs = await driveRows(d.id); if (rs.length < 100) { d.review.stats.upRough = null; d.review.stats.cdFirm = null; await putDrives([d]); continue; }
+      const gearOk = !!(d.summary && d.summary.gear && d.summary.gear.n >= 30), cat = shiftCatalog(rs, gearOk); Object.assign(d.review.stats, shiftQuality(cat.shifts)); await putDrives([d]); } rebuildBaseline(); } catch (e) { console.error(e); } finally { backfilling = false; }
 }
+// Current-drive values for the usual bands. Averages after 5 min of engine time, peaks after 10 min, shift quality after 5 upshifts: earlier than that a hop says nothing.
+function liveBandValues() {
+  const o = {}, sec = driveStart ? (Date.now() - driveStart) / 1000 : 0;
+  BAND_DEFS.forEach(([key, , , , kind, id, stat]) => { if (kind !== "sum") return; const s = stats[id]; if (!s || !s.n || s.n < 30) return; if (stat === "avg" && sec >= 300) o[key] = s.sum / s.n; if ((stat === "max" || stat === "min") && sec >= 600) o[key] = s[stat]; });
+  const now = Date.now(); if (rows.length >= 60 && now - liveQ.t > 30000) { liveQ.t = now; try { liveQ.v = shiftQuality(shiftCatalog(rows, !(mstate.gear && mstate.gear.status === "failed")).shifts); } catch (e) { liveQ.v = null; } }
+  if (liveQ.v) { if (liveQ.v.upRough !== null) o.upRough = liveQ.v.upRough; if (liveQ.v.cdFirm !== null) o.cdFirm = liveQ.v.cdFirm; }
+  let mis = 0, any = false; for (let c = 1; c <= 8; c++) { const v = latest["mis" + c]; if (typeof v === "number") { mis += v; any = true; } } if (any) o.misTotal = mis;
+  return o;
+}
+function liveBandCompare() { if (!baseline) return null; const cmp = compareBands(baseline.bands, liveBandValues()); return { rows: cmp, out: cmp.filter(r => r.state !== "in") }; }
 
 /* ---------- Widget renderers ---------- */
 function canvasCtx(c) {
@@ -1968,7 +2074,7 @@ R.number = (w, box) => {
     pill.textContent = v === null ? emptyText(m) : ruleOf(m) ? PILL[r.state] + r.text : ""; pill.className = "pill " + r.state;
     box.className = "w " + (r.state === "none" ? "" : r.state) + (v === null ? " off" : "");
     const parts = st ? ["min " + st.min.toFixed(m.digits), "avg " + (st.sum / st.n).toFixed(m.digits), "max " + st.max.toFixed(m.digits)] : [];
-    if (u) parts.push("usual " + u.avg.toFixed(m.digits));
+    if (u) parts.push("usual " + u.lo.toFixed(m.digits) + "–" + u.hi.toFixed(m.digits));
     sub.textContent = parts.join(" · ");
     spark(c, m);
   };
@@ -2093,6 +2199,73 @@ R.tires = (w, box) => {
   const cells = {}, grid = el("div", { class: "tires" }); ["tpfl","tpfr","tprr","tprl"].forEach(i => { const c = el("div", { class: "tire" }, el("b"), el("span", { textContent: byId[i].label.replace(" tire", "") })); cells[i] = c; grid.append(c); });
   box.append(header(w, "Tire pressures", "Unverified"), el("div", { class: "body" }, grid));
   return () => { let worst = "none"; ["tpfl","tpfr","tprl","tprr"].forEach(i => { const v = latest[i] ?? null, r = ratingOf(byId[i], v); cells[i].querySelector("b").textContent = v === null ? "--" : v.toFixed(0); cells[i].className = "tire " + r.state; if (r.state === "bad") worst = "bad"; else if (r.state === "good" && worst === "none") worst = "good"; }); box.className = "w " + (worst === "none" ? "" : worst); };
+};
+R.cockpit = (w, box) => {
+  const veh = vehicles[vid] || {}, c = el("canvas"), spd = el("div", { class: "ck-spd" }), gearB = el("b");
+  c.setAttribute("role", "img");
+  const num = label => { const n = el("div", { class: "ckn" }); return { n, d: el("div", {}, n, el("small", { textContent: label })) }; };
+  const ect = num("coolant"), trans = num("trans fluid"), oil = num("oil °F / psi"), fuel = num("fuel rem"), evap = num("evap vapor Pa");
+  const afm = el("div", { class: "ckn", style: "flex:0 0 28%" }), cyl = el("div", { class: "ck-cyl" }), cells = {};
+  [1,3,5,7,2,4,6,8].forEach(n => { const v = el("span"); cells[n] = { d: el("div", {}, el("span", { textContent: String(n) }), el("br"), v), v }; cyl.append(cells[n].d); });
+  const tires = el("div", { class: "ck-tires" }), tc = {}; [["tpfl","DF"],["tprl","DR"],["tpfr","PF"],["tprr","PR"]].forEach(([id, l]) => { const d = el("div", { class: "tv", textContent: "--" }); tc[id] = d; tires.append(el("div", {}, d, el("small", { textContent: l }))); });
+  const foot = el("div", { class: "ck-foot", textContent: "" });
+  box.classList.add("ckw");
+  box.append(el("div", { class: "ck" },
+    el("div", { class: "ck-top" }, c, el("div", { class: "ck-ov" }, el("div", { class: "ck-spdw" }, spd, el("small", { textContent: "speed" }), el("div", { class: "ck-gear" }, gearB, el("small", { textContent: "gear" }))))),
+    el("div", { class: "ck-row" }, ect.d, trans.d),
+    el("div", { class: "ck-row" }, oil.d),
+    el("div", { class: "ck-row" }, afm, cyl),
+    el("div", { class: "ck-row" }, fuel.d, evap.d),
+    el("div", { class: "ck-row" }, tires),
+    foot));
+  const ZONES = [[0, 4000, "#0ca30c"], [4000, 5500, "#e0a100"], [5500, 6500, "#d03b3b"]]; // visual zones for the dial only; no published limit is implied
+  return () => {
+    const rpm = latest.rpm ?? null, mph = latest.mph ?? null, gv = latest.gear ?? null, sl = latest.slip ?? null, cmp = liveBandCompare(), outKeys = new Set(cmp ? cmp.out.map(r => r.key.split(".")[0]) : []);
+    // Dial
+    const { g, W, H } = canvasCtx(c), a0 = Math.PI * .8, a1 = Math.PI * 2.2, cx = W / 2, fitR = Math.min(W / 2, H * .6), pad = Math.max(16, fitR * .2), rad = Math.max(10, fitR - pad), cy = Math.min(H - 6, rad + pad), MAX = 6500;
+    const ang = x => a0 + Math.min(MAX, Math.max(0, x)) / MAX * (a1 - a0);
+    g.lineWidth = Math.max(5, rad * .07); ZONES.forEach(([x0, x1, col]) => { g.strokeStyle = col; g.beginPath(); g.arc(cx, cy, rad, ang(x0) + .01, ang(x1) - .01); g.stroke(); });
+    g.fillStyle = "#c3c2b7"; g.font = "700 " + Math.max(10, rad * .13) + "px system-ui"; g.textAlign = "center"; g.textBaseline = "middle";
+    for (let k = 1; k <= 6; k++) { const t = ang(k * 1000), r2 = rad + Math.max(9, rad * .17); g.fillText(String(k), cx + Math.cos(t) * r2, cy + Math.sin(t) * r2); }
+    g.font = Math.max(9, rad * .09) + "px system-ui"; g.fillStyle = "#8f8e85"; g.textAlign = "left"; g.textBaseline = "top"; g.fillText("rpm ×1000", 4, 3); g.textAlign = "center"; g.textBaseline = "middle";
+    if (rpm !== null) { const t = ang(rpm); g.strokeStyle = "#f0efec"; g.lineWidth = Math.max(2.5, rad * .035); g.beginPath(); g.moveTo(cx + Math.cos(t) * (rad * .72), cy + Math.sin(t) * (rad * .72)); g.lineTo(cx + Math.cos(t) * (rad - 2), cy + Math.sin(t) * (rad - 2)); g.stroke(); }
+    spd.textContent = mph === null ? "--" : mph.toFixed(0);
+    const sr = ratingOf(byId.slip, sl); gearB.textContent = gv !== null ? gv.toFixed(0) : (latest.gratio ?? null) !== null ? latest.gratio.toFixed(1) : "--"; gearB.style.color = sr.state === "bad" ? "#ff8a80" : "";
+    c.setAttribute("aria-label", "Speed " + spd.textContent + " mph, " + (rpm === null ? "no rpm" : rpm.toFixed(0) + " rpm") + ", gear " + gearB.textContent);
+    // Numbers: red when a rule is broken, amber when outside this vehicle's usual band, grey when the vehicle isn't answering.
+    const put = (o, id, text, extra) => { const v = latest[id] ?? null, r = v === null ? { state: "none" } : ratingOf(byId[id], v); o.n.textContent = text; o.n.className = "ckn " + (v === null ? "off" : r.state === "bad" ? "bad" : outKeys.has(id) || (extra && outKeys.has(extra)) ? "dev" : ""); };
+    put(ect, "ect", (latest.ect ?? null) === null ? "--" : latest.ect.toFixed(0));
+    put(trans, "trans", (latest.trans ?? null) === null ? "--" : latest.trans.toFixed(0));
+    put(oil, "oilt", ((latest.oilt ?? null) === null ? "--" : latest.oilt.toFixed(0)) + " / " + ((latest.oilp ?? null) === null ? "--" : latest.oilp.toFixed(0)), "oilp");
+    if ((latest.oilp ?? null) !== null && ratingOf(byId.oilp, latest.oilp).state === "bad") oil.n.className = "ckn bad";
+    put(fuel, "fuel", (latest.fuel ?? null) === null ? "--" : latest.fuel.toFixed(0) + "%");
+    put(evap, "evapp", (latest.evapp ?? null) === null ? "--" : latest.evapp.toFixed(0));
+    const mode = latest.afm ?? null, v4 = mode === "V4"; afm.textContent = mode === null ? "V?" : /V4/.test(mode) ? "V4" : "V8"; afm.className = "ckn" + (mode === null ? " off" : ""); afm.title = mode === null ? "Cylinder mode needs the injector pulse-width requests; this vehicle hasn't answered them" : mode;
+    let misAny = false; for (let n = 1; n <= 8; n++) { const mv = latest["mis" + n]; const known = typeof mv === "number"; if (known) misAny = true; cells[n].v.textContent = known ? String(mv) : "–"; cells[n].d.className = (known ? (mv > 0 ? "mis" : "") : "unk") + (v4 && (veh.afmCyls || []).includes(n) ? " offc" : ""); }
+    cyl.title = misAny ? "Misfire counter per cylinder (current or last drive cycle). Dimmed cylinders are deactivated in V4." : "Misfire counters not read yet";
+    let tbad = false; ["tpfl","tprl","tpfr","tprr"].forEach(id => { const v = latest[id] ?? null, r = v === null ? { state: "none" } : ratingOf(byId[id], v); tc[id].textContent = v === null ? "--" : v.toFixed(0); tc[id].className = "tv " + (v === null ? "off" : r.state === "bad" ? "bad" : ""); if (r.state === "bad") tbad = true; });
+    // Footer: the live band verdict
+    if (!baseline || !Object.keys(baseline.bands).length) { foot.textContent = "No usual bands yet: needs 5 saved drives of 5+ minutes"; foot.className = "ck-foot"; }
+    else if (!cmp || !cmp.rows.length) { foot.textContent = "Usual bands from " + baseline.label + " · comparing after 5 min"; foot.className = "ck-foot"; }
+    else if (cmp.out.length) { foot.textContent = "Outside usual: " + cmp.out.slice(0, 3).map(r => r.label.replace(/,.*$/, "") + " " + r.value.toFixed(r.digits) + (r.state === "in" ? "" : " (" + r.lo.toFixed(r.digits) + "–" + r.hi.toFixed(r.digits) + ")")).join(" · ") + (cmp.out.length > 3 ? " +" + (cmp.out.length - 3) : ""); foot.className = "ck-foot dev"; }
+    else { foot.textContent = "Within usual bands · " + cmp.rows.length + " measures · " + baseline.label; foot.className = "ck-foot"; }
+    box.className = "w ckw" + (cmp && cmp.out.length ? " watch" : "") + (tbad ? " bad" : "");
+  };
+};
+R.bands = (w, box) => {
+  const head = el("div", { class: "big", style: "font-size:1.2rem" }), sub = el("div", { class: "sub", style: "white-space:normal" }), list = el("div", { class: "bandlist" });
+  box.append(header(w, "Vs. this vehicle's usual bands", "Estimate"), el("div", { class: "body" }, head, sub, list));
+  return () => {
+    const cmp = liveBandCompare();
+    if (!baseline || !Object.keys(baseline.bands).length) { head.textContent = "No bands yet"; sub.textContent = "Bands need 5 saved drives of 5+ minutes. Each band is the 10th–90th percentile of a measure across those drives."; list.textContent = ""; box.className = "w"; return; }
+    const nb = Object.keys(baseline.bands).length;
+    if (!session) { head.textContent = nb + " bands ready"; sub.textContent = "From " + baseline.label + ". " + (baseline.frozen ? "Frozen at that repair: later drives are judged against it and never widen it." : "Rolling: log the repair in Vehicle settings when the truck comes back so the bands freeze at the drives before it."); list.textContent = ""; box.className = "w"; return; }
+    if (!cmp || !cmp.rows.length) { head.textContent = "Comparing after 5 min"; sub.textContent = "Averages after 5 minutes of engine time, peaks after 10, shift quality after 5 upshifts. " + nb + " bands from " + baseline.label + "."; list.textContent = ""; box.className = "w"; return; }
+    head.textContent = cmp.out.length ? cmp.out.length + " of " + cmp.rows.length + " outside usual" : "Within usual on " + cmp.rows.length + " measures";
+    sub.textContent = "Bands from " + baseline.label + (baseline.frozen ? " (frozen)" : " (rolling)") + ".";
+    list.textContent = ""; cmp.rows.slice().sort((a, b) => (a.state === "in" ? 1 : 0) - (b.state === "in" ? 1 : 0)).forEach(r => list.append(el("div", { class: /new/.test(r.state) ? "nk" : r.state !== "in" ? "k" : "", textContent: (r.state === "in" ? "✓ " : r.state === "above" ? "▲ " : r.state === "below" ? "▼ " : "‼ ") + bandText(r) })));
+    box.className = "w " + (cmp.out.some(r => /new/.test(r.state)) || cmp.out.length >= 4 ? "watch" : cmp.out.length ? "" : "good");
+  };
 };
 R.gearbox = (w, box) => {
   const big = el("div", { class: "gear" }), a = el("div", { class: "sub" }), pill = el("div", { class: "pill" }), b = el("div", { class: "sub" });
@@ -2536,7 +2709,7 @@ function aboutOf(m) { if (ABOUT[m.id]) return ABOUT[m.id]; if (m.basis === "phon
 function evWidgets() {
   const F = (type, about, extra = {}, big = true) => ({ w: { id: "ev" + type + (extra.share || (extra.metrics || []).join("")), type, metrics: [], ...extra }, about, big });
   const views = [
-    ["Vehicle status", [F("status", "Whether the check-engine light is on, and code counts."), F("gearbox", "Current gear and converter slip together."), F("learn", "Is the transmission still adapting? Inferred, with a confidence."), F("tires", "Four tire pressures from the body module (GM trucks)."), F("misfire", "Recent misfires per cylinder, which shows whether a problem is localized."), F("readiness", "Which emissions self-tests have finished."), F("codes", "Stored, pending, and permanent trouble codes, plus freeze frame."), F("mode06", "Computer self-test results against the vehicle's own limits."), F("truck", "VIN, software fingerprint, and which computers answer. It stays on this device."), F("crosscheck", "Whether related sensors move together."), F("sysmap", "A schematic of where each sensor sits in the air, fuel, exhaust, coolant, oil, and transmission paths, colored by its live value. Exact in order, approximate in position."), F("phone", "Opt-in GPS, motion, and microphone capture."), F("elab", "Parked tests for starting voltage and accessory load.")]],
+    ["Vehicle status", [F("status", "Whether the check-engine light is on, and code counts."), F("cockpit", "Speed, rpm, gear, temperatures, oil, cylinder mode and misfires, fuel, EVAP, and tires on one screen. Amber numbers sit outside this vehicle's usual band."), F("bands", "Where this drive sits against the vehicle's own usual bands, frozen at the last logged repair."), F("gearbox", "Current gear and converter slip together."), F("learn", "Is the transmission still adapting? Inferred, with a confidence."), F("tires", "Four tire pressures from the body module (GM trucks)."), F("misfire", "Recent misfires per cylinder, which shows whether a problem is localized."), F("readiness", "Which emissions self-tests have finished."), F("codes", "Stored, pending, and permanent trouble codes, plus freeze frame."), F("mode06", "Computer self-test results against the vehicle's own limits."), F("truck", "VIN, software fingerprint, and which computers answer. It stays on this device."), F("crosscheck", "Whether related sensors move together."), F("sysmap", "A schematic of where each sensor sits in the air, fuel, exhaust, coolant, oil, and transmission paths, colored by its live value. Exact in order, approximate in position."), F("phone", "Opt-in GPS, motion, and microphone capture."), F("elab", "Parked tests for starting voltage and accessory load.")]],
     ["Gauges", ["rpm","mph","trans","ect","volt","fuel"].map(i => F("needle", "Needle gauge. Colors show its limit, if one exists.", { metrics: [i] }, false))],
     ["Graphs and pies", [F("line", "Fuel corrections over time.", { metrics: ["stft1","ltft1","stft2","ltft2"], win: 5 }), F("line", "All major heat readings together.", { metrics: ["ect","oilt","trans"], win: 15 }), F("line", "Converter slip over time.", { metrics: ["slip"], win: 5 }), F("scatter", "Each point is engine speed against road speed. Each locked gear forms a straight ray.", { metrics: ["mph","rpm"] }), F("share", "Time in each gear.", { share: "gear", view: "bars" }), F("share", "Time in each transmission temperature band.", { share: "temp", view: "donut" }), F("share", "Time stopped, cruising, accelerating, and slowing.", { share: "drive", view: "donut" }), F("history", "Transmission temperature peak on each saved drive.", { metrics: ["trans"], stat: "max" }), F("history", "Estimated fuel economy on each saved drive.", { metrics: ["mpg"], stat: "avg" })]],
     ["Health", [F("healthcheck", "The guided steps that exercise more of the vehicle."), F("healthcard", "System-by-system status for this session.")]]
@@ -2565,6 +2738,7 @@ function renderEverything(g) {
 /* ---------- Marks ---------- */
 function addMark() {
   if (!session) return toast("Connect first.");
+  try { if (navigator.vibrate) navigator.vibrate(80); } catch (e) {}
   if (movingNow()) { markPending = "Marked while driving"; toast("Marked."); return; } // no EVAP focus while driving: it would crowd out gear and slip sampling right when a mark needs them
   $("dlg").classList.remove("wide"); const put = t => { markPending = t; if (/cap|evap|fuel/i.test(t) || !movingNow()) focusEvap(); $("dlg").close(); toast("Marked: " + t); }, txt = el("input", { placeholder: "Your note", maxLength: 60, "aria-label": "Note" });
   showDlg("Mark this moment", el("p", { textContent: "This pins a note to the log with what the vehicle was doing." }), el("div", { class: "bar" }, ["Cap loose", "Cap tight", "Blower noise", "Blower speed changed", "Blower stopped", "Lights dimmed", "Shudder", "Slip feeling", "Rough running"].map(t => el("button", { textContent: t, onclick: () => put(t) }))), txt, el("div", { class: "bar" }, el("button", { class: "primary", textContent: "Save note", onclick: () => txt.value.trim() && put(txt.value.trim()) })));

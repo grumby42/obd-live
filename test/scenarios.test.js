@@ -3,7 +3,7 @@ const fs = require("fs"), assert = require("assert");
 const html = fs.readFileSync("index.html", "utf8");
 const src = html.split("/*PURE-START*/")[1].split("/*PURE-END*/")[0];
 new Function(html.split("<script>")[1].split("</script>")[0]); // whole page script must parse
-const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,shiftCatalog,transShopReport,tccApplySpeed,rpmEvents,eventWindows,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom,inferGears,toMessagesByEcu,hmm,learningState,markedShifts};")();
+const api = new Function(src + "; return {isAllowedCommand,parseDtc,parseMode06,parseMode06Full,parseSupport,parseMonitor,decodeMetric,plausible,METRICS,isNoData,simulatorReply,csvCell,rate,compact,flow,overlap,median,analyzeDrive,matchVehicle,reportMarkdown,shiftCatalog,transShopReport,tccApplySpeed,rpmEvents,eventWindows,repairSplit,repairCompare,watchList,REPAIR_TAGS,coldStartWindow,valvetrainTrend,caseFile,annotate,validateSignals,healthSteps,healthCoverage,GLOSSARY,voltageEvents,analyzeLoadSteps,stepStats,crankResult,crossChecks,conditionStats,markSnapshots,histogram,ecusFrom,inferGears,toMessagesByEcu,hmm,learningState,markedShifts,shiftQuality,usualBands,baselineSet,compareBands,driveBandValues,bandText};")();
 const m = id => api.METRICS.find(x => x.id === id);
 
 // ---- Safety allowlist
@@ -304,4 +304,18 @@ assert(!/1GTV2MEC/.test(html), "Real VIN must not ship in the public file");
 // Driver marks are matched to the shifts just before them; slipping and hard-locked upshifts are counted.
 { const sh = [{ t: 10000, from: 3, to: 4, kind: "up", feel: "slipping (slip 200 rpm)", mph: 30, jump: -200, slipPeak: 200, tps: 35 }, { t: 30000, from: 5, to: 4, kind: "coast-down", feel: "cushioned, converter released", mph: 29, jump: 120 }];
   const ms = api.markedShifts(sh, [{ t: 13000, mph: 31 }, { t: 60000, mph: 20 }]); assert.strictEqual(ms[0].prime.from, 3); assert.strictEqual(ms[1].prime, null); }
+// Usual bands: 10th–90th percentile per measure across 5+ drives of 5+ minutes; a logged repair freezes the band at the drives before it; a later drive outside the band is flagged, beyond anything logged is "new".
+{ const drive = (i, ect, rough) => ({ id: "d" + i, start: 1000 * i, summary: { rpm: { n: 400 }, ect: { min: 100, max: ect, avg: 180, n: 400 }, oilp: { min: 0, max: 0, avg: 0, n: 400 } }, review: { stats: { upRough: rough, misTotal: 2 } } });
+  const hist = [1,2,3,4,5,6,7,8,9,10].map(i => drive(i, 200 + i, 30 + i));
+  const ub = api.usualBands(hist); assert.strictEqual(ub.drives, 10); assert(ub.bands["ect.max"] && ub.bands["upRough"], "bands built"); assert(!ub.bands["oilp.avg"], "dead oil-pressure drives are not a band");
+  assert(ub.bands["ect.max"].lo > 200 && ub.bands["ect.max"].hi < 210);
+  const short = api.usualBands([drive(1, 205, 30), drive(2, 205, 30), drive(3, 205, 30), drive(4, 205, 30)]); assert.strictEqual(Object.keys(short.bands).length, 0, "needs 5 drives");
+  const rolling = api.baselineSet(hist, []); assert.strictEqual(rolling.frozen, false); assert(/rolling/.test(rolling.label));
+  const frozen = api.baselineSet(hist.concat([drive(11, 260, 70)]), [{ t: 10500, note: "trans", tags: ["trans"] }]); assert.strictEqual(frozen.frozen, true); assert.strictEqual(frozen.drives, 10, "post-repair drive does not feed the band");
+  const cmp = api.compareBands(frozen.bands, api.driveBandValues(drive(11, 260, 70))); const by = Object.fromEntries(cmp.map(r => [r.key, r.state]));
+  assert.strictEqual(by["ect.max"], "new high"); assert.strictEqual(by["upRough"], "new high"); assert.strictEqual(by["misTotal"], "in");
+  const mid = api.compareBands(frozen.bands, { "ect.max": 209.5, upRough: 35 }); assert.strictEqual(mid.find(r => r.key === "ect.max").state, "above"); assert.strictEqual(mid.find(r => r.key === "upRough").state, "in");
+  assert(/Coolant peak 260 °F \(usual 20\d–20\d, 10 drives\)/.test(api.bandText(cmp.find(r => r.key === "ect.max"))), api.bandText(cmp[0]));
+  const q = api.shiftQuality([{ kind: "up", feel: "slipping (slip 200 rpm)", tps: 20, jump: -100 }, { kind: "up", feel: "locked", tps: 40, jump: -400 }, { kind: "up", feel: "locked", tps: 10, jump: -400 }, { kind: "up", feel: "released", jump: -300 }, { kind: "up", feel: "flare", jump: -600 }, { kind: "coast-down", feel: "firm, converter locked through", jump: 300 }]);
+  assert.strictEqual(q.upN, 5); assert.strictEqual(q.upRough, 60); assert.strictEqual(q.cdFirm, null, "fewer than 5 coast-downs is no rate"); }
 console.log("all tests passed");
