@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="build-id" content="TICK-20261113-1415Z">
-<meta name="build-utc" content="2026-11-13T14:15:12Z">
+<meta name="build-id" content="TICK-20261113-1545Z">
+<meta name="build-utc" content="2026-11-13T15:45:39Z">
 <title>Tick Finder — HVAC noise locator</title>
 <style>
 :root{--bg:#0d1117;--panel:#161b22;--line:#2a313c;--ink:#e6edf3;--mute:#8b949e;--acc:#ff9f43;--live:#39c5cf;--good:#3fb950;--bad:#f85149;--warn:#d29922}
@@ -50,7 +50,7 @@ details summary{cursor:pointer;color:var(--mute)}
 <body>
 <header>
   <h1>Tick Finder <span class="note">· HVAC noise locator</span></h1>
-  <div class="stamp">Build TICK-20261113-1415Z · shipped 2026-11-13T14:15:12Z</div>
+  <div class="stamp">Build TICK-20261113-1545Z · shipped 2026-11-13T15:45:39Z</div>
 </header>
 <main>
 
@@ -61,6 +61,7 @@ details summary{cursor:pointer;color:var(--mute)}
     <button id="btnStop" disabled>Stop</button>
     <span id="status" class="note">Mic off. Engine running, doors closed, radio off.</span>
   </div>
+  <div id="diag" class="hint" style="display:none"></div>
   <p class="note">Phone voice processing (echo cancel, noise suppression, auto-gain) is requested OFF so readings are comparable. Levels are relative dBFS, not calibrated SPL. Keep the phone's mic (usually the bottom edge) pointed the same way at every spot.</p>
 </section>
 
@@ -146,7 +147,7 @@ details summary{cursor:pointer;color:var(--mute)}
 </main>
 <script>
 "use strict";
-const BUILD_ID="TICK-20261113-1415Z", BUILD_UTC="2026-11-13T14:15:12Z";
+const BUILD_ID="TICK-20261113-1545Z", BUILD_UTC="2026-11-13T15:45:39Z";
 const BANDS=[["250",250],["500",500],["1k",1000],["2k",2000],["4k",4000],["8k",8000],["custom",3000]];
 const SPOTS=["Passenger footwell","Behind glovebox","Center stack","Driver footwell","Driver vent","Passenger vent","Center vents","Defrost slots","Under cowl (outside)","Fan 1","Fan 2","Fan 3","Fan 4","Fan max"];
 const $=id=>document.getElementById(id);
@@ -171,9 +172,16 @@ function fmtF(f){return f>=1000?(f/1000).toFixed(f>=10000?0:1)+"k":Math.round(f)
 
 /* ---------- start / stop ---------- */
 async function start(){
+  $("diag").style.display="none";
+  if(!window.isSecureContext||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){await micDiag(null);return;}
   try{
     stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:1}});
-  }catch(e){$("status").textContent="Mic blocked: "+e.message+". If opened from a file on Android, try hosting it on https (e.g. GitHub Pages).";return;}
+  }catch(e){
+    // Retry with a plain request for errors that a constraint or a busy device can cause; never for a permission refusal
+    if(e.name!=="NotAllowedError"&&e.name!=="SecurityError"){
+      try{stream=await navigator.mediaDevices.getUserMedia({audio:true});}catch(e2){await micDiag(e2);return;}
+    }else{await micDiag(e);return;}
+  }
   ac=new (window.AudioContext||window.webkitAudioContext)();await ac.resume();
   FMAX=Math.min(20000,ac.sampleRate/2*0.95);
   const src=ac.createMediaStreamSource(stream);
@@ -195,6 +203,41 @@ async function start(){
   $("status").textContent=`Listening · ${ac.sampleRate} Hz · AGC ${st.autoGainControl?"ON (readings less reliable)":"off"} · NS ${st.noiseSuppression?"ON":"off"}`;
   statTimer=setInterval(tickStats,200);
   drawOverlay();loop();
+}
+/* ---------- microphone diagnostics ---------- */
+async function micDiag(err){
+  const L=[],F=[];
+  const secure=!!window.isSecureContext,hasMD=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia);
+  let perm="unknown";try{if(navigator.permissions)perm=(await navigator.permissions.query({name:"microphone"})).state;}catch(e){perm="not reported";}
+  let policy="unknown";try{const pp=document.permissionsPolicy||document.featurePolicy;if(pp&&pp.allowsFeature)policy=pp.allowsFeature("microphone")?"allowed":"blocked";}catch(e){}
+  let inputs="unknown";try{if(navigator.mediaDevices&&navigator.mediaDevices.enumerateDevices){const d=await navigator.mediaDevices.enumerateDevices();inputs=String(d.filter(x=>x.kind==="audioinput").length);}}catch(e){}
+  const framed=window.self!==window.top;
+  const name=err?err.name:"(no request made)",msg=err?err.message:"";
+  L.push(["Error",name+(msg?" · "+msg:"")],["Page",location.protocol+"//"+location.host],["Secure context",secure?"yes":"NO"],
+    ["Mic permission (Chrome)",perm],["Page policy",policy],["Inside a frame",framed?"yes":"no"],["Audio inputs seen",inputs],["Browser",navigator.userAgent.replace(/^Mozilla\/5\.0 /,"")]);
+  if(!secure||!hasMD){
+    F.push(`This page isn't a secure page (it was opened as <b>${esc(location.protocol)}</b>), so Chrome hides the microphone entirely. Open <b>https://</b>${esc(location.host+location.pathname)} instead. Typing the address without https:// may land on the http version.`);
+  }else if(policy==="blocked"||framed){
+    F.push("The page is being shown inside another page or app that doesn't pass the microphone through. Open it directly in Chrome's own address bar, not from a preview or an in-app browser.");
+  }else if(name==="NotAllowedError"&&perm==="denied"){
+    F.push("Chrome is refusing the microphone for this site before it asks you. Check these in order and reload after each:");
+    F.push("1. <b>Chrome's master switch:</b> Chrome ⋮ → Settings → Site settings → <b>Microphone</b>. Turn the top switch <b>on</b>. If grumby42.github.io is under <b>Blocked</b>, tap it and choose Allow. (\"Sound\" is speaker playback, which is a different setting.)");
+    F.push("2. <b>Android's privacy switch:</b> swipe down the quick panel and look for <b>Mic access</b>. It must be on. Also check Settings → Security and privacy → Privacy → Microphone access.");
+    F.push("3. <b>Android app permission:</b> Settings → Apps → Chrome → Permissions → Microphone → Allow only while using the app (already set, per your screenshot).");
+  }else if(name==="NotAllowedError"){
+    F.push("The request was refused, but Chrome didn't say why. Chrome's permission state for the site is <b>"+esc(perm)+"</b>. If no prompt appeared, check Chrome ⋮ → Settings → Site settings → Microphone (top switch on) and Android's quick-panel <b>Mic access</b> switch, then reload.");
+  }else if(name==="NotReadableError"||name==="AbortError"){
+    F.push("Permission is fine, but the microphone is busy or failed to start. Close apps that may be using it (a call, voice recorder, Google Assistant, a dash-cam or screen-recorder app, Android Auto), then tap Start again.");
+  }else if(name==="NotFoundError"||inputs==="0"){
+    F.push("No microphone input was found. A Bluetooth headset or car audio connection can take over the input. Disconnect it and try again.");
+  }else{
+    F.push("Unexpected error. Screenshot this box and send it over.");
+  }
+  $("status").textContent="Mic not available. See the check below.";
+  const box=$("diag");box.style.display="block";
+  box.innerHTML="<b>Microphone check</b><br>"+F.map(f=>`<div style="margin-top:6px">${f}</div>`).join("")+
+    `<table style="margin-top:8px;font-size:12px">${L.map(([k,v])=>`<tr><td class="note">${k}</td><td>${esc(v)}</td></tr>`).join("")}</table>`+
+    `<div class="note" style="margin-top:6px">Build ${BUILD_ID}</div>`;
 }
 function stop(){
   running=false;clearInterval(statTimer);cancelAnimationFrame(raf);
