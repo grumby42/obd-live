@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261113-0239Z">
-<meta name="build-timestamp-utc" content="2026-11-13T02:39:53Z">
+<meta name="build-id" content="OBD-20261113-1051Z">
+<meta name="build-timestamp-utc" content="2026-11-13T10:51:04Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -115,6 +115,7 @@ body.fit .w.ckw{padding:4px 8px}
 @keyframes casflash{50%{background:#5a1a1a;color:#ffb3ad}}
 .ck.declutter .ck-row:not(.keep),.ck.declutter .ck-top:not(.keep){opacity:.35}
 .ck-foot{flex:none;font-size:clamp(.62rem,1.6vh,.8rem);color:var(--muted);padding-top:3px;border-top:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ck-foot.dev{color:#e0a100}
+.vsum{font-size:.82rem}.vsum .mrow{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);cursor:pointer}.vsum .mrow canvas{grid-column:1/-1;width:100%;height:64px;display:block}.vsum .mrow b{font-size:.86rem}.vsum .mrow .r{text-align:right;color:var(--muted);font-size:.76rem}.vsum .tot{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px;margin:6px 0 10px}.vsum .tot div{background:var(--raised);border-radius:8px;padding:6px 8px}.vsum .tot b{display:block;font-size:1.1rem}.vsum .leg{color:var(--muted);font-size:.76rem;margin:4px 0 8px}
 .bandlist{font-size:.82rem;line-height:1.35;white-space:normal}.bandlist div{padding:2px 0;border-top:1px solid var(--line)}.bandlist .k{color:#e0a100}.bandlist .nk{color:#ff8a80}
 #ctlBtn{display:none}body.fit.live #ctlBtn{display:block;margin-left:auto;position:sticky;right:0;background:var(--raised);color:var(--text)}
 .evhead{grid-column:1/-1;margin:10px 0 0;font-size:.95rem}.evhint{grid-column:1/-1;font-size:.82rem;color:var(--muted);margin:0}
@@ -153,7 +154,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261113-0239Z", BUILD_UTC = "2026-11-13T02:39:53Z";
+const BUILD_ID = "OBD-20261113-1051Z", BUILD_UTC = "2026-11-13T10:51:04Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -2278,6 +2279,40 @@ R.cockpit = (w, box) => {
     box.className = "w ckw" + (cmp && cmp.out.length ? " watch" : "") + (tbad || red ? " bad" : "");
   };
 };
+/* ---------- Vehicle summary: every saved drive of the selected vehicle, every band, drawn so the normal pattern and the thresholds are visible at once ---------- */
+function openVehicleSummary() {
+  const veh = vehicles[vid] || {}, bs = baseline || baselineSet(drives, veh.repairs), all = drives.slice(), use = all.filter(d => d.summary && d.summary.rpm && d.summary.rpm.n >= 300);
+  const mi = all.reduce((a, d) => a + ((d.summary && d.summary.tripmi && d.summary.tripmi.max) || 0), 0), hrs = all.reduce((a, d) => a + Math.max(0, ((d.end || d.start) - d.start)) / 3600000, 0);
+  const codesSeen = new Set(); all.forEach(d => { if (d.codes) [...(d.codes.stored || []), ...(d.codes.pending || [])].forEach(c => codesSeen.add(c)); });
+  const first = all.length ? new Date(all[0].start).toLocaleDateString() : "—", last = all.length ? new Date(all[all.length - 1].start).toLocaleDateString() : "—";
+  const tot = el("div", { class: "tot" },
+    el("div", {}, el("b", { textContent: String(all.length) }), "drives (" + use.length + " of 5+ min)"), el("div", {}, el("b", { textContent: mi.toFixed(0) }), "miles logged"), el("div", {}, el("b", { textContent: hrs.toFixed(1) }), "hours"),
+    el("div", {}, el("b", { textContent: first + " – " + last }), "first to last drive"), el("div", {}, el("b", { textContent: codesSeen.size ? [...codesSeen].join(" ") : "none" }), "codes seen"),
+    el("div", {}, el("b", { textContent: (veh.repairs || []).length ? (veh.repairs || []).map(r => new Date(r.t).toLocaleDateString() + " " + (r.note || "")).join("; ") : "none logged" }), "repairs"));
+  const body = el("div", { class: "vsum" }, tot,
+    el("p", { textContent: "Band = 10th–90th percentile of the per-drive value across " + bs.label + (bs.frozen ? " (frozen at that repair; later drives are judged against it)." : ". Log a repair in Vehicle settings to freeze it.") }),
+    el("div", { class: "leg", textContent: "Chart: one dot per drive in date order (brighter = after the repair), shaded band = usual, white line = median, red dashes = the limit from the reading's rule where one exists." }));
+  const charts = [];
+  BAND_DEFS.forEach(def => { const [key, label, unit, digits, kind, id] = def, b = bs.bands[key]; if (!b) return;
+    const vals = use.map(d => ({ t: d.start, v: bandValueOf(d, def), post: !!(bs.repair && d.start > bs.repair.t) })).filter(x => x.v !== null); if (!vals.length) return;
+    const rule = kind === "sum" && byId[id] ? ruleOf(byId[id]) : null, f = x => x.toFixed(digits);
+    const c = el("canvas"), row = el("div", { class: "mrow", onclick: () => { if (kind === "sum" && byId[id] && !movingNow()) openDrill(id); } },
+      el("b", { textContent: label + (unit && unit !== "count" ? " (" + unit + ")" : "") }), el("div", { class: "r", textContent: "median " + f(b.med) + " · usual " + f(b.lo) + "–" + f(b.hi) }),
+      el("div", { class: "r", style: "text-align:left", textContent: "all-time " + f(b.min) + "–" + f(b.max) + " · " + b.n + " drives" }), el("div", { class: "r", textContent: rule ? "limit " + (rule.lo != null ? "low " + rule.lo + " " : "") + (rule.hi != null ? "high " + rule.hi : "") : "no fixed limit" }), c);
+    body.append(row); charts.push({ c, vals, b, rule, digits });
+  });
+  if (!charts.length) body.append(el("p", { textContent: "No bands yet: they need 5 saved drives of 5+ minutes." }));
+  showDlg(veh.name + " · all recorded drives", body);
+  requestAnimationFrame(() => charts.forEach(({ c, vals, b, rule }) => {
+    const { g, W, H } = canvasCtx(c), ys = vals.map(x => x.v).concat([b.lo, b.hi], rule ? [rule.lo, rule.hi].filter(x => x != null) : []), lo = Math.min(...ys), hi = Math.max(...ys), span = (hi - lo) || 1, pad = 6;
+    const Y = v => H - pad - (v - lo) / span * (H - 2 * pad), X = i => 10 + i / Math.max(1, vals.length - 1) * (W - 20);
+    g.fillStyle = "rgba(57,135,229,.22)"; g.fillRect(0, Y(b.hi), W, Y(b.lo) - Y(b.hi));
+    g.strokeStyle = "#c3c2b7"; g.lineWidth = 1; g.beginPath(); g.moveTo(0, Y(b.med)); g.lineTo(W, Y(b.med)); g.stroke();
+    if (rule) { g.strokeStyle = "#ff8a80"; g.setLineDash([4, 3]); [rule.lo, rule.hi].forEach(v => { if (v == null) return; g.beginPath(); g.moveTo(0, Y(v)); g.lineTo(W, Y(v)); g.stroke(); }); g.setLineDash([]); }
+    g.strokeStyle = "#5a5953"; g.beginPath(); vals.forEach((x, i) => i ? g.lineTo(X(i), Y(x.v)) : g.moveTo(X(i), Y(x.v))); g.stroke();
+    vals.forEach((x, i) => { const out = x.v > b.hi || x.v < b.lo; g.fillStyle = x.post ? (out ? "#ffb347" : "#9ad0ff") : (out ? "#e0a100" : "#3987e5"); g.beginPath(); g.arc(X(i), Y(x.v), x.post ? 4 : 3, 0, Math.PI * 2); g.fill(); });
+  }));
+}
 /* ---------- Annunciators: which conditions are up right now, with a chime and (optionally) a spoken line when one appears ---------- */
 const CAS_ICON = {
   temp: "<svg viewBox='0 0 24 24'><path d='M10 4a2 2 0 0 1 4 0v9.3a4 4 0 1 1-4 0z'/><path d='M12 9v6'/></svg>",
@@ -2660,7 +2695,7 @@ function openMore() {
   const xl = el("div", { class: "scroll", style: "max-height:240px;font:11px ui-monospace,monospace;white-space:pre-wrap" }); const renderXlog = () => { const L = lastXlog || []; xl.textContent = L.length ? L.map(x => new Date(x.t).toISOString().slice(11, 19) + " " + String(x.ms).padStart(5) + "ms  " + x.cmd + "  →  " + (x.r || "(empty)")).join("\n") : "No adapter traffic yet."; }; renderXlog();
   const xlBtn = el("button", { textContent: "Copy connection log", onclick: async () => { try { await navigator.clipboard.writeText(xl.textContent); toast("Copied " + (lastXlog || []).length + " exchanges."); } catch (e) { toast("Select and copy the text instead."); } } });
   showDlg("Data and sources",
-    el("div", { class: "bar" }, el("button", { textContent: "Export session CSV", onclick: exportCsv }), el("button", { textContent: "Export history", onclick: exportHistory }), el("button", { textContent: "Import history", onclick: importHistory })),
+    el("div", { class: "bar" }, el("button", { textContent: "Export session CSV", onclick: exportCsv }), el("button", { textContent: "Export history", onclick: exportHistory }), el("button", { textContent: "Import history", onclick: importHistory }), el("button", { textContent: "Vehicle summary", onclick: openVehicleSummary })),
     el("h3", { textContent: "Connection log (last 300 adapter exchanges, this session or the one that just ended)" }), xlBtn, xl,
     el("h3", { textContent: "This session (table view of all readings)" }), stat,
     el("h3", { textContent: "What the green and red colors mean" }),
