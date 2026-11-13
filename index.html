@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261112-2127Z">
-<meta name="build-timestamp-utc" content="2026-11-12T21:27:39Z">
+<meta name="build-id" content="OBD-20261113-0230Z">
+<meta name="build-timestamp-utc" content="2026-11-13T02:30:57Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -65,6 +65,8 @@ dialog.wide{width:min(960px,calc(100vw - 16px))}
 .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;margin:8px 0}.stats div{background:var(--raised);border-radius:8px;padding:7px 9px;font-size:.72rem;color:var(--muted)}.stats b{display:block;font-size:1.05rem;color:var(--text);font-variant-numeric:tabular-nums}
 details.f{border:1px solid var(--line);border-radius:8px;margin:5px 0;padding:8px 10px;background:var(--surface)}details.f summary{cursor:pointer;font-size:.88rem;font-weight:600}details.f p{margin:6px 0 0}details.f small{color:var(--faint);display:block;margin-top:6px}.lv{font-weight:700;margin-right:6px}.lv.attention{color:#ff8a80}.lv.watch{color:#fab219}.lv.good{color:#4cc94c}.lv.info{color:var(--muted)}
 dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog .dhead{position:sticky;top:-14px;z-index:3;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin:-14px -14px 8px;padding:12px 10px 8px 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+dialog .dhead h2{margin:0;flex:1 1 auto}dialog .xclose{flex:none;width:44px;height:44px;border-radius:10px;font-size:1.3rem;line-height:1;padding:0;background:var(--raised);color:var(--text);border:1px solid var(--axis)}
 dialog h2{font-size:1rem;margin:0 0 8px}dialog h3{font-size:.86rem;margin:14px 0 4px;color:var(--muted)}
 dialog p{margin:0 0 8px;font-size:.86rem}dialog a{color:#7fb5f2}
 label{display:block;font-size:.8rem;color:var(--muted);margin:8px 0 2px}
@@ -96,7 +98,7 @@ body.fit.live main{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 .ck-top{position:relative;flex:3.6 1 0;min-height:0}.ck-top canvas{width:100%;height:100%;display:block}
 .ck-ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
 .ck-spd{font-size:clamp(2.6rem,min(15vh,24cqw),8rem);font-weight:900;line-height:.95}
-.ck-spdw{text-align:center}.ck-gear{text-align:center;pointer-events:none;margin-top:1.2vh}.ck-gear b{display:block;font-size:clamp(1.3rem,min(4.8vh,8cqw),2.6rem);font-weight:900;line-height:1}
+.ck-spdw{text-align:center}.ck-gear{text-align:center;pointer-events:none;margin-top:.8vh;padding-bottom:4px}.ck-gear b{display:block;font-size:clamp(1.3rem,min(4.8vh,8cqw),2.6rem);font-weight:900;line-height:1}
 .ck-row{flex:1 1 0;display:flex;align-items:center;justify-content:space-evenly;border-top:1px solid var(--line);min-height:0;gap:4px;padding:2px 0}.ck-row.r4>div{flex:1 1 0}.ck-row.r4 .ckn{font-size:clamp(1.15rem,4vh,2.3rem)}.ck-row.r4 small{letter-spacing:.03em}
 .ck-row>div{min-width:0}
 .ck-cyl{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;flex:0 0 52%}
@@ -151,7 +153,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261112-2127Z", BUILD_UTC = "2026-11-12T21:27:39Z";
+const BUILD_ID = "OBD-20261113-0230Z", BUILD_UTC = "2026-11-13T02:30:57Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1816,7 +1818,7 @@ function visibleIds() {
   (dash[tab] || []).forEach(w => { (w.metrics || []).forEach(i => ids.add(i));
     if (w.type === "gearbox") ["gear","slip","gratio"].forEach(i => ids.add(i));
     if (w.type === "tires") ["tpfl","tpfr","tprr","tprl"].forEach(i => ids.add(i));
-    if (w.type === "cockpit") { ["gear","slip","gratio","trans","oilt","oilp","afm","fuel","evapp","tpfl","tpfr","tprr","tprl"].forEach(i => ids.add(i)); for (let c = 1; c <= 8; c++) ids.add("mis" + c); }
+    if (w.type === "cockpit") { ["gear","slip","gratio","trans","oilt","oilp","afm","fuel","volt","tpfl","tpfr","tprr","tprl"].forEach(i => ids.add(i)); for (let c = 1; c <= 8; c++) ids.add("mis" + c); }
     if (w.type === "bands") ["slip","trans","oilt","oilp","volt","ltft1","ltft2","stft1","stft2","timing"].forEach(i => ids.add(i));
     if (w.type === "misfire") for (let c = 1; c <= 8; c++) ids.add("mis" + c);
     if (w.type === "status" || w.type === "readiness") ids.add("mon");
@@ -2215,7 +2217,7 @@ R.cockpit = (w, box) => {
   const veh = vehicles[vid] || {}, c = el("canvas"), spd = el("div", { class: "ck-spd" }), gearB = el("b");
   c.setAttribute("role", "img");
   const num = label => { const n = el("div", { class: "ckn" }); return { n, d: el("div", {}, n, el("small", { textContent: label })) }; };
-  const ect = num("coolant"), trans = num("trans fluid"), oilt = num("oil °F"), oilp = num("oil psi"), fuel = num("fuel rem"), evap = num("evap vapor Pa");
+  const ect = num("coolant"), trans = num("trans fluid"), oilt = num("oil °F"), oilp = num("oil psi"), fuel = num("fuel rem"), volt = num("volts");
   const afm = el("div", { class: "ckn", style: "flex:0 0 28%" }), cyl = el("div", { class: "ck-cyl" }), cells = {};
   [1,3,5,7,2,4,6,8].forEach(n => { const v = el("span"); cells[n] = { d: el("div", {}, el("span", { textContent: String(n) }), el("br"), v), v }; cyl.append(cells[n].d); });
   const tires = el("div", { class: "ck-tires" }), tc = {}; [["tpfl","DF"],["tprl","DR"],["tpfr","PF"],["tprr","PR"]].forEach(([id, l]) => { const d = el("div", { class: "tv", textContent: "--" }); tc[id] = d; tires.append(el("div", {}, d, el("small", { textContent: l }))); });
@@ -2223,14 +2225,13 @@ R.cockpit = (w, box) => {
   cas.onclick = () => { casAck(); };
   box.classList.add("ckw");
   const rowTop = el("div", { class: "ck-top" }, c, el("div", { class: "ck-ov" }, el("div", { class: "ck-spdw" }, spd, el("small", { textContent: "speed" })), el("div", { class: "ck-gear" }, gearB, el("small", { textContent: "gear" }))));
-  const rowTemp = el("div", { class: "ck-row r4" }, ect.d, trans.d, oilt.d, oilp.d), rowCyl = el("div", { class: "ck-row" }, afm, cyl), rowFuel = el("div", { class: "ck-row" }, fuel.d, evap.d), rowTire = el("div", { class: "ck-row" }, tires);
-  const rowFor = { ect: rowTemp, trans: rowTemp, oilp: rowTemp, oilt: rowTemp, volt: rowTop, link: rowTop, slip: rowTop, mil: rowCyl, mis: rowCyl, fuel: rowFuel, evapp: rowFuel, tire: rowTire };
+  const rowTemp = el("div", { class: "ck-row r4" }, ect.d, trans.d, oilt.d, oilp.d), rowCyl = el("div", { class: "ck-row" }, afm, cyl), rowFuel = el("div", { class: "ck-row" }, fuel.d, volt.d), rowTire = el("div", { class: "ck-row" }, tires);
+  const rowFor = { ect: rowTemp, trans: rowTemp, oilp: rowTemp, oilt: rowTemp, volt: rowFuel, link: rowTop, slip: rowTop, mil: rowCyl, mis: rowCyl, fuel: rowFuel, evapp: rowFuel, tire: rowTire };
   const ov = rowTop.querySelector(".ck-ov");
   ck.append(cas, rowTop, rowTemp, rowCyl, rowFuel, rowTire); box.append(ck);
   const ZONES = [[0, 4000, "#0ca30c"], [4000, 5500, "#e0a100"], [5500, 6500, "#d03b3b"]]; // visual zones for the dial only; no published limit is implied
-  return () => {
-    const rpm = latest.rpm ?? null, mph = latest.mph ?? null, gv = latest.gear ?? null, sl = latest.slip ?? null, cmp = liveBandCompare(), outKeys = new Set(cmp ? cmp.out.map(r => r.key.split(".")[0]) : []);
-    // Dial
+  // The pointer eases toward each new sample over a few frames instead of jumping once a second.
+  let shown = null, lastDrawn = null, dialH = 0, dialRad = 0, dialCy = 0; const drawDial = (rpm) => {
     const { g, W, H } = canvasCtx(c), a0 = Math.PI * .8, a1 = Math.PI * 2.2, cx = W / 2, fitR = Math.min(W / 2, H * .62), pad = Math.max(8, fitR * .06), rad = Math.max(10, fitR - pad), cy = Math.min(H - 6, rad + pad), MAX = 6500;
     const ang = x => a0 + Math.min(MAX, Math.max(0, x)) / MAX * (a1 - a0);
     const bw = Math.max(5, rad * .07); g.lineWidth = bw; ZONES.forEach(([x0, x1, col]) => { g.strokeStyle = col; g.beginPath(); g.arc(cx, cy, rad, ang(x0) + .01, ang(x1) - .01); g.stroke(); });
@@ -2239,9 +2240,17 @@ R.cockpit = (w, box) => {
     // Scale numbers sit inside the band, just past the major ticks, so the speed digits get the rest of the dial.
     g.fillStyle = "#c3c2b7"; g.font = "700 " + Math.max(9, rad * .085) + "px system-ui"; g.textAlign = "center"; g.textBaseline = "middle";
     for (let k = 1; k <= 6; k++) { const t = ang(k * 1000), r2 = rad - bw / 2 - Math.max(7, rad * .11) - Math.max(7, rad * .075); g.fillText(String(k), cx + Math.cos(t) * r2, cy + Math.sin(t) * r2); }
+    dialH = H; dialRad = rad; dialCy = cy;
     // Pointer: a triangle inside the band, tip on the band's inner edge.
     if (rpm !== null) { const t = ang(rpm), tip = rad - bw / 2 - 1, base = tip - Math.max(10, rad * .12), hw = Math.max(5, rad * .06), px = Math.cos(t), py = Math.sin(t); g.fillStyle = "#f0efec"; g.beginPath(); g.moveTo(cx + px * tip, cy + py * tip); g.lineTo(cx + px * base - py * hw, cy + py * base + px * hw); g.lineTo(cx + px * base + py * hw, cy + py * base - px * hw); g.closePath(); g.fill(); }
-    spd.textContent = mph === null ? "--" : mph.toFixed(0); ov.style.paddingTop = Math.max(0, 2 * (cy + rad * .18 - H / 2)) + "px";
+    lastDrawn = rpm;
+  };
+  const tween = () => { if (!c.isConnected) return; const target = latest.rpm ?? null; if (target === null) { if (shown !== null) { shown = null; drawDial(null); } } else { if (shown === null) shown = target; else shown += (target - shown) * .22; if (lastDrawn === null || Math.abs(shown - lastDrawn) >= 2) drawDial(shown); } requestAnimationFrame(tween); };
+  requestAnimationFrame(tween);
+  return () => {
+    const rpm = latest.rpm ?? null, mph = latest.mph ?? null, gv = latest.gear ?? null, sl = latest.slip ?? null, cmp = liveBandCompare(), outKeys = new Set(cmp ? cmp.out.map(r => r.key.split(".")[0]) : []);
+    if (lastDrawn === null && rpm === null) drawDial(null); const { H, rad, cy } = { H: dialH, rad: dialRad, cy: dialCy };
+    spd.textContent = mph === null ? "--" : mph.toFixed(0); if (H) ov.style.paddingTop = Math.max(0, 2 * (cy + rad * .08 - H / 2)) + "px";
     const sr = ratingOf(byId.slip, sl); gearB.textContent = gv !== null ? gv.toFixed(0) : (latest.gratio ?? null) !== null ? latest.gratio.toFixed(1) : "--"; gearB.style.color = sr.state === "bad" ? "#ff8a80" : "";
     c.setAttribute("aria-label", "Speed " + spd.textContent + " mph, " + (rpm === null ? "no rpm" : rpm.toFixed(0) + " rpm") + ", gear " + gearB.textContent);
     // Numbers: red when a rule is broken, amber when outside this vehicle's usual band, grey when the vehicle isn't answering.
@@ -2254,7 +2263,7 @@ R.cockpit = (w, box) => {
     put(oilt, "oilt", (latest.oilt ?? null) === null ? "--" : latest.oilt.toFixed(0));
     put(oilp, "oilp", (latest.oilp ?? null) === null ? "--" : latest.oilp.toFixed(0));
     put(fuel, "fuel", (latest.fuel ?? null) === null ? "--" : latest.fuel.toFixed(0) + "%"); if ((latest.fuel ?? null) !== null) fuel.n.className = "ckn " + (latest.fuel <= 15 ? "bad" : latest.fuel <= 30 ? "warn" : "");
-    put(evap, "evapp", (latest.evapp ?? null) === null ? "--" : latest.evapp.toFixed(0));
+    put(volt, "volt", (latest.volt ?? null) === null ? "--" : latest.volt.toFixed(1));
     const mode = latest.afm ?? null, v4 = mode === "V4"; afm.textContent = mode === null ? "V?" : /V4/.test(mode) ? "V4" : "V8"; afm.className = "ckn" + (mode === null ? " off" : ""); afm.title = mode === null ? "Cylinder mode needs the injector pulse-width requests; this vehicle hasn't answered them" : mode;
     let misAny = false; for (let n = 1; n <= 8; n++) { const mv = latest["mis" + n]; const known = typeof mv === "number"; if (known) misAny = true; cells[n].v.textContent = known ? String(mv) : "–"; cells[n].d.className = (known ? (mv > 0 ? "mis" : "") : "unk") + (v4 && (veh.afmCyls || []).includes(n) ? " offc" : ""); }
     cyl.title = misAny ? "Misfire counter per cylinder (current or last drive cycle). Dimmed cylinders are deactivated in V4." : "Misfire counters not read yet";
@@ -2313,7 +2322,8 @@ function casMessages() {
   const cmp = running ? liveBandCompare() : null; if (cmp && cmp.out.some(r => /new/.test(r.state))) { const r = cmp.out.find(x => /new/.test(x.state)); out.push({ key: "band", level: "warn", icon: "band", text: r.label.replace(/,.*$/, "") + " " + r.state, say: r.label.replace(/,.*$/, "") + " beyond anything logged", row: "band" }); }
   // First appearance (or a return after 60 s clear) chimes and speaks; red ones flash until acknowledged.
   out.forEach(m => { const seen = casSeen[m.key]; if (!seen || now - seen.last > 60000) { chime(m.level); if (phonePrefs.speak) speak(m.say); casSeen[m.key] = { first: now, last: now }; } else seen.last = now; m.flash = m.level === "alert" && casSeen[m.key].first > casAckAt; });
-  return out;
+  // Amber chips retire from the strip after 15 s (the condition is still rated on its own tile and in the review); red ones stay as long as the condition does.
+  return out.filter(m => m.level === "alert" || now - casSeen[m.key].first < 15000);
 }
 function renderCas(host, msgs) {
   const sig = msgs.map(m => m.key + m.text + m.flash).join("|"); if (host.dataset.sig === sig) return; host.dataset.sig = sig; host.textContent = "";
@@ -2568,7 +2578,7 @@ function setEdit(on) {
 }
 
 /* ---------- Dialogs ---------- */
-function showDlg(title, ...kids) { const d = $("dlg"); d.textContent = ""; d.append(el("h2", { textContent: title }), ...kids, el("div", { class: "bar" }, el("button", { textContent: "Close", onclick: () => d.close() }))); if (!d.open) d.showModal(); }
+function showDlg(title, ...kids) { const d = $("dlg"); d.textContent = ""; d.append(el("div", { class: "dhead" }, el("h2", { textContent: title }), el("button", { class: "xclose", "aria-label": "Close", textContent: "✕", onclick: () => d.close() })), ...kids, el("div", { class: "bar" }, el("button", { textContent: "Close", onclick: () => d.close() }))); if (!d.open) d.showModal(); }
 const NUMERIC = () => METRICS.filter(m => m.id !== "mon" && !m.rawHex);
 function metricOptions(sel) { const groups = {}; NUMERIC().forEach(m => (groups[m.group] = groups[m.group] || []).push(m)); return Object.entries(groups).map(([g, a]) => el("optgroup", { label: g }, a.map(m => el("option", { value: m.id, textContent: m.label + (m.basis === "community" ? " (unverified)" : m.basis === "derived" ? " (estimate)" : ""), selected: m.id === sel })))); }
 const TYPE_LABEL = { number: "Number with sparkline", needle: "Active needle", line: "Line graph", history: "Per-drive history" };
@@ -2783,7 +2793,7 @@ function aboutOf(m) { if (ABOUT[m.id]) return ABOUT[m.id]; if (m.basis === "phon
 function evWidgets() {
   const F = (type, about, extra = {}, big = true) => ({ w: { id: "ev" + type + (extra.share || (extra.metrics || []).join("")), type, metrics: [], ...extra }, about, big });
   const views = [
-    ["Vehicle status", [F("status", "Whether the check-engine light is on, and code counts."), F("cockpit", "Speed, rpm, gear, temperatures, oil, cylinder mode and misfires, fuel, EVAP, and tires on one screen. Amber numbers sit outside this vehicle's usual band."), F("bands", "Where this drive sits against the vehicle's own usual bands, frozen at the last logged repair."), F("gearbox", "Current gear and converter slip together."), F("learn", "Is the transmission still adapting? Inferred, with a confidence."), F("tires", "Four tire pressures from the body module (GM trucks)."), F("misfire", "Recent misfires per cylinder, which shows whether a problem is localized."), F("readiness", "Which emissions self-tests have finished."), F("codes", "Stored, pending, and permanent trouble codes, plus freeze frame."), F("mode06", "Computer self-test results against the vehicle's own limits."), F("truck", "VIN, software fingerprint, and which computers answer. It stays on this device."), F("crosscheck", "Whether related sensors move together."), F("sysmap", "A schematic of where each sensor sits in the air, fuel, exhaust, coolant, oil, and transmission paths, colored by its live value. Exact in order, approximate in position."), F("phone", "Opt-in GPS, motion, and microphone capture."), F("elab", "Parked tests for starting voltage and accessory load.")]],
+    ["Vehicle status", [F("status", "Whether the check-engine light is on, and code counts."), F("cockpit", "Speed, rpm, gear, temperatures, oil, cylinder mode and misfires, fuel, volts, and tires on one screen. Amber numbers sit outside this vehicle's usual band."), F("bands", "Where this drive sits against the vehicle's own usual bands, frozen at the last logged repair."), F("gearbox", "Current gear and converter slip together."), F("learn", "Is the transmission still adapting? Inferred, with a confidence."), F("tires", "Four tire pressures from the body module (GM trucks)."), F("misfire", "Recent misfires per cylinder, which shows whether a problem is localized."), F("readiness", "Which emissions self-tests have finished."), F("codes", "Stored, pending, and permanent trouble codes, plus freeze frame."), F("mode06", "Computer self-test results against the vehicle's own limits."), F("truck", "VIN, software fingerprint, and which computers answer. It stays on this device."), F("crosscheck", "Whether related sensors move together."), F("sysmap", "A schematic of where each sensor sits in the air, fuel, exhaust, coolant, oil, and transmission paths, colored by its live value. Exact in order, approximate in position."), F("phone", "Opt-in GPS, motion, and microphone capture."), F("elab", "Parked tests for starting voltage and accessory load.")]],
     ["Gauges", ["rpm","mph","trans","ect","volt","fuel"].map(i => F("needle", "Needle gauge. Colors show its limit, if one exists.", { metrics: [i] }, false))],
     ["Graphs and pies", [F("line", "Fuel corrections over time.", { metrics: ["stft1","ltft1","stft2","ltft2"], win: 5 }), F("line", "All major heat readings together.", { metrics: ["ect","oilt","trans"], win: 15 }), F("line", "Converter slip over time.", { metrics: ["slip"], win: 5 }), F("scatter", "Each point is engine speed against road speed. Each locked gear forms a straight ray.", { metrics: ["mph","rpm"] }), F("share", "Time in each gear.", { share: "gear", view: "bars" }), F("share", "Time in each transmission temperature band.", { share: "temp", view: "donut" }), F("share", "Time stopped, cruising, accelerating, and slowing.", { share: "drive", view: "donut" }), F("history", "Transmission temperature peak on each saved drive.", { metrics: ["trans"], stat: "max" }), F("history", "Estimated fuel economy on each saved drive.", { metrics: ["mpg"], stat: "avg" })]],
     ["Health", [F("healthcheck", "The guided steps that exercise more of the vehicle."), F("healthcard", "System-by-system status for this session.")]]
