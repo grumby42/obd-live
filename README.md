@@ -52,3 +52,12 @@ Readings tagged **Unverified** come from community reports for other GM vehicles
 - Requests can carry an alternate route: tire pressures fall back from the body module (241) to the older engine-module DIDs (248E–2491) when the first never answers.
 - Vehicles without a gear request get an inferred converter slip (engine rpm minus the speed-implied rpm for the inferred gear).
 - The raw-request scan covers more ranges (0000, 0100, 1600, 2300 added) for vehicles like the 2006 Lucerne whose transmission data lives at addresses the newer lists don't cover.
+
+## Tick Finder (`tick-finder.html`)
+A separate single-file tool for locating a ticking noise (built for an HVAC tick that starts and stops with the blower) using the phone's microphone. It runs fully offline with no network requests. Nothing is stored or uploaded, apart from a CSV you export yourself.
+
+- Live spectrogram, frequency graph and a 60-second level/tick-score line graph.
+- Capture fan OFF and fan ON to see which frequency band the fan adds. Auto mode locks onto the band whose envelope is most periodic and impulsive (the tick score). You can also tap the spectrum to set a custom band.
+- Record 5-second samples at labeled spots to rank locations by band level, and at each fan speed to test whether the tick rate follows blower speed (points to the blower wheel) or stays flat (points to an actuator, relay or speed control).
+- Tick rate is detected from about 3 to 300 per second. Levels are relative dBFS, not calibrated SPL. It's a locating aid, not a diagnosis.
+- The mic needs a secure page, so open it from the GitHub Pages URL rather than a local file on Android.

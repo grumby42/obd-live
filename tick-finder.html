@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="build-id" content="TICK-20261113-1415Z">
+<meta name="build-utc" content="2026-11-13T14:15:12Z">
+<title>Tick Finder — HVAC noise locator</title>
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--line:#2a313c;--ink:#e6edf3;--mute:#8b949e;--acc:#ff9f43;--live:#39c5cf;--good:#3fb950;--bad:#f85149;--warn:#d29922}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+header h1{font-size:17px;margin:0}
+.stamp{font:11px ui-monospace,Consolas,monospace;color:var(--mute)}
+main{padding:10px;max-width:980px;margin:0 auto;display:grid;gap:10px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px}
+section h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);margin:0 0 8px}
+button,select,input{font:inherit;color:var(--ink);background:#21262d;border:1px solid var(--line);border-radius:8px;padding:9px 12px}
+button{cursor:pointer;font-weight:600}
+button.primary{background:#1f6feb;border-color:#1f6feb}
+button.rec{background:#8b2a2a;border-color:#b33}
+button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chips button{padding:6px 9px;font-weight:500;font-size:12px}
+canvas{width:100%;display:block;border-radius:6px;background:#05060f}
+.wrap{position:relative}
+.wrap canvas.ov{position:absolute;inset:0;background:transparent;pointer-events:none}
+#sg{height:190px}#spec{height:170px;cursor:crosshair}#diff{height:90px}#lg{height:150px}
+.meter{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.meter div{background:#0d1117;border:1px solid var(--line);border-radius:8px;padding:8px;text-align:center}
+.meter b{display:block;font-size:24px;font-variant-numeric:tabular-nums}
+.meter span{font-size:11px;color:var(--mute)}
+.bar{height:14px;background:#0d1117;border-radius:7px;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--good),var(--warn),var(--bad));width:0%}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--mute);font-weight:500}
+td.r,th.r{text-align:right}
+tr.pick td{color:var(--acc);font-weight:700}
+.minibar{height:8px;background:var(--acc);border-radius:4px}
+.note{color:var(--mute);font-size:12px}
+.hint{background:#0d1117;border-left:3px solid var(--acc);padding:8px 10px;border-radius:4px;margin-top:6px}
+.legend{display:flex;gap:12px;font-size:12px;color:var(--mute);margin-top:4px;flex-wrap:wrap}
+.legend i{display:inline-block;width:12px;height:3px;vertical-align:middle;margin-right:4px}
+details summary{cursor:pointer;color:var(--mute)}
+@media(max-width:560px){.meter{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Tick Finder <span class="note">· HVAC noise locator</span></h1>
+  <div class="stamp">Build TICK-20261113-1415Z · shipped 2026-11-13T14:15:12Z</div>
+</header>
+<main>
+
+<section>
+  <h2>1 · Start</h2>
+  <div class="row">
+    <button id="btnStart" class="primary">Start microphone</button>
+    <button id="btnStop" disabled>Stop</button>
+    <span id="status" class="note">Mic off. Engine running, doors closed, radio off.</span>
+  </div>
+  <p class="note">Phone voice processing (echo cancel, noise suppression, auto-gain) is requested OFF so readings are comparable. Levels are relative dBFS, not calibrated SPL. Keep the phone's mic (usually the bottom edge) pointed the same way at every spot.</p>
+</section>
+
+<section>
+  <h2>2 · Fingerprint the tick (fan OFF vs ON)</h2>
+  <div class="row">
+    <button id="btnOff" disabled>Capture fan OFF (4 s)</button>
+    <button id="btnOn" disabled>Capture fan ON (4 s)</button>
+    <label class="note">Band:
+      <select id="bandSel">
+        <option value="auto">Auto (most tick-like)</option>
+        <option value="250">250 Hz octave</option>
+        <option value="500">500 Hz octave</option>
+        <option value="1k">1 kHz octave</option>
+        <option value="2k">2 kHz octave</option>
+        <option value="4k">4 kHz octave</option>
+        <option value="8k">8 kHz octave</option>
+        <option value="custom">Custom (tap spectrum)</option>
+      </select>
+    </label>
+  </div>
+  <p class="note">Hold the phone in one spot. Capture with fan off, then fan on. The bands where ON rises over OFF <em>and</em> the signal is impulsive and periodic are where the tick lives. Tap the spectrum to set a custom band.</p>
+  <div class="wrap"><canvas id="sg"></canvas><canvas id="sgo" class="ov"></canvas></div>
+  <div class="legend"><span>Spectrogram, newest on the right · log frequency 40 Hz – top</span></div>
+  <canvas id="spec" style="margin-top:8px"></canvas>
+  <div class="legend"><span><i style="background:var(--live)"></i>live</span><span><i style="background:#777"></i>fan OFF</span><span><i style="background:var(--acc)"></i>fan ON</span><span><i style="background:rgba(255,159,67,.35);height:10px"></i>active band</span></div>
+  <canvas id="diff" style="margin-top:8px"></canvas>
+  <div class="legend"><span>ON − OFF difference (dB). Peaks show what the fan adds.</span></div>
+  <table id="bandTbl" style="margin-top:8px">
+    <thead><tr><th>Band</th><th class="r">OFF dB</th><th class="r">ON dB</th><th class="r">Δ dB</th><th class="r">Tick score</th><th class="r">Ticks/s</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <p class="note">Tick score (0–100) = how periodic × how spiky the band's envelope is. Steady fan hiss scores low; a repeating click scores high.</p>
+</section>
+
+<section>
+  <h2>3 · Hunt</h2>
+  <div class="meter">
+    <div><b id="mLvl">—</b><span>band level dBFS</span></div>
+    <div><b id="mDelta">—</b><span>vs fan-OFF</span></div>
+    <div><b id="mScore">—</b><span>tick score</span></div>
+    <div><b id="mRate">—</b><span>ticks/s (≈ RPM if 1/rev)</span></div>
+  </div>
+  <div class="bar" style="margin-top:8px"><i id="mBar"></i></div>
+  <p class="note">Sweep the phone slowly around the dash and footwells. Louder band level with a high tick score means you're getting closer. Band is locked while recording.</p>
+  <canvas id="lg"></canvas>
+  <div class="legend"><span><i style="background:var(--live)"></i>band level (dB, left)</span><span><i style="background:var(--acc)"></i>tick score (right, 0–100)</span><span><i style="background:#fff;width:2px;height:10px"></i>recordings</span></div>
+</section>
+
+<section>
+  <h2>4 · Record spots &amp; fan speeds</h2>
+  <div class="row chips" id="chips"></div>
+  <div class="row" style="margin-top:8px">
+    <input id="label" placeholder="Label, e.g. behind glovebox" style="flex:1;min-width:180px">
+    <button id="btnLoc" disabled>Record location (5 s)</button>
+    <button id="btnSpd" disabled>Record fan-speed step (5 s)</button>
+  </div>
+  <p class="note">Locations: same fan speed, same phone orientation, about a hand's width from each surface. Fan-speed steps: same spot, label each "Fan 1", "Fan 2"… so the app can test whether the tick rate follows blower speed.</p>
+  <h2 style="margin-top:10px">Location ranking</h2>
+  <table id="locTbl"><thead><tr><th>#</th><th>Spot</th><th class="r">Level dB</th><th class="r">Score</th><th class="r">Ticks/s</th><th style="width:28%"></th><th></th></tr></thead><tbody></tbody></table>
+  <h2 style="margin-top:10px">Fan-speed sweep</h2>
+  <table id="spdTbl"><thead><tr><th>Step</th><th class="r">Level dB</th><th class="r">Score</th><th class="r">Ticks/s</th><th class="r">≈ RPM if 1/rev</th><th></th></tr></thead><tbody></tbody></table>
+  <div id="interp" class="hint">Record at least two fan-speed steps and two or more locations to get a read-out.</div>
+  <div class="row" style="margin-top:8px">
+    <button id="btnCsv">Export CSV</button>
+    <button id="btnClear">Clear log</button>
+  </div>
+</section>
+
+<section>
+  <details><summary>Field procedure &amp; caveats</summary>
+  <ol class="note">
+    <li>Engine idling (or key-on, engine off, to rule out engine noise), radio off, windows up, A/C compressor off if possible so the clutch cycling isn't confused for a tick.</li>
+    <li>Fingerprint: capture fan OFF, then fan ON at the speed where the tick is loudest.</li>
+    <li>Fan-speed sweep from one spot (passenger footwell is usually closest to the blower). Rate rising with speed points at something turning with the blower wheel.</li>
+    <li>Location sweep at one fixed fan speed. Typical spots: passenger footwell / behind glovebox (blower housing on most trucks and SUVs), center stack, driver footwell, each vent outlet, defrost slots, and outside under the cowl / windshield base on the passenger side (fresh-air intake).</li>
+    <li>Also try Recirc vs Fresh and Vent vs Floor vs Defrost modes. A tick that changes with mode doors points toward a door, actuator or flap in the box rather than the blower.</li>
+  </ol>
+  <p class="note">Limits: tick rate is detectable from about 3 to 300 per second. The phone mic and the cabin's reflections color the readings, so trust the relative ranking between spots more than any absolute number. This is a locating aid, not a diagnosis.</p>
+  </details>
+</section>
+
+</main>
+<script>
+"use strict";
+const BUILD_ID="TICK-20261113-1415Z", BUILD_UTC="2026-11-13T14:15:12Z";
+const BANDS=[["250",250],["500",500],["1k",1000],["2k",2000],["4k",4000],["8k",8000],["custom",3000]];
+const SPOTS=["Passenger footwell","Behind glovebox","Center stack","Driver footwell","Driver vent","Passenger vent","Center vents","Defrost slots","Under cowl (outside)","Fan 1","Fan 2","Fan 3","Fan 4","Fan max"];
+const $=id=>document.getElementById(id);
+
+let ac=null, stream=null, analyser=null, freqBuf=null, binHz=1, chains=[], sink=null;
+let running=false, wakeLock=null, statTimer=null, raf=0;
+let stats={}, ema={}, active="2k", sel="auto", locked=null;
+let offSpec=null, onSpec=null, offBand=null, onBand=null, capture=null, recording=null;
+let hist=[], marks=[], log=[];
+const FMIN=40; let FMAX=20000;
+
+/* ---------- colormap ---------- */
+const STOPS=[[0,[5,6,15]],[.25,[59,15,112]],[.5,[181,54,122]],[.75,[251,136,97]],[1,[252,253,191]]];
+const LUT=[]; for(let i=0;i<256;i++){const t=i/255;let k=0;while(k<STOPS.length-2&&t>STOPS[k+1][0])k++;const[a,ca]=STOPS[k],[b,cb]=STOPS[k+1];const u=(t-a)/(b-a);LUT.push(ca.map((v,j)=>Math.round(v+(cb[j]-v)*u)));}
+
+/* ---------- canvas helpers ---------- */
+function fit(c){const d=window.devicePixelRatio||1;const w=Math.round(c.clientWidth*d),h=Math.round(c.clientHeight*d);if(c.width!==w||c.height!==h){c.width=w;c.height=h;return true;}return false;}
+const fx=(f,w)=>w*Math.log(f/FMIN)/Math.log(FMAX/FMIN);
+const xf=(x,w)=>FMIN*Math.pow(FMAX/FMIN,x/w);
+function bandEdges(id){const b=chains.find(c=>c.id===id);const fc=b?b.fc:1000;return[fc/Math.SQRT2,fc*Math.SQRT2];}
+function fmtF(f){return f>=1000?(f/1000).toFixed(f>=10000?0:1)+"k":Math.round(f)+"";}
+
+/* ---------- start / stop ---------- */
+async function start(){
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:1}});
+  }catch(e){$("status").textContent="Mic blocked: "+e.message+". If opened from a file on Android, try hosting it on https (e.g. GitHub Pages).";return;}
+  ac=new (window.AudioContext||window.webkitAudioContext)();await ac.resume();
+  FMAX=Math.min(20000,ac.sampleRate/2*0.95);
+  const src=ac.createMediaStreamSource(stream);
+  sink=ac.createGain();sink.gain.value=0;sink.connect(ac.destination);
+  analyser=ac.createAnalyser();analyser.fftSize=4096;analyser.smoothingTimeConstant=0.55;analyser.minDecibels=-130;analyser.maxDecibels=0;
+  src.connect(analyser);analyser.connect(sink);
+  freqBuf=new Float32Array(analyser.frequencyBinCount);binHz=ac.sampleRate/analyser.fftSize;
+  chains=BANDS.map(([id,fc])=>{
+    const f1=ac.createBiquadFilter(),f2=ac.createBiquadFilter();
+    for(const f of[f1,f2]){f.type="bandpass";f.frequency.value=fc;f.Q.value=1.41;}
+    const an=ac.createAnalyser();an.fftSize=32768;
+    src.connect(f1);f1.connect(f2);f2.connect(an);an.connect(sink);
+    return{id,fc,f1,f2,an,buf:new Float32Array(an.fftSize)};
+  });
+  running=true;
+  try{if(navigator.wakeLock)wakeLock=await navigator.wakeLock.request("screen");}catch(e){}
+  $("btnStart").disabled=true;["btnStop","btnOff","btnOn","btnLoc","btnSpd"].forEach(i=>$(i).disabled=false);
+  const tr=stream.getAudioTracks()[0];const st=tr.getSettings?tr.getSettings():{};
+  $("status").textContent=`Listening · ${ac.sampleRate} Hz · AGC ${st.autoGainControl?"ON (readings less reliable)":"off"} · NS ${st.noiseSuppression?"ON":"off"}`;
+  statTimer=setInterval(tickStats,200);
+  drawOverlay();loop();
+}
+function stop(){
+  running=false;clearInterval(statTimer);cancelAnimationFrame(raf);
+  if(stream)stream.getTracks().forEach(t=>t.stop());if(ac)ac.close();
+  if(wakeLock){wakeLock.release().catch(()=>{});wakeLock=null;}
+  $("btnStart").disabled=false;["btnStop","btnOff","btnOn","btnLoc","btnSpd"].forEach(i=>$(i).disabled=true);
+  $("status").textContent="Mic off.";
+}
+
+/* ---------- per-band analysis: level, crest, periodicity, tick rate ---------- */
+function analyze(ch){
+  const x=ch.buf;ch.an.getFloatTimeDomainData(x);
+  const N=x.length;let ss=0;for(let i=0;i<N;i++)ss+=x[i]*x[i];
+  const level=10*Math.log10(ss/N+1e-14);
+  const B=Math.max(1,Math.round(ac.sampleRate/1000)),M=Math.floor(N/B),envRate=ac.sampleRate/B;
+  const e=new Float32Array(M);let mean=0,peak=0;
+  for(let i=0;i<M;i++){let m=0;const o=i*B;for(let j=0;j<B;j++){const v=Math.abs(x[o+j]);if(v>m)m=v;}e[i]=m;mean+=m;if(m>peak)peak=m;}
+  mean/=M;const crest=peak/(mean+1e-12);
+  for(let pass=0;pass<2;pass++){let prev=e[0];for(let i=1;i<M-1;i++){const cur=e[i];e[i]=(prev+cur+e[i+1])/3;prev=cur;}}
+  let r0=0;for(let i=0;i<M;i++){e[i]-=mean;r0+=e[i]*e[i];}
+  const maxLag=Math.min(Math.floor(M/2),Math.floor(envRate/3)),minLag=Math.max(2,Math.ceil(envRate/300));
+  const r=new Float32Array(maxLag+2);
+  for(let k=1;k<=maxLag+1;k++){let s=0;for(let i=0;i+k<M;i++)s+=e[i]*e[i+k];r[k]=s/(r0+1e-20);}
+  let k0=1;while(k0<maxLag&&r[k0]>0)k0++;
+  let best=-1,per=0;
+  let gmax=0;for(let k=Math.max(k0,minLag);k<=maxLag;k++)if(r[k]>gmax)gmax=r[k];
+  for(let k=Math.max(k0,minLag);k<=maxLag;k++){if(r[k]>=0.75*gmax&&r[k]>=r[k-1]&&r[k]>=r[k+1]){per=r[k];best=k;break;}}
+  let rate=null;
+  if(best>0){const a=r[best-1],b=r[best],c=r[best+1],den=a-2*b+c;const d=den!==0?0.5*(a-c)/den:0;rate=envRate/(best+d);}
+  const score=Math.max(0,Math.min(1,per))*Math.max(0,Math.min(1,(crest-1.8)/3))*100;
+  return{level,crest,per,rate,score};
+}
+function tickStats(){
+  if(!running)return;
+  for(const ch of chains){const s=analyze(ch);stats[ch.id]=s;ema[ch.id]=ema[ch.id]==null?s.score:ema[ch.id]*0.8+s.score*0.2;}
+  if(locked)active=locked;
+  else if(sel!=="auto")active=sel;
+  else{
+    let bestId=active,bv=-1;for(const ch of chains){if(ch.id==="custom")continue;if(ema[ch.id]>bv){bv=ema[ch.id];bestId=ch.id;}}
+    if(bv<12&&offBand&&onBand){let bd=-99;for(const ch of chains){if(ch.id==="custom")continue;const d=onBand[ch.id]-offBand[ch.id];if(d>bd){bd=d;bestId=ch.id;}}}
+    if(bestId!==active&&(ema[bestId]>(ema[active]||0)*1.25+2||bv<12))active=bestId;
+  }
+  const s=stats[active],t=performance.now()/1000;
+  hist.push({t,level:s.level,score:s.score,rate:s.rate});while(hist.length&&t-hist[0].t>60)hist.shift();
+  if(capture)for(const ch of chains)capture.band[ch.id].push(stats[ch.id].level);
+  if(recording)recording.samples.push({...stats[recording.band]});
+  updateMeter();renderBandTable();drawLine();
+}
+
+/* ---------- drawing loop ---------- */
+let rowBin=null,lastSg=0;
+function loop(){
+  raf=requestAnimationFrame(loop);
+  analyser.getFloatFrequencyData(freqBuf);
+  if(capture){for(let i=0;i<freqBuf.length;i++)capture.pow[i]+=Math.pow(10,freqBuf[i]/10);capture.n++;}
+  drawSg();drawSpec();
+}
+function drawSg(){
+  const c=$("sg"),g=c.getContext("2d");
+  if(fit(c)||!rowBin){rowBin=new Int32Array(c.height);for(let y=0;y<c.height;y++){const f=FMIN*Math.pow(FMAX/FMIN,1-y/(c.height-1));rowBin[y]=Math.min(freqBuf.length-1,Math.max(1,Math.round(f/binHz)));}g.fillStyle="#05060f";g.fillRect(0,0,c.width,c.height);drawOverlay();}
+  const step=Math.max(1,Math.round((window.devicePixelRatio||1)));
+  g.drawImage(c,-step,0);
+  const img=g.createImageData(step,c.height),d=img.data,lo=-115,hi=-35;
+  for(let y=0;y<c.height;y++){const v=freqBuf[rowBin[y]];const ti=Math.max(0,Math.min(255,Math.round((v-lo)/(hi-lo)*255)));const col=LUT[ti];for(let s=0;s<step;s++){const p=(y*step+s)*4;d[p]=col[0];d[p+1]=col[1];d[p+2]=col[2];d[p+3]=255;}}
+  g.putImageData(img,c.width-step,0);
+}
+function drawOverlay(){
+  const c=$("sgo");fit(c);const g=c.getContext("2d"),w=c.width,h=c.height,d=window.devicePixelRatio||1;
+  g.clearRect(0,0,w,h);g.font=`${10*d}px system-ui`;g.fillStyle="rgba(255,255,255,.7)";
+  for(const f of[100,250,500,1000,2000,4000,8000,16000]){if(f>FMAX)continue;const y=h-h*Math.log(f/FMIN)/Math.log(FMAX/FMIN);g.fillRect(0,y,6*d,1);g.fillText(fmtF(f),8*d,y+3*d);}
+  if(!chains.length)return;
+  const[a,b]=bandEdges(active);g.strokeStyle="rgba(255,159,67,.8)";g.setLineDash([4*d,4*d]);
+  for(const f of[a,b]){const y=h-h*Math.log(Math.min(f,FMAX)/FMIN)/Math.log(FMAX/FMIN);g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();}
+  g.setLineDash([]);
+}
+let lastActiveDrawn=null;
+function specPath(g,arr,w,h,lo,hi){g.beginPath();let first=true;for(let x=0;x<w;x+=2){const f=xf(x,w);const i=Math.min(arr.length-1,Math.max(1,Math.round(f/binHz)));const y=h-(arr[i]-lo)/(hi-lo)*h;if(first){g.moveTo(x,y);first=false;}else g.lineTo(x,y);}g.stroke();}
+function drawSpec(){
+  if(active!==lastActiveDrawn){drawOverlay();lastActiveDrawn=active;}
+  const c=$("spec");fit(c);const g=c.getContext("2d"),w=c.width,h=c.height,d=window.devicePixelRatio||1,lo=-125,hi=-20;
+  g.fillStyle="#05060f";g.fillRect(0,0,w,h);
+  const[a,b]=bandEdges(active);g.fillStyle="rgba(255,159,67,.18)";g.fillRect(fx(a,w),0,fx(b,w)-fx(a,w),h);
+  g.font=`${10*d}px system-ui`;g.fillStyle="#6e7681";g.strokeStyle="#21262d";g.lineWidth=1;
+  for(const f of[100,250,500,1000,2000,4000,8000,16000]){if(f>FMAX)continue;const x=fx(f,w);g.beginPath();g.moveTo(x,0);g.lineTo(x,h);g.stroke();g.fillText(fmtF(f),x+2*d,h-3*d);}
+  for(let db=-120;db<=-20;db+=20){const y=h-(db-lo)/(hi-lo)*h;g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();g.fillText(db,2*d,y-2*d);}
+  g.lineWidth=1.5*d;
+  if(offSpec){g.strokeStyle="#777";specPath(g,offSpec,w,h,lo,hi);}
+  if(onSpec){g.strokeStyle="#ff9f43";specPath(g,onSpec,w,h,lo,hi);}
+  g.strokeStyle="#39c5cf";g.lineWidth=1*d;specPath(g,freqBuf,w,h,lo,hi);
+  drawDiff();
+}
+function drawDiff(){
+  const c=$("diff");fit(c);const g=c.getContext("2d"),w=c.width,h=c.height,d=window.devicePixelRatio||1,lo=-10,hi=30;
+  g.fillStyle="#05060f";g.fillRect(0,0,w,h);g.font=`${10*d}px system-ui`;g.fillStyle="#6e7681";
+  const y0=h-(0-lo)/(hi-lo)*h;g.strokeStyle="#30363d";g.beginPath();g.moveTo(0,y0);g.lineTo(w,y0);g.stroke();g.fillText("0 dB",2*d,y0-2*d);g.fillText("+30",2*d,10*d);
+  if(!(offSpec&&onSpec)){g.fillText("Capture fan OFF and fan ON to see the difference",40*d,h/2);return;}
+  const[a,b]=bandEdges(active);g.fillStyle="rgba(255,159,67,.18)";g.fillRect(fx(a,w),0,fx(b,w)-fx(a,w),h);
+  g.strokeStyle="#ff9f43";g.lineWidth=1.5*d;g.beginPath();
+  for(let x=0;x<w;x+=2){const f=xf(x,w);const i=Math.min(onSpec.length-1,Math.max(1,Math.round(f/binHz)));const v=onSpec[i]-offSpec[i];const y=h-(Math.max(lo,Math.min(hi,v))-lo)/(hi-lo)*h;x?g.lineTo(x,y):g.moveTo(x,y);}
+  g.stroke();
+}
+function drawLine(){
+  const c=$("lg");fit(c);const g=c.getContext("2d"),w=c.width,h=c.height,d=window.devicePixelRatio||1;
+  g.fillStyle="#05060f";g.fillRect(0,0,w,h);if(hist.length<2)return;
+  const tEnd=hist[hist.length-1].t,tx=t=>w-(tEnd-t)/60*w;
+  let mn=Infinity,mx=-Infinity;for(const p of hist){mn=Math.min(mn,p.level);mx=Math.max(mx,p.level);}
+  mn=Math.floor(mn/5)*5-5;mx=Math.ceil(mx/5)*5+5;if(mx-mn<20)mx=mn+20;
+  g.font=`${10*d}px system-ui`;g.fillStyle="#6e7681";g.strokeStyle="#21262d";
+  for(let v=mn;v<=mx;v+=5){const y=h-(v-mn)/(mx-mn)*h;g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();if((v-mn)%10===0)g.fillText(v,2*d,y-2*d);}
+  g.fillText("60 s ago",2*d,h-3*d);g.fillText("now",w-24*d,h-3*d);
+  g.strokeStyle="#ffffff";for(const m of marks){if(tEnd-m.t>60)continue;const x=tx(m.t);g.beginPath();g.moveTo(x,0);g.lineTo(x,h);g.stroke();g.fillStyle="#fff";g.fillText(m.label.slice(0,14),x+2*d,12*d);}
+  g.lineWidth=1.5*d;g.strokeStyle="#ff9f43";g.beginPath();hist.forEach((p,i)=>{const y=h-p.score/100*h;i?g.lineTo(tx(p.t),y):g.moveTo(tx(p.t),y);});g.stroke();
+  g.strokeStyle="#39c5cf";g.beginPath();hist.forEach((p,i)=>{const y=h-(p.level-mn)/(mx-mn)*h;i?g.lineTo(tx(p.t),y):g.moveTo(tx(p.t),y);});g.stroke();
+  g.lineWidth=1;
+}
+
+/* ---------- readouts ---------- */
+const nameOf=id=>id==="custom"?`custom ${fmtF(chains.find(c=>c.id==="custom").fc)} Hz`:id+(id.endsWith("k")?"Hz":" Hz");
+function updateMeter(){
+  const s=stats[active];if(!s)return;
+  $("mLvl").textContent=s.level.toFixed(1);
+  $("mDelta").textContent=offBand?((s.level-offBand[active]>=0?"+":"")+(s.level-offBand[active]).toFixed(1)):"—";
+  $("mScore").textContent=Math.round(s.score);
+  $("mRate").textContent=s.rate&&s.per>0.3?`${s.rate.toFixed(1)}`:"—";
+  $("mRate").title=s.rate?`≈ ${Math.round(s.rate*60)} RPM if once per revolution`:"";
+  const ref=offBand?offBand[active]:-90;$("mBar").style.width=Math.max(0,Math.min(100,(s.level-ref+5)/35*100))+"%";
+}
+function renderBandTable(){
+  const tb=$("bandTbl").tBodies[0];let html="";
+  for(const ch of chains){const s=stats[ch.id];if(!s)continue;const o=offBand?offBand[ch.id]:null,n=onBand?onBand[ch.id]:null;
+    html+=`<tr class="${ch.id===active?"pick":""}"><td>${nameOf(ch.id)}${ch.id===active?" ◀":""}</td><td class="r">${o!=null?o.toFixed(1):"—"}</td><td class="r">${n!=null?n.toFixed(1):"—"}</td><td class="r">${o!=null&&n!=null?(n-o>=0?"+":"")+(n-o).toFixed(1):"—"}</td><td class="r">${Math.round(ema[ch.id]||0)}</td><td class="r">${s.rate&&s.per>0.3?s.rate.toFixed(1):"—"}</td></tr>`;}
+  tb.innerHTML=html;
+}
+
+/* ---------- captures ---------- */
+function doCapture(kind){
+  if(capture||recording)return;
+  const btn=$(kind==="off"?"btnOff":"btnOn"),orig=btn.textContent;
+  capture={pow:new Float64Array(freqBuf.length),n:0,band:Object.fromEntries(chains.map(c=>[c.id,[]]))};
+  let left=4;btn.textContent=`Capturing… ${left}`;btn.disabled=true;
+  const iv=setInterval(()=>{left--;btn.textContent=`Capturing… ${left}`;if(left<=0){clearInterval(iv);finish();}},1000);
+  function finish(){
+    const spec=new Float32Array(freqBuf.length);for(let i=0;i<spec.length;i++)spec[i]=10*Math.log10(capture.pow[i]/Math.max(1,capture.n)+1e-20);
+    const band={};for(const id in capture.band)band[id]=pAvg(capture.band[id]);
+    if(kind==="off"){offSpec=spec;offBand=band;}else{onSpec=spec;onBand=band;}
+    capture=null;btn.textContent=orig+" ✓";btn.disabled=false;
+    marks.push({t:performance.now()/1000,label:kind==="off"?"fan OFF":"fan ON"});
+  }
+}
+function pAvg(arr){if(!arr.length)return NaN;let s=0;for(const v of arr)s+=Math.pow(10,v/10);return 10*Math.log10(s/arr.length);}
+function median(a){if(!a.length)return null;const b=[...a].sort((x,y)=>x-y);const m=b.length>>1;return b.length%2?b[m]:(b[m-1]+b[m])/2;}
+function doRecord(type){
+  if(capture||recording)return;
+  const label=($("label").value||"").trim()||(type==="loc"?`Spot ${log.filter(l=>l.type==="loc").length+1}`:`Fan step ${log.filter(l=>l.type==="spd").length+1}`);
+  const btn=$(type==="loc"?"btnLoc":"btnSpd"),orig=btn.textContent;
+  locked=active;recording={band:active,samples:[]};btn.classList.add("rec");btn.disabled=true;
+  let left=5;btn.textContent=`Recording… ${left}`;
+  const iv=setInterval(()=>{left--;btn.textContent=`Recording… ${left}`;if(left<=0){clearInterval(iv);finish();}},1000);
+  function finish(){
+    const S=recording.samples;
+    const rates=S.filter(s=>s.rate&&s.per>0.3).map(s=>s.rate);
+    log.push({type,label,band:recording.band,bandHz:Math.round(chains.find(c=>c.id===recording.band).fc),
+      level:pAvg(S.map(s=>s.level)),score:S.reduce((a,s)=>a+s.score,0)/Math.max(1,S.length),
+      rate:rates.length>=Math.max(2,S.length*0.3)?median(rates):null,deltaOff:offBand?pAvg(S.map(s=>s.level))-offBand[recording.band]:null,
+      utc:new Date().toISOString()});
+    marks.push({t:performance.now()/1000,label});
+    recording=null;locked=null;btn.classList.remove("rec");btn.textContent=orig;btn.disabled=false;$("label").value="";
+    renderLog();
+  }
+}
+
+/* ---------- log & interpretation ---------- */
+function renderLog(){
+  const locs=log.map((l,i)=>({...l,i})).filter(l=>l.type==="loc").sort((a,b)=>b.level-a.level);
+  const spds=log.map((l,i)=>({...l,i})).filter(l=>l.type==="spd");
+  const top=locs.length?locs[0].level:0,bot=locs.length?Math.min(...locs.map(l=>l.level)):0;
+  $("locTbl").tBodies[0].innerHTML=locs.map((l,k)=>`<tr class="${k===0&&locs.length>1?"pick":""}"><td>${k+1}</td><td>${esc(l.label)}<br><span class="note">${l.bandHz} Hz band</span></td><td class="r">${l.level.toFixed(1)}</td><td class="r">${Math.round(l.score)}</td><td class="r">${l.rate?l.rate.toFixed(1):"—"}</td><td><div class="minibar" style="width:${locs.length>1?Math.max(4,(l.level-bot+1)/(top-bot+1)*100):100}%"></div></td><td><button data-del="${l.i}" style="padding:2px 8px">×</button></td></tr>`).join("");
+  $("spdTbl").tBodies[0].innerHTML=spds.map(l=>`<tr><td>${esc(l.label)}</td><td class="r">${l.level.toFixed(1)}</td><td class="r">${Math.round(l.score)}</td><td class="r">${l.rate?l.rate.toFixed(1):"—"}</td><td class="r">${l.rate?Math.round(l.rate*60):"—"}</td><td><button data-del="${l.i}" style="padding:2px 8px">×</button></td></tr>`).join("");
+  interpret(locs,spds);
+}
+function interpret(locs,spds){
+  const out=[];
+  if(locs.length>=2){
+    const gap=locs[0].level-locs[1].level,mixedBands=new Set(locs.map(l=>l.band)).size>1;
+    out.push(`<b>Loudest spot:</b> ${esc(locs[0].label)} (${locs[0].level.toFixed(1)} dB, ${gap.toFixed(1)} dB above ${esc(locs[1].label)}). `+
+      (gap>=6?"That's a clear lead, so start inspecting there.":gap>=3?"That's a moderate lead. Re-record the top two spots to confirm.":"The top spots are within 3 dB, which is too close to call. Move the phone closer to the surfaces and re-record."));
+    if(locs[0].score<20)out.push("The tick score at the loudest spot is low, so the level there may be fan hiss rather than the tick. Try a narrower custom band on the peak in the ON − OFF graph.");
+    if(mixedBands)out.push("<span style='color:var(--warn)'>Spots were recorded in different bands, so the levels aren't directly comparable. Set Band to a fixed value and re-record.</span>");
+  }
+  const rs=spds.filter(s=>s.rate);
+  if(rs.length>=2){
+    const r0=rs[0].rate,r1=rs[rs.length-1].rate,ch=(r1-r0)/r0*100;
+    if(Math.abs(ch)>15){
+      out.push(`<b>Tick rate follows fan speed</b> (${r0.toFixed(1)} → ${r1.toFixed(1)}/s, ${ch>0?"+":""}${ch.toFixed(0)}%). Something is moving with the blower wheel. Common culprits are a leaf, twig or paper in the blower cage, the wheel rubbing its housing, or a worn blower motor bearing. ${rs.some(s=>s.rate*60>600&&s.rate*60<4500)?"The rates are in a typical blower RPM range, which fits a once-per-revolution contact.":""}`);
+    }else{
+      out.push(`<b>Tick rate stays flat across fan speeds</b> (${r0.toFixed(1)} → ${r1.toFixed(1)}/s). That points away from the blower wheel and toward something cycling on its own timing while the fan runs: a mode, blend or recirc door actuator hunting or skipping a stripped gear, a relay, or the blower speed control. Try changing modes and temperature. If the tick changes, it's in the door/actuator system.`);
+    }
+  }else if(spds.length>=2)out.push("No steady tick rate came through at the fan-speed steps. Record from closer to the blower, or set a custom band on the ON − OFF peak.");
+  if(!out.length)out.push("Record at least two fan-speed steps and two or more locations to get a read-out.");
+  out.push("<span class='note'>This is a locating aid, not a diagnosis. Confirm by eye or with a mechanic's stethoscope.</span>");
+  $("interp").innerHTML=out.join("<br><br>");
+}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function exportCsv(){
+  const rows=[["# Tick Finder export"],["# build_id",BUILD_ID],["# build_utc",BUILD_UTC],["# exported_utc",new Date().toISOString()],
+    ["type","label","band_hz","level_dbfs","delta_vs_fan_off_db","tick_score","ticks_per_s","rpm_if_1_per_rev","recorded_utc"]];
+  for(const l of log)rows.push([l.type==="loc"?"location":"fan_speed",l.label,l.bandHz,l.level.toFixed(2),l.deltaOff!=null?l.deltaOff.toFixed(2):"",l.score.toFixed(1),l.rate?l.rate.toFixed(2):"",l.rate?Math.round(l.rate*60):"",l.utc]);
+  const csv=rows.map(r=>r.map(v=>{v=String(v);return/[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v;}).join(",")).join("\n");
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download=`tick-finder_${new Date().toISOString().replace(/[:.]/g,"").slice(0,15)}Z.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+/* ---------- wiring ---------- */
+$("btnStart").onclick=start;$("btnStop").onclick=stop;
+$("btnOff").onclick=()=>doCapture("off");$("btnOn").onclick=()=>doCapture("on");
+$("btnLoc").onclick=()=>doRecord("loc");$("btnSpd").onclick=()=>doRecord("spd");
+$("btnCsv").onclick=exportCsv;$("btnClear").onclick=()=>{if(confirm("Clear all recorded spots and fan steps?")){log=[];marks=[];renderLog();}};
+$("bandSel").onchange=e=>{sel=e.target.value;if(sel!=="auto")active=sel;drawOverlay();};
+$("spec").addEventListener("click",e=>{
+  if(!chains.length)return;const r=e.target.getBoundingClientRect();const f=Math.min(FMAX/1.5,Math.max(80,xf(e.clientX-r.left,r.width)));
+  const ch=chains.find(c=>c.id==="custom");ch.fc=f;ch.f1.frequency.value=f;ch.f2.frequency.value=f;ema.custom=null;
+  sel="custom";active="custom";$("bandSel").value="custom";$("bandSel").options[7].text=`Custom ${fmtF(f)} Hz (tap spectrum)`;drawOverlay();
+});
+document.addEventListener("click",e=>{const d=e.target.dataset&&e.target.dataset.del;if(d!=null){log.splice(+d,1);renderLog();}});
+$("chips").innerHTML=SPOTS.map(s=>`<button type="button" data-chip="${s}">${s}</button>`).join("");
+$("chips").addEventListener("click",e=>{const s=e.target.dataset.chip;if(s)$("label").value=s;});
+document.addEventListener("visibilitychange",async()=>{if(running&&document.visibilityState==="visible"&&navigator.wakeLock){try{wakeLock=await navigator.wakeLock.request("screen");}catch(e){}}});
+window.addEventListener("resize",()=>{rowBin=null;});
+renderLog();
+</script>
+</body>
+</html>
