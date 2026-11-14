@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261113-1051Z">
-<meta name="build-timestamp-utc" content="2026-11-13T10:51:04Z">
+<meta name="build-id" content="OBD-20261114-0104Z">
+<meta name="build-timestamp-utc" content="2026-11-14T01:04:23Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -154,7 +154,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261113-1051Z", BUILD_UTC = "2026-11-13T10:51:04Z";
+const BUILD_ID = "OBD-20261114-0104Z", BUILD_UTC = "2026-11-14T01:04:23Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -2691,7 +2691,8 @@ function openMore() {
     for (let d = r0; d <= r0 + 255 && session; d++) { const did = d.toString(16).toUpperCase(); try { const raw = await askH(h, "22" + did), b = isNoData(raw) ? null : dataBytes(raw, "62" + did); if (b) { scanOut.append(foundRow(h, did, b)); if (!rawDids.some(x => x.did === did && x.header === h)) { const rec = { did, header: h }; rawDids.push(rec); registerRawDid(rec); store.set(vkey("rawdids"), rawDids); } } } catch (e) { break; } scan.textContent = "Scanning " + did; }
     scan.textContent = "Scan, parked only"; scan.disabled = false; if (!scanOut.children.length) scanOut.textContent = "No answers in this range.";
   } });
-  ex.append(el("p", { textContent: "Asks the vehicle which GM read requests it answers. It sends read requests only. Anything that answers is logged raw from then on. Its meaning stays unknown until you check it against a known value." }), hdr, range, scan, scanOut);
+  const copyScan = el("button", { textContent: "Copy scan results", onclick: async () => { const t = [...scanOut.children].map(r => r.textContent).join("\n") || scanOut.textContent; try { await navigator.clipboard.writeText(hdr.value + " " + range.options[range.selectedIndex].textContent + "\n" + t); toast("Copied " + scanOut.children.length + " answers."); } catch (e) { toast("Select and copy the text instead."); } } });
+  ex.append(el("p", { textContent: "Asks the vehicle which GM read requests it answers. It sends read requests only. Anything that answers is logged raw from then on (and rides along in every history export). Its meaning stays unknown until you check it against a known value." }), hdr, range, scan, copyScan, scanOut);
   const xl = el("div", { class: "scroll", style: "max-height:240px;font:11px ui-monospace,monospace;white-space:pre-wrap" }); const renderXlog = () => { const L = lastXlog || []; xl.textContent = L.length ? L.map(x => new Date(x.t).toISOString().slice(11, 19) + " " + String(x.ms).padStart(5) + "ms  " + x.cmd + "  →  " + (x.r || "(empty)")).join("\n") : "No adapter traffic yet."; }; renderXlog();
   const xlBtn = el("button", { textContent: "Copy connection log", onclick: async () => { try { await navigator.clipboard.writeText(xl.textContent); toast("Copied " + (lastXlog || []).length + " exchanges."); } catch (e) { toast("Select and copy the text instead."); } } });
   showDlg("Data and sources",
