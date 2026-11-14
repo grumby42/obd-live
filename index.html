@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261114-0104Z">
-<meta name="build-timestamp-utc" content="2026-11-14T01:04:23Z">
+<meta name="build-id" content="OBD-20261114-1252Z">
+<meta name="build-timestamp-utc" content="2026-11-14T12:52:11Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -154,7 +154,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261114-0104Z", BUILD_UTC = "2026-11-14T01:04:23Z";
+const BUILD_ID = "OBD-20261114-1252Z", BUILD_UTC = "2026-11-14T12:52:11Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -2692,7 +2692,27 @@ function openMore() {
     scan.textContent = "Scan, parked only"; scan.disabled = false; if (!scanOut.children.length) scanOut.textContent = "No answers in this range.";
   } });
   const copyScan = el("button", { textContent: "Copy scan results", onclick: async () => { const t = [...scanOut.children].map(r => r.textContent).join("\n") || scanOut.textContent; try { await navigator.clipboard.writeText(hdr.value + " " + range.options[range.selectedIndex].textContent + "\n" + t); toast("Copied " + scanOut.children.length + " answers."); } catch (e) { toast("Select and copy the text instead."); } } });
-  ex.append(el("p", { textContent: "Asks the vehicle which GM read requests it answers. It sends read requests only. Anything that answers is logged raw from then on (and rides along in every history export). Its meaning stays unknown until you check it against a known value." }), hdr, range, scan, copyScan, scanOut);
+  // Scan everything: every module × every range in one run, results kept per vehicle and included in the history export. Nothing is auto-registered (190 extra polls would starve the live readings); each row still has "Add as reading".
+  const SCAN_MODULES = [["7E0", "engine"], ["7E2", "transmission"], ["7E1", "alternate"], ["241", "body"]], SCAN_RANGES = ["1100", "1200", "1600", "1900", "1A00", "2000", "2300", "2800", "3000", "0000", "0100"];
+  let scanAbort = false; const allOut = el("div", { class: "scroll", style: "max-height:260px" }), allProg = el("div", { class: "sub", style: "white-space:normal" });
+  const allBtn = el("button", { textContent: "Scan everything (parked, engine running)", onclick: async () => {
+    if (!session) return toast("Connect first."); if (!session.link.sim && latest.mph > 0) return toast("Park the vehicle first.");
+    if (!(latest.rpm > 400)) { toast("Engine is off: pressures and anything rpm-driven will read zero. Start it for a complete scan."); }
+    scanAbort = false; allBtn.disabled = true; stopBtn.disabled = false; allOut.textContent = ""; const t0 = Date.now(), results = [], ctxAt = { rpm: latest.rpm ?? null, ect: latest.ect ?? null, volt: latest.volt ?? null };
+    let done = 0, errs = 0; const total = SCAN_MODULES.length * SCAN_RANGES.length * 256;
+    outer: for (const [h, role] of SCAN_MODULES) { let moduleAnswered = false; for (const r of SCAN_RANGES) { const r0 = parseInt(r, 16); let rangeHits = 0;
+      for (let d = r0; d <= r0 + 255; d++) { if (scanAbort || !session) break outer; const did = d.toString(16).toUpperCase().padStart(4, "0");
+        try { const raw = await askH(h, "22" + did), b = isNoData(raw) ? null : dataBytes(raw, "62" + did); if (b) { rangeHits++; moduleAnswered = true; results.push({ h, did, bytes: b.map(x => x.toString(16).padStart(2, "0")).join(" ") }); allOut.append(foundRow(h, did, b)); } errs = 0; } catch (e) { if (++errs >= 3) { toast("Adapter stopped answering; scan stopped."); break outer; } }
+        if (++done % 16 === 0) allProg.textContent = h + " (" + role + ") " + did + " · " + Math.round(100 * done / total) + "% · " + results.length + " answers · " + Math.round((Date.now() - t0) / 1000) + " s"; }
+      // A module that answers nothing in its first two ranges is not on this bus at this address: skip the rest of it.
+      if (!moduleAnswered && SCAN_RANGES.indexOf(r) >= 1) { done += (SCAN_RANGES.length - SCAN_RANGES.indexOf(r) - 1) * 256; break; } } }
+    const rec = { t: Date.now(), build: BUILD_ID, aborted: scanAbort, at: ctxAt, seconds: Math.round((Date.now() - t0) / 1000), results }; const scans = store.get(vkey("scans"), []); scans.push(rec); while (scans.length > 6) scans.shift(); store.set(vkey("scans"), scans);
+    allProg.textContent = (scanAbort ? "Stopped. " : "Done. ") + results.length + " answers in " + rec.seconds + " s" + (ctxAt.rpm > 400 ? "" : " — engine was off") + ". Saved with this vehicle; included in the next history export."; allBtn.disabled = false; stopBtn.disabled = true;
+  } });
+  const stopBtn = el("button", { textContent: "Stop", disabled: true, onclick: () => { scanAbort = true; } });
+  const copyAll = el("button", { textContent: "Copy all results", onclick: async () => { const scans = store.get(vkey("scans"), []), last = scans[scans.length - 1]; if (!last) return toast("No full scan yet."); const t = "scan " + new Date(last.t).toISOString() + " rpm " + last.at.rpm + " ect " + last.at.ect + "\n" + last.results.map(x => x.h + " " + x.did + " " + x.bytes).join("\n"); try { await navigator.clipboard.writeText(t); toast("Copied " + last.results.length + " answers."); } catch (e) { toast("Select and copy the text instead."); } } });
+  ex.append(el("p", { textContent: "Asks the vehicle which GM read requests it answers. It sends read requests only. Anything that answers is logged raw from then on (and rides along in every history export). Its meaning stays unknown until you check it against a known value." }), hdr, range, scan, copyScan, scanOut,
+    el("h3", { textContent: "Scan everything" }), el("p", { textContent: "Runs every range above against the engine, transmission, alternate and body modules in one pass, about 10–15 minutes with the engine running. A module that answers nothing in its first two ranges is skipped. Results are kept with this vehicle (last 6 scans) and go out in the history export; nothing is added to live polling unless you tap Add as reading." }), el("div", { class: "bar" }, allBtn, stopBtn, copyAll), allProg, allOut);
   const xl = el("div", { class: "scroll", style: "max-height:240px;font:11px ui-monospace,monospace;white-space:pre-wrap" }); const renderXlog = () => { const L = lastXlog || []; xl.textContent = L.length ? L.map(x => new Date(x.t).toISOString().slice(11, 19) + " " + String(x.ms).padStart(5) + "ms  " + x.cmd + "  →  " + (x.r || "(empty)")).join("\n") : "No adapter traffic yet."; }; renderXlog();
   const xlBtn = el("button", { textContent: "Copy connection log", onclick: async () => { try { await navigator.clipboard.writeText(xl.textContent); toast("Copied " + (lastXlog || []).length + " exchanges."); } catch (e) { toast("Select and copy the text instead."); } } });
   showDlg("Data and sources",
@@ -2734,7 +2754,7 @@ function exportCsv() {
 }
 async function exportHistory() {
   const full = []; for (const d of drives) { const { review, ...rest } = d; full.push({ ...rest, review, rows: stripRows(await driveRows(d.id)) }); }
-  download(vid + "-obd-history-" + stampName() + ".json", JSON.stringify({ build: BUILD_ID, exported: new Date().toISOString(), vehicle: vid, drives: full }, null, 0), "application/json");
+  download(vid + "-obd-history-" + stampName() + ".json", JSON.stringify({ build: BUILD_ID, exported: new Date().toISOString(), vehicle: vid, vehicleProfile: vehicles[vid], scans: store.get(vkey("scans"), []), drives: full }, null, 0), "application/json");
 }
 function importHistory() {
   const i = el("input", { type: "file", accept: "application/json", onchange: async () => {
