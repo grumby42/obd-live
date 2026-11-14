@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261114-1322Z">
-<meta name="build-timestamp-utc" content="2026-11-14T13:22:24Z">
+<meta name="build-id" content="OBD-20261114-1347Z">
+<meta name="build-timestamp-utc" content="2026-11-14T13:47:32Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -154,7 +154,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261114-1322Z", BUILD_UTC = "2026-11-14T13:22:24Z";
+const BUILD_ID = "OBD-20261114-1347Z", BUILD_UTC = "2026-11-14T13:47:32Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -2684,7 +2684,7 @@ function openMore() {
   ];
   const ex = el("div"), scanOut = el("div", { class: "scroll", style: "max-height:220px" });
   const hdr = el("select", { "aria-label": "Module" }, ["7E2","7E0","7E1"].map(h => el("option", { value: h, textContent: h === "7E2" ? "7E2 (usually transmission)" : h === "7E0" ? "7E0 (usually engine)" : "7E1 (alternate)" })));
-  const range = el("select", { "aria-label": "Range" }, ["1900","1100","1200","1600","1A00","2000","2300","2800","3000","0000","0100"].map(r => el("option", { value: r, textContent: r + "–" + r.slice(0, 2) + "FF" })));
+  const range = el("select", { "aria-label": "Range" }, ["1900","1100","1200","1400","1600","1A00","1C00","2000","2300","2800","3000","0000","0100"].map(r => el("option", { value: r, textContent: r + "–" + r.slice(0, 2) + "FF" })));
   const scan = el("button", { textContent: "Scan, parked only", onclick: async () => {
     if (!session) return toast("Connect first."); if (!session.link.sim && latest.mph > 0) return toast("Park the vehicle first.");
     scan.disabled = true; scanOut.textContent = ""; const h = hdr.value, r0 = parseInt(range.value, 16);
@@ -2693,7 +2693,7 @@ function openMore() {
   } });
   const copyScan = el("button", { textContent: "Copy scan results", onclick: async () => { const t = [...scanOut.children].map(r => r.textContent).join("\n") || scanOut.textContent; try { await navigator.clipboard.writeText(hdr.value + " " + range.options[range.selectedIndex].textContent + "\n" + t); toast("Copied " + scanOut.children.length + " answers."); } catch (e) { toast("Select and copy the text instead."); } } });
   // Scan everything: every module × every range in one run, results kept per vehicle and included in the history export. Nothing is auto-registered (190 extra polls would starve the live readings); each row still has "Add as reading".
-  const SCAN_MODULES = [["7E0", "engine"], ["7E2", "transmission"], ["7E1", "alternate"], ["241", "body"]], SCAN_RANGES = ["1100", "1200", "1600", "1900", "1A00", "2000", "2300", "2800", "3000", "0000", "0100"];
+  const SCAN_MODULES = [["7E0", "engine"], ["7E2", "transmission"], ["7E1", "alternate"], ["241", "body"]], SCAN_RANGES = ["1100", "1200", "1400", "1600", "1900", "1A00", "1C00", "2000", "2300", "2800", "3000", "0000", "0100"];
   let scanAbort = false; const allOut = el("div", { class: "scroll", style: "max-height:260px" }), allProg = el("div", { style: "white-space:normal;min-height:1.4em;padding:6px 8px;margin:6px 0;border-radius:8px;background:var(--raised);font-variant-numeric:tabular-nums", textContent: "Idle. Tap Scan everything with the vehicle parked and the engine running." });
   const allBtn = el("button", { textContent: "Scan everything (parked, engine running)", onclick: async () => {
     // Every way out is written on screen, not only toasted, so a tap that does nothing explains itself.
@@ -2714,7 +2714,7 @@ function openMore() {
   const stopBtn = el("button", { textContent: "Stop", disabled: true, onclick: () => { scanAbort = true; } });
   const copyAll = el("button", { textContent: "Copy all results", onclick: async () => { const scans = store.get(vkey("scans"), []), last = scans[scans.length - 1]; if (!last) return toast("No full scan yet."); const t = "scan " + new Date(last.t).toISOString() + " rpm " + last.at.rpm + " ect " + last.at.ect + "\n" + last.results.map(x => x.h + " " + x.did + " " + x.bytes).join("\n"); try { await navigator.clipboard.writeText(t); toast("Copied " + last.results.length + " answers."); } catch (e) { toast("Select and copy the text instead."); } } });
   ex.append(el("p", { textContent: "Asks the vehicle which GM read requests it answers. It sends read requests only. Anything that answers is logged raw from then on (and rides along in every history export). Its meaning stays unknown until you check it against a known value." }), hdr, range, scan, copyScan, scanOut,
-    el("h3", { textContent: "Scan everything" }), el("p", { textContent: "Runs every range above against the engine, transmission, alternate and body modules in one pass, about 10–15 minutes with the engine running. A module that answers nothing in its first two ranges is skipped. Results are kept with this vehicle (last 6 scans) and go out in the history export; nothing is added to live polling unless you tap Add as reading." }), el("div", { class: "bar" }, allBtn, stopBtn, copyAll), allProg, allOut);
+    el("h3", { textContent: "Scan everything" }), el("p", { textContent: "Runs every range above (13 blocks) against the engine, transmission, alternate and body modules in one pass, about 12–18 minutes with the engine running. A module that answers nothing in its first two ranges is skipped. Results are kept with this vehicle (last 6 scans) and go out in the history export; nothing is added to live polling unless you tap Add as reading." }), el("div", { class: "bar" }, allBtn, stopBtn, copyAll), allProg, allOut);
   const xl = el("div", { class: "scroll", style: "max-height:240px;font:11px ui-monospace,monospace;white-space:pre-wrap" }); const renderXlog = () => { const L = lastXlog || []; xl.textContent = L.length ? L.map(x => new Date(x.t).toISOString().slice(11, 19) + " " + String(x.ms).padStart(5) + "ms  " + x.cmd + "  →  " + (x.r || "(empty)")).join("\n") : "No adapter traffic yet."; }; renderXlog();
   const xlBtn = el("button", { textContent: "Copy connection log", onclick: async () => { try { await navigator.clipboard.writeText(xl.textContent); toast("Copied " + (lastXlog || []).length + " exchanges."); } catch (e) { toast("Select and copy the text instead."); } } });
   showDlg("Data and sources",
