@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261114-1347Z">
-<meta name="build-timestamp-utc" content="2026-11-14T13:47:32Z">
+<meta name="build-id" content="OBD-20261114-1353Z">
+<meta name="build-timestamp-utc" content="2026-11-14T13:53:54Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -154,7 +154,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261114-1347Z", BUILD_UTC = "2026-11-14T13:47:32Z";
+const BUILD_ID = "OBD-20261114-1353Z", BUILD_UTC = "2026-11-14T13:53:54Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1712,6 +1712,9 @@ let labBuf = null, markPending = null, dlgPainters = [];
 let series = {}, stats = {}, latest = {}, shares = {}, rows = [], flushed = 0, chunkSeq = 0, supported = null, monitor = null, truck = {}, codes = null, mode06 = null, drives = [], lastTick = 0, driveId = null, driveStart = 0, prevMph = null, stableBuf = [];
 function dropDynamic() { for (let i = METRICS.length - 1; i >= 0; i--) if (METRICS[i].dynamic) { delete byId[METRICS[i].id]; delete mstate[METRICS[i].id]; METRICS.splice(i, 1); } }
 function addDynamic(m) { if (byId[m.id]) return; m.dynamic = true; METRICS.push(m); byId[m.id] = m; mstate[m.id] = { status: "unknown", misses: 0, last: 0, headerIdx: 0, badSince: 0 }; }
+// Watch a handful of addresses through a drive: polled about once a second on every screen, logged in the rows (and so in the export) as w<header><did>, dropped at the end of the session or on Stop watching. Not persisted.
+function watchDids(header, dids) { let n = 0; dids.forEach(did => { did = did.toUpperCase(); if (!/^[0-9A-F]{4}$/.test(did) || !/^[0-9A-F]{3}$/.test(header)) return; const id = "w" + header + did; if (byId[id]) return; addDynamic({ id, label: "Watch " + header + " " + did, group: "Watch", cmd: "22" + did, pre: "62" + did, headers: [header], tier: "med", digits: 0, unit: "", min: 0, max: 65535, f: b => b.length >= 2 ? u16(b[0], b[1]) : b[0], basis: "community (raw first byte, or A×256+B when two bytes)", watch: true }); n++; }); return n; }
+function stopWatching() { let n = 0; for (let i = METRICS.length - 1; i >= 0; i--) if (METRICS[i].watch) { delete byId[METRICS[i].id]; delete mstate[METRICS[i].id]; METRICS.splice(i, 1); n++; } return n; }
 function registerRawDid(d) { if (!/^[0-9A-F]{4}$/.test(d.did) || !/^[0-9A-F]{3}$/.test(d.header)) return; addDynamic({ id: "r" + d.header + d.did, label: "GM " + d.header + " " + d.did + " (raw)", group: "Raw", cmd: "22" + d.did, pre: "62" + d.did, headers: [d.header], rawHex: true, tier: "slow", digits: 0, unit: "", min: 0, max: 255, basis: "community" }); }
 function loadVehicle(id) {
   vid = id; store.set("vid", vid); dropDynamic();
@@ -1826,6 +1829,7 @@ function visibleIds() {
     if (w.type === "allsensors") METRICS.forEach(m => { if (m.cmd && m.tier !== "slow") ids.add(m.id); });
     if (w.type === "crosscheck") ["pedal","pedale","tps","cmdtps","tpsb","maf","map","load","absload"].forEach(i => ids.add(i));
     if (w.type === "share") ids.add(w.share === "gear" ? "gear" : w.share === "temp" ? "trans" : "mph"); });
+  METRICS.forEach(m => { if (m.watch) ids.add(m.id); }); // addresses being watched for a drive poll at the visible rate on every screen
   [...ids].forEach(i => { const m = byId[i]; if (m && m.need) m.need.forEach(n => ids.add(n)); if (m && m.parent) ids.add(m.parent); });
   return ids;
 }
@@ -2683,7 +2687,7 @@ function openMore() {
    ["OBDLink MX+ product page", "https://www.obdlink.com/products/obdlink-mxp/", "Official: MX+ adds GM SW-CAN and MS-CAN, which reach networks the LX may not."]
   ];
   const ex = el("div"), scanOut = el("div", { class: "scroll", style: "max-height:220px" });
-  const hdr = el("select", { "aria-label": "Module" }, ["7E2","7E0","7E1"].map(h => el("option", { value: h, textContent: h === "7E2" ? "7E2 (usually transmission)" : h === "7E0" ? "7E0 (usually engine)" : "7E1 (alternate)" })));
+  const hdr = el("select", { "aria-label": "Module" }, ["7E0","7E2","7E1","241"].map(h => el("option", { value: h, textContent: h === "7E2" ? "7E2 (usually transmission)" : h === "7E0" ? "7E0 (usually engine)" : h === "241" ? "241 (body module)" : "7E1 (alternate)" })));
   const range = el("select", { "aria-label": "Range" }, ["1900","1100","1200","1400","1600","1A00","1C00","2000","2300","2800","3000","0000","0100"].map(r => el("option", { value: r, textContent: r + "–" + r.slice(0, 2) + "FF" })));
   const scan = el("button", { textContent: "Scan, parked only", onclick: async () => {
     if (!session) return toast("Connect first."); if (!session.link.sim && latest.mph > 0) return toast("Park the vehicle first.");
@@ -2713,7 +2717,11 @@ function openMore() {
   } });
   const stopBtn = el("button", { textContent: "Stop", disabled: true, onclick: () => { scanAbort = true; } });
   const copyAll = el("button", { textContent: "Copy all results", onclick: async () => { const scans = store.get(vkey("scans"), []), last = scans[scans.length - 1]; if (!last) return toast("No full scan yet."); const t = "scan " + new Date(last.t).toISOString() + " rpm " + last.at.rpm + " ect " + last.at.ect + "\n" + last.results.map(x => x.h + " " + x.did + " " + x.bytes).join("\n"); try { await navigator.clipboard.writeText(t); toast("Copied " + last.results.length + " answers."); } catch (e) { toast("Select and copy the text instead."); } } });
+  const watchIn = el("input", { placeholder: "e.g. 1123 1131 115D 119C 234B 234D 238E", "aria-label": "Addresses to watch", style: "width:100%", value: (METRICS.filter(m => m.watch).map(m => m.cmd.slice(2)).join(" ")) }), watchStat = el("div", { class: "sub", style: "white-space:normal", textContent: METRICS.some(m => m.watch) ? "Watching " + METRICS.filter(m => m.watch).length + " addresses this session." : "Not watching anything." });
+  const watchBtn = el("button", { textContent: "Watch during this drive", onclick: () => { const n = watchDids(hdr.value, watchIn.value.trim().split(/[\s,]+/).filter(Boolean)); watchStat.textContent = n ? "Watching " + METRICS.filter(m => m.watch).length + " addresses on " + hdr.value + ", about once a second, on every screen. They log into this drive's rows and the export." : "Nothing new to watch (check the addresses: four hex digits each)."; } });
+  const unwatchBtn = el("button", { textContent: "Stop watching", onclick: () => { const n = stopWatching(); watchStat.textContent = n ? "Stopped watching " + n + " addresses." : "Not watching anything."; } });
   ex.append(el("p", { textContent: "Asks the vehicle which GM read requests it answers. It sends read requests only. Anything that answers is logged raw from then on (and rides along in every history export). Its meaning stays unknown until you check it against a known value." }), hdr, range, scan, copyScan, scanOut,
+    el("h3", { textContent: "Watch addresses through a drive" }), el("p", { textContent: "A scan samples each address once, parked. To learn what an address is, watch it while driving: pick the module above, list the addresses, tap Watch, then drive. Each is read about once a second alongside rpm, speed and temperatures, so a pressure shows up as the value that rises with rpm and a temperature as the one that creeps. Watching ends with the session." }), watchIn, el("div", { class: "bar" }, watchBtn, unwatchBtn), watchStat,
     el("h3", { textContent: "Scan everything" }), el("p", { textContent: "Runs every range above (13 blocks) against the engine, transmission, alternate and body modules in one pass, about 12–18 minutes with the engine running. A module that answers nothing in its first two ranges is skipped. Results are kept with this vehicle (last 6 scans) and go out in the history export; nothing is added to live polling unless you tap Add as reading." }), el("div", { class: "bar" }, allBtn, stopBtn, copyAll), allProg, allOut);
   const xl = el("div", { class: "scroll", style: "max-height:240px;font:11px ui-monospace,monospace;white-space:pre-wrap" }); const renderXlog = () => { const L = lastXlog || []; xl.textContent = L.length ? L.map(x => new Date(x.t).toISOString().slice(11, 19) + " " + String(x.ms).padStart(5) + "ms  " + x.cmd + "  →  " + (x.r || "(empty)")).join("\n") : "No adapter traffic yet."; }; renderXlog();
   const xlBtn = el("button", { textContent: "Copy connection log", onclick: async () => { try { await navigator.clipboard.writeText(xl.textContent); toast("Copied " + (lastXlog || []).length + " exchanges."); } catch (e) { toast("Select and copy the text instead."); } } });
