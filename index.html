@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261114-1500Z">
-<meta name="build-timestamp-utc" content="2026-11-14T15:00:26Z">
+<meta name="build-id" content="OBD-20261114-1542Z">
+<meta name="build-timestamp-utc" content="2026-11-14T15:42:14Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -154,7 +154,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261114-1500Z", BUILD_UTC = "2026-11-14T15:00:26Z";
+const BUILD_ID = "OBD-20261114-1542Z", BUILD_UTC = "2026-11-14T15:42:14Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -384,6 +384,9 @@ const METRICS = [
  gm("injb2","Injector pulse, bank 2","Fuel","12C4","ms","med",2,0,30,b=>u16(b[0],b[1])*0.015,{headers:["7E0"],basis:"community (OBDb LaCrosse/Camaro DID 12C4, ×0.015 ms; answers on the 2014 Equinox)"}),
  gm("mistot","Misfires, total (since codes cleared)","Misfire","1200","count","slow",0,0,255,b=>b[0],{headers:["7E0"],basis:"community (OBDb LaCrosse/CTS DID 1200)"}),
  ...[["1201",1],["1202",2],["1203",3],["1204",4],["11F8",5],["11F9",6],["11FA",7],["11FB",8]].map(([did,n])=>gm("mish"+n,"Cyl "+n+" misfires since codes cleared","Misfire",did,"count","slow",0,0,65535,b=>u16(b[0],b[1]),{headers:["7E0"],basis:"community (OBDb LaCrosse/Terrain/Camaro misfire history DIDs; cylinder numbering per OBDb)"})),
+ gm("pcsCmd","Pressure control solenoid, commanded","Transmission","199F","mA","med",0,0,1500,b=>u16(b[0],b[1]),{headers:["7E0","7E2"],basis:"community (OBDb Silverado DID 199F P_CTRL_SOLENOID, milliamps; unverified)"}),
+ gm("pcsAct","Pressure control solenoid, actual","Transmission","199E","mA","med",0,0,1500,b=>u16(b[0],b[1]),{headers:["7E0","7E2"],basis:"community (OBDb Silverado DID 199E P_CTRL_SOLENOID_ACT, milliamps; unverified)"}),
+ gm("c1slip","C1 clutch slip","Transmission","2851","rpm","med",0,-8000,8000,b=>s16(b[0],b[1])/4,{headers:["7E2"],basis:"community (OBDb Silverado DID 2851 CLU_SLIP_C1_RING ÷4; unverified)"}),
  gm("toss","Trans output speed","Transmission","1942","rpm","med",0,0,8000,b=>u16(b[0],b[1])/4,{headers:["7E2"],basis:"community (OBDb Terrain DID 1942, ÷4; two bytes on the 2014 Equinox; unverified)"}),
  gm("c3slip","C3 clutch slip (6T70)","Transmission","19D4","rpm","med",0,-8000,8000,b=>s16(b[0],b[1])/4,{headers:["7E2"],basis:"community (OBDb Colorado DID 19D4 CLU_SLIP_C3_RING ÷4; answers on the 2014 Equinox 6T70; meaning not yet checked against a shift)"}),
  ...[1,2,3,4,5,6,7,8].map(n => { const mid = (0xA1 + n).toString(16).toUpperCase();
@@ -1684,7 +1687,7 @@ const W = (type, metrics, p, d, o = {}) => ({ type, metrics, p, d, ...o });
 const PRESETS = {
  "Health check": [ W("healthcheck",[],[4,9],[6,8]), W("healthcard",[],[4,8],[6,8]), W("bands",[],[4,6],[6,6]), W("needle",["rpm"],[4,4],[4,4]), W("number",["ect"],[2,3],[4,4]), W("number",["volt"],[2,3],[4,4]) ],
  Glance: [ W("cockpit",[],[4,12],[12,12]) ],
- Transmission: [ W("learn",[],[4,3],[6,3]), W("bands",[],[4,5],[6,5]), W("gearbox",[],[4,3],[3,4]), W("number",["c3slip"],[2,3],[3,3]), W("number",["toss"],[2,3],[3,3]), W("needle",["trans"],[4,4],[3,4]), W("line",["slip"],[4,4],[6,4],{win:5}), W("scatter",["mph","rpm"],[4,5],[6,5]),
+ Transmission: [ W("learn",[],[4,3],[6,3]), W("bands",[],[4,5],[6,5]), W("gearbox",[],[4,3],[3,4]), W("number",["c1slip"],[2,3],[3,3]), W("number",["c3slip"],[2,3],[3,3]), W("number",["pcsCmd"],[2,3],[3,3]), W("number",["pcsAct"],[2,3],[3,3]), W("number",["toss"],[2,3],[3,3]), W("needle",["trans"],[4,4],[3,4]), W("line",["slip"],[4,4],[6,4],{win:5}), W("scatter",["mph","rpm"],[4,5],[6,5]),
    W("line",["trans"],[4,4],[6,5],{win:15}), W("share",[],[4,4],[4,4],{share:"gear",view:"bars"}), W("share",[],[4,4],[4,4],{share:"temp",view:"donut"}),
    W("share",[],[4,4],[4,4],{share:"drive",view:"donut"}), W("number",["sh12"],[2,3],[3,3]), W("number",["sh23"],[2,3],[3,3]), W("number",["sh34"],[2,3],[3,3]), W("number",["ratio"],[2,3],[3,3]), W("number",["geari"],[2,3],[3,3]), W("history",["trans"],[4,4],[12,4],{stat:"max"}) ],
  Electrical: [ W("elab",[],[4,3],[4,3]), W("needle",["volt"],[2,4],[4,4]), W("number",["atrv"],[2,4],[4,4]), W("line",["volt","atrv"],[4,4],[12,4],{win:15}), W("history",["volt"],[4,4],[12,4],{stat:"min"}) ],
@@ -1736,14 +1739,14 @@ function watchDids(header, dids) { let n = 0; dids.forEach(did => { did = did.to
 function stopWatching() { let n = 0; for (let i = METRICS.length - 1; i >= 0; i--) if (METRICS[i].watch) { delete byId[METRICS[i].id]; delete mstate[METRICS[i].id]; METRICS.splice(i, 1); n++; } return n; }
 function registerRawDid(d) { if (!/^[0-9A-F]{4}$/.test(d.did) || !/^[0-9A-F]{3}$/.test(d.header)) return; addDynamic({ id: "r" + d.header + d.did, label: "GM " + d.header + " " + d.did + " (raw)", group: "Raw", cmd: "22" + d.did, pre: "62" + d.did, headers: [d.header], rawHex: true, tier: "slow", digits: 0, unit: "", min: 0, max: 255, basis: "community" }); }
 function loadVehicle(id) {
-  vid = id; store.set("vid", vid); dropDynamic();
+  vid = id; store.set("vid", vid); dropDynamic(); answers = store.get(vkey("answers"), {});
   const saved = store.get(vkey("dash"), null); dash = saved && typeof saved === "object" ? saved : {};
   Object.keys(PRESETS).forEach(k => { if (!Array.isArray(dash[k])) dash[k] = buildDash(k); });
   fits = store.get(vkey("fits"), {});
   // Glance v3 absorbs the old Trip screen (one cockpit tile); a Trip tab built by an earlier build is removed so the preset list stays the recommended set.
   if (store.get(vkey("glancev"), 0) !== 3) { dash.Glance = buildDash("Glance"); store.set(vkey("glancev"), 3); if (store.get(vkey("tripv"), 0)) { delete dash.Trip; delete fits.Trip; store.set(vkey("fits"), fits); } save(); }
   if (store.get(vkey("learnv"), 0) !== 2) { dash.Transmission = buildDash("Transmission"); dash["Health check"] = buildDash("Health check"); store.set(vkey("learnv"), 2); save(); }
-  if (store.get(vkey("gmv2"), 0) !== 1) { dash.Transmission = buildDash("Transmission"); dash.Fuel = buildDash("Fuel"); store.set(vkey("gmv2"), 1); save(); }
+  if (store.get(vkey("gmv2"), 0) !== 2) { dash.Transmission = buildDash("Transmission"); dash.Fuel = buildDash("Fuel"); store.set(vkey("gmv2"), 2); save(); }
   rules = store.get(vkey("rules"), {}); customs = store.get(vkey("customs"), []); rawDids = store.get(vkey("rawdids"), []);
   customs.forEach(registerCustom); rawDids.forEach(registerRawDid);
   tab = store.get(vkey("tab"), "Health check"); if (!dash[tab] && tab !== EV) tab = "Health check";
@@ -1751,6 +1754,10 @@ function loadVehicle(id) {
 // Trip computer: totals since connect plus a rolling 10-minute window for burn rate and specific range (the aviation "how far on what's left" numbers).
 let trip = { gal: 0, mi: 0, sec: 0, hist: [] };
 function tripWindow() { const h = trip.hist; if (h.length < 2) return null; const a = h[0], b = h[h.length - 1], hrs = (b.t - a.t) / 3600000; if (hrs < 1 / 60) return null; const gal = b.gal - a.gal, mi = b.mi - a.mi; return { gph: gal / hrs, mpg: gal > 0.005 ? mi / gal : null, mph: mi / hrs, hrs }; }
+// Which GM requests this vehicle has answered (and on which header), remembered per vehicle: the next session starts on the right header and parks known-silent requests until a 60 s retry instead of burning three tries each on every header.
+let answers = {};
+function noteAnswer(m, ok, header) { if (!session || session.link.sim || !m.cmd || !/^22/.test(m.cmd) || m.dynamic) return; const prev = answers[m.id]; if (prev && prev.ok === ok && prev.header === header) return; answers[m.id] = { ok, header: header || null, t: Date.now() }; store.set(vkey("answers"), answers); }
+function applyKnownAnswers() { const now = Date.now(); METRICS.forEach(m => { const a = answers[m.id], s = mstate[m.id]; if (!a || !s || !m.cmd) return; if (a.ok === false) { s.status = "failed"; s.last = now; } else if (a.header && m.headers) { const i = m.headers.indexOf(a.header); if (i >= 0) s.headerIdx = i; } }); }
 function resetLive() {
   trip = { gal: 0, mi: 0, sec: 0, hist: [] };
   series = {}; stats = {}; latest = {}; rows = []; flushed = 0; chunkSeq = 0; monitor = null; truck = {}; codes = null; mode06 = null; supported = null; prevMph = null; stableBuf = [];
@@ -1893,11 +1900,11 @@ async function pollOnce(m) {
   if (v === null) {
     s.misses++;
     if (s.status !== "ok" && s.headerIdx < headers.length - 1 && !s.zeros) { s.headerIdx++; s.misses = 0; }
-    else if (s.misses >= 3) { s.status = "failed"; s.headerIdx = 0; s.misses = 0; s.zeros = 0;
+    else if (s.misses >= 3) { s.status = "failed"; s.headerIdx = 0; s.misses = 0; s.zeros = 0; noteAnswer(m, false, null);
       // Some data lives at a different address on other GM generations: fall back to the next alternate request once this one is exhausted.
       const alts = m.alts || (m.alt ? [m.alt] : []); s.altIdx = s.altIdx || 0;
       if (s.altIdx < alts.length) { if (!m.orig) m.orig = { cmd: m.cmd, pre: m.pre, headers: m.headers, f: m.f, basis: m.basis, label: m.label }; Object.assign(m, alts[s.altIdx++]); s.status = "unknown"; if (session) logX(session, "route " + m.id, "→ " + m.cmd + " " + (m.basis || ""), Date.now()); } }
-  } else { s.misses = 0; s.status = "ok"; }
+  } else { if (s.status !== "ok") noteAnswer(m, true, headers[s.headerIdx] || headers[0]); s.misses = 0; s.status = "ok"; }
   record(m.id, v, Date.now());
 }
 async function runLoop(s) {
@@ -1923,7 +1930,7 @@ async function runLoop(s) {
 async function start(link, label) {
   try {
     await link.open();
-    resetLive(); const s = { link, header: null, savedAt: Date.now() }; session = s; driveId = "d" + Date.now(); driveStart = Date.now();
+    resetLive(); applyKnownAnswers(); const s = { link, header: null, savedAt: Date.now() }; session = s; driveId = "d" + Date.now(); driveStart = Date.now();
     if (!link.sim && navigator.storage && navigator.storage.persist) { try { await navigator.storage.persist(); } catch (e) {} }
     setStatus("Initializing " + label + "…");
     // CAN first, which every vehicle so far uses and answers instantly. Only if that fails, let the adapter search protocols, which can take ten seconds or more.
@@ -2719,6 +2726,28 @@ function openMore() {
   // Scan everything: every module × every range in one run, results kept per vehicle and included in the history export. Nothing is auto-registered (190 extra polls would starve the live readings); each row still has "Add as reading".
   const SCAN_MODULES = [["7E0", "engine"], ["7E2", "transmission"], ["7E1", "alternate"], ["241", "body"]], SCAN_RANGES = ["1100", "1200", "1400", "1600", "1900", "1A00", "1C00", "2000", "2300", "2800", "3000", "0000", "0100"];
   let scanAbort = false; const allOut = el("div", { class: "scroll", style: "max-height:260px" }), allProg = el("div", { style: "white-space:normal;min-height:1.4em;padding:6px 8px;margin:6px 0;border-radius:8px;background:var(--raised);font-variant-numeric:tabular-nums", textContent: "Idle. Tap Scan everything with the vehicle parked and the engine running." });
+  // Probe: every GM request the app knows, once each on each of its headers, so a new vehicle's request set is settled in under a minute.
+  const reqOut = el("div", { class: "scroll", style: "max-height:260px;font-size:.8rem" }), reqStat = el("div", { class: "sub", style: "white-space:normal" });
+  const gmReqs = () => METRICS.filter(m => m.cmd && /^22/.test(m.cmd) && !m.dynamic);
+  const renderReq = () => { const L = gmReqs(); const ok = L.filter(m => answers[m.id] && answers[m.id].ok).length, no = L.filter(m => answers[m.id] && answers[m.id].ok === false).length; reqStat.textContent = ok + " of " + L.length + " GM requests answered on this vehicle, " + no + " known silent, " + (L.length - ok - no) + " not yet tried."; };
+  const reqShow = el("button", { textContent: "Show list", onclick: () => { reqOut.textContent = ""; gmReqs().sort((a, b) => (a.group + a.label).localeCompare(b.group + b.label)).forEach(m => { const a = answers[m.id]; reqOut.append(el("div", { class: "row" }, el("span", { textContent: m.label + " · " + m.cmd.slice(2) }), el("span", { style: a && a.ok ? "color:var(--good)" : a ? "color:var(--muted)" : "", textContent: a ? (a.ok ? "answers on " + a.header : "silent") + " · " + new Date(a.t).toLocaleDateString() : "not tried" }))); }); } });
+  const probeBtn = el("button", { textContent: "Probe all known requests", onclick: async () => {
+    if (!session) { reqStat.textContent = "Not connected. Connect first, then probe."; return; } if (!session.link.sim && latest.mph > 0) { reqStat.textContent = "Parked only."; return; }
+    probeBtn.disabled = true; const L = gmReqs(); let i = 0;
+    for (const m of L) { if (!session) break; let hit = null; for (const h of m.headers || ["7E0"]) { try { const raw = await askH(h, m.cmd); if (!isNoData(raw) && dataBytes(raw, m.pre)) { hit = h; break; } } catch (e) {} }
+      answers[m.id] = { ok: !!hit, header: hit, t: Date.now() }; const st = mstate[m.id]; if (st) { if (hit) { st.headerIdx = Math.max(0, (m.headers || []).indexOf(hit)); if (st.status === "failed") st.status = "unknown"; } else { st.status = "failed"; st.last = Date.now(); } }
+      reqStat.textContent = "Probing " + (++i) + " of " + L.length + " · " + m.label; }
+    if (!session || !session.link.sim) store.set(vkey("answers"), answers); probeBtn.disabled = false; renderReq(); reqShow.onclick(); } });
+  renderReq();
+  // Compare the last two full scans
+  const cmpOut = el("div", { class: "scroll", style: "max-height:260px;font:12px ui-monospace,monospace;white-space:pre-wrap" });
+  const cmpBtn = el("button", { textContent: "Compare", onclick: () => { const sc = store.get(vkey("scans"), []); if (sc.length < 2) { cmpOut.textContent = "Needs two saved full scans of this vehicle (" + sc.length + " so far)."; return; }
+    const [A, B] = sc.slice(-2), ma = new Map(A.results.map(r => [r.h + " " + r.did, r.bytes])), mb = new Map(B.results.map(r => [r.h + " " + r.did, r.bytes])), lines = [];
+    const tag = (x) => new Date(x.t).toLocaleString() + " (rpm " + (x.at.rpm == null ? "?" : Math.round(x.at.rpm)) + ", coolant " + (x.at.ect == null ? "?" : Math.round(x.at.ect)) + ")";
+    lines.push("A: " + tag(A)); lines.push("B: " + tag(B)); lines.push("");
+    const keys = [...new Set([...ma.keys(), ...mb.keys()])].sort(); let n = 0;
+    keys.forEach(k => { const a = ma.get(k), b = mb.get(k); if (a === b) return; n++; lines.push(k.padEnd(9) + (a === undefined ? "(absent)" : a).padEnd(14) + " → " + (b === undefined ? "(absent)" : b)); });
+    lines.push(""); lines.push(n + " of " + keys.length + " addresses differ; the rest are identical in both scans."); cmpOut.textContent = lines.join("\n"); } });
   const allBtn = el("button", { textContent: "Scan everything (parked, engine running)", onclick: async () => {
     // Every way out is written on screen, not only toasted, so a tap that does nothing explains itself.
     if (!session) { allProg.textContent = "Not connected. Connect first, then scan."; return; }
@@ -2742,6 +2771,8 @@ function openMore() {
   const unwatchBtn = el("button", { textContent: "Stop watching", onclick: () => { const n = stopWatching(); watchStat.textContent = n ? "Stopped watching " + n + " addresses." : "Not watching anything."; } });
   ex.append(el("p", { textContent: "Asks the vehicle which GM read requests it answers. It sends read requests only. Anything that answers is logged raw from then on (and rides along in every history export). Its meaning stays unknown until you check it against a known value." }), hdr, range, scan, copyScan, scanOut,
     el("h3", { textContent: "Watch addresses through a drive" }), el("p", { textContent: "A scan samples each address once, parked. To learn what an address is, watch it while driving: pick the module above, list the addresses, tap Watch, then drive. Each is read about once a second alongside rpm, speed and temperatures, so a pressure shows up as the value that rises with rpm and a temperature as the one that creeps. Watching ends with the session." }), watchIn, el("div", { class: "bar" }, watchBtn, unwatchBtn), watchStat,
+    el("h3", { textContent: "Requests this vehicle answers" }), reqStat, el("div", { class: "bar" }, probeBtn, reqShow), reqOut,
+    el("h3", { textContent: "Compare the last two full scans" }), el("p", { textContent: "Lists addresses that appeared, disappeared or changed between the two most recent full scans of this vehicle: engine-off against engine-running is the quickest way to see which addresses are live values." }), el("div", { class: "bar" }, cmpBtn), cmpOut,
     el("h3", { textContent: "Scan everything" }), el("p", { textContent: "Runs every range above (13 blocks) against the engine, transmission, alternate and body modules in one pass, about 12–18 minutes with the engine running. A module that answers nothing in its first two ranges is skipped. Results are kept with this vehicle (last 6 scans) and go out in the history export; nothing is added to live polling unless you tap Add as reading." }), el("div", { class: "bar" }, allBtn, stopBtn, copyAll), allProg, allOut);
   const xl = el("div", { class: "scroll", style: "max-height:240px;font:11px ui-monospace,monospace;white-space:pre-wrap" }); const renderXlog = () => { const L = lastXlog || []; xl.textContent = L.length ? L.map(x => new Date(x.t).toISOString().slice(11, 19) + " " + String(x.ms).padStart(5) + "ms  " + x.cmd + "  →  " + (x.r || "(empty)")).join("\n") : "No adapter traffic yet."; }; renderXlog();
   const xlBtn = el("button", { textContent: "Copy connection log", onclick: async () => { try { await navigator.clipboard.writeText(xl.textContent); toast("Copied " + (lastXlog || []).length + " exchanges."); } catch (e) { toast("Select and copy the text instead."); } } });
