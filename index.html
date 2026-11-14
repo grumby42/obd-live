@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261114-1353Z">
-<meta name="build-timestamp-utc" content="2026-11-14T13:53:54Z">
+<meta name="build-id" content="OBD-20261114-1500Z">
+<meta name="build-timestamp-utc" content="2026-11-14T15:00:26Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -154,7 +154,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261114-1353Z", BUILD_UTC = "2026-11-14T13:53:54Z";
+const BUILD_ID = "OBD-20261114-1500Z", BUILD_UTC = "2026-11-14T15:00:26Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -377,6 +377,15 @@ const METRICS = [
  gm("achp","A/C high-side pressure","HVAC","1564","psi","slow",0,0,450,b=>b[0]*2.0,{headers:["7E0"],basis:"community (recorded on a 2016 Silverado 1500, OBDb; scaling single-source)"}),
  gm("oill","Oil life","Engine","119F","%","slow",0,0,100,pct,{rule:{lo:15,note:GUIDE}}),
  gm("knock","Knock retard","Engine","11A6","°","med",1,0,30,b=>b[0]*0.0878906),
+ gm("kr2","Total knock retard","Engine","12D9","°","med",1,0,60,b=>b[0]*0.45,{headers:["7E0"],basis:"community (OBDb LaCrosse/CTS DID 12D9, ×0.45°; answers on the 2014 Equinox)"}),
+ gm("tq","Engine torque","Engine","203F","Nm","med",0,0,1000,b=>u16(b[0],b[1])/4,{headers:["7E0"],basis:"community (OBDb LaCrosse/CTS DID 203F, ÷4 Nm; answers on the 2014 Equinox)"}),
+ gm("eth","Ethanol estimate","Fuel","0052","%","slow",0,0,100,b=>b[0]*100/255,{headers:["7E0"],basis:"community (OBDb LaCrosse/CTS DID 0052, ×100/255; the ECM's own estimate from fuel trims after a fill, not a sensor)"}),
+ gm("injb1","Injector pulse, bank 1","Fuel","12C3","ms","med",2,0,30,b=>u16(b[0],b[1])*0.015,{headers:["7E0"],basis:"community (OBDb LaCrosse/Camaro DID 12C3, ×0.015 ms; answers on the 2014 Equinox)"}),
+ gm("injb2","Injector pulse, bank 2","Fuel","12C4","ms","med",2,0,30,b=>u16(b[0],b[1])*0.015,{headers:["7E0"],basis:"community (OBDb LaCrosse/Camaro DID 12C4, ×0.015 ms; answers on the 2014 Equinox)"}),
+ gm("mistot","Misfires, total (since codes cleared)","Misfire","1200","count","slow",0,0,255,b=>b[0],{headers:["7E0"],basis:"community (OBDb LaCrosse/CTS DID 1200)"}),
+ ...[["1201",1],["1202",2],["1203",3],["1204",4],["11F8",5],["11F9",6],["11FA",7],["11FB",8]].map(([did,n])=>gm("mish"+n,"Cyl "+n+" misfires since codes cleared","Misfire",did,"count","slow",0,0,65535,b=>u16(b[0],b[1]),{headers:["7E0"],basis:"community (OBDb LaCrosse/Terrain/Camaro misfire history DIDs; cylinder numbering per OBDb)"})),
+ gm("toss","Trans output speed","Transmission","1942","rpm","med",0,0,8000,b=>u16(b[0],b[1])/4,{headers:["7E2"],basis:"community (OBDb Terrain DID 1942, ÷4; two bytes on the 2014 Equinox; unverified)"}),
+ gm("c3slip","C3 clutch slip (6T70)","Transmission","19D4","rpm","med",0,-8000,8000,b=>s16(b[0],b[1])/4,{headers:["7E2"],basis:"community (OBDb Colorado DID 19D4 CLU_SLIP_C3_RING ÷4; answers on the 2014 Equinox 6T70; meaning not yet checked against a shift)"}),
  ...[1,2,3,4,5,6,7,8].map(n => { const mid = (0xA1 + n).toString(16).toUpperCase();
    return { id:"mis"+n, label:"Cyl "+n+" misfires (counter C)", group:"Misfire", cmd:"06"+mid, unit:"count", tier:"slow", digits:0, min:0, max:50, basis:"standard", mid, raw:r=>parseMode06(r,mid)[0x0C], kids:[{ id:"misb"+n, label:"Cyl "+n+" misfires (counter B)", unit:"count", digits:0, min:0, max:50, raw:r=>parseMode06(r,mid)[0x0B] }], rule:{hi:0,note:"Misfire monitor counters. SAE defines one counter for the current or last drive cycle and one for the last ten cycles; published sources disagree on which is $0B and which is $0C, so both are logged and the review rates growth within a drive."} }; }),
  { id:"ratio",label:"Engine rpm per mph",group:"Transmission",unit:"rpm/mph",digits:1,min:0,max:200,basis:"derived",need:["rpm","mph"],calc:v=>v.mph>5&&v.rpm>0?v.rpm/v.mph:null },
@@ -1022,6 +1031,14 @@ function analyzeDrive(input) {
   notes.forEach(t => add("Weighing the evidence", "info", "Evidence that pulls in different directions", t, "Stated so the reasoning can be checked, not to settle it.", [], [], "Cross-signal reasoning"));
   F.forEach(f => { if (!f.chain) return; const sup = f.chain.hypotheses.filter(h => h.verdict === "supported" || h.verdict === "partly supported"); f.bestGuess = sup.length ? sup.sort((a, b) => (b.hits / Math.max(1, b.testable)) - (a.hits / Math.max(1, a.testable)) || b.hits - a.hits)[0].name : (f.chain.hypotheses.some(h => h.verdict === "untested") ? "Not decidable from this drive" : f.causes[0] || null); f.alsoPossible = f.chain.hypotheses.filter(h => h.name !== f.bestGuess && h.verdict !== "weakened").map(h => h.name); f.ruledOut = f.chain.hypotheses.filter(h => h.verdict === "weakened").map(h => h.name); });
   // Verdict
+  // Injector pulse by bank (GM DIDs 12C3/12C4): the fueling side of a bank-to-bank trim difference.
+  { const pr = rows.filter(r => typeof r.injb1 === "number" && typeof r.injb2 === "number" && r.injb1 > 0.5 && r.injb2 > 0.5 && (r.rpm || 0) > 400);
+    if (pr.length >= 60) { const sk = pr.map(r => (r.injb1 - r.injb2) / ((r.injb1 + r.injb2) / 2) * 100), skew = pctl(sk, .5); stats.injSkew = skew;
+      if (Math.abs(skew) >= 8) add("Fuel control", "watch", "Bank " + (skew > 0 ? "1" : "2") + " injectors pulse " + Math.abs(skew).toFixed(0) + "% longer than the other bank", "Median over " + pr.length + " running samples: bank 1 " + pctl(pr.map(r => r.injb1), .5).toFixed(2) + " ms, bank 2 " + pctl(pr.map(r => r.injb2), .5).toFixed(2) + " ms.", "The ECM fuels each bank from its own oxygen sensor. Equal banks should pulse within a few percent of each other; a steady gap means one bank needs more fuel for the same air, and the trims should show the same lean-rich split.", ["Air leak or exhaust leak on one bank", "Oxygen sensor reading differently on one bank", "Injector flow drift on one bank"], ["Compare with the bank 1 vs bank 2 long-term trims on this drive: if they split the same way, the cause is upstream of the injectors."], "Unverified GM request (OBDb)");
+      else add("Fuel control", "info", "Injector pulse balanced between banks (" + skew.toFixed(1) + "%)", "Bank 1 " + pctl(pr.map(r => r.injb1), .5).toFixed(2) + " ms, bank 2 " + pctl(pr.map(r => r.injb2), .5).toFixed(2) + " ms, median of " + pr.length + " samples.", "", [], [], "Unverified GM request (OBDb)"); } }
+  // Misfire history counters (GM DIDs, since codes were last cleared): the long memory the mode-06 counters lack.
+  { const last = rows.slice().reverse().find(r => typeof r.mish1 === "number" || typeof r.mish5 === "number"); if (last) { const per = []; let tot = 0; for (let c = 1; c <= 8; c++) { const v = last["mish" + c]; if (typeof v === "number") { per.push([c, v]); tot += v; } } stats.misHist = tot;
+      if (tot > 0) { const top = per.slice().sort((a, b) => b[1] - a[1])[0], share = top[1] / tot; add("Combustion", share >= .6 && tot >= 10 ? "watch" : "info", tot + " misfire" + (tot === 1 ? "" : "s") + " logged since codes were cleared" + (share >= .6 && tot >= 10 ? ", " + Math.round(share * 100) + "% on cylinder " + top[0] : ""), per.filter(x => x[1] > 0).map(x => "cyl " + x[0] + ": " + x[1]).join(", ") + ".", "These counters accumulate across drives until codes are cleared, so they show which cylinder misfires over weeks rather than in the last few minutes.", share >= .6 && tot >= 10 ? ["Ignition coil or plug on that cylinder", "Injector on that cylinder", "Compression or valve on that cylinder"] : [], share >= .6 && tot >= 10 ? ["Swap that cylinder's coil with a neighbour and see whether the count follows the coil."] : [], "Unverified GM request (OBDb)"); } } }
   // Compared with this vehicle's own usual bands (frozen at the last logged repair once 5+ drives precede it).
   { const prior = (history || []).filter(d => d && d.id !== meta.id), bs = baselineSet(prior, vehicle.repairs), cmp = compareBands(bs.bands, driveBandValues({ summary: meta.summary, stats }));
     const out = cmp.filter(r => r.state !== "in"), newExt = out.filter(r => /new/.test(r.state));
@@ -1598,6 +1615,8 @@ const BAND_DEFS = [
   ["knock", "Knock retard (98th pct)", "°", 1, "stat", "knock"], ["timing.avg", "Timing advance, average", "°", 1, "sum", "timing", "avg"],
   ["idleMafPerL", "Idle airflow per liter", "g/s/L", 2, "stat", "idleMafPerL"], ["mpg", "Estimated mpg", "mpg", 1, "stat", "mpg"],
   ["evapp.avg", "EVAP tank pressure, average", "Pa", 0, "sum", "evapp", "avg"],
+  ["eth.avg", "Ethanol estimate", "%", 0, "sum", "eth", "avg"], ["injb1.avg", "Injector pulse bank 1, average", "ms", 2, "sum", "injb1", "avg"], ["injb2.avg", "Injector pulse bank 2, average", "ms", 2, "sum", "injb2", "avg"], ["injSkew", "Injector pulse bank 1 vs 2", "%", 1, "stat", "injSkew"],
+  ["tq.max", "Engine torque peak", "Nm", 0, "sum", "tq", "max"], ["kr2.max", "Total knock retard peak", "°", 1, "sum", "kr2", "max"], ["c3slip.max", "C3 clutch slip peak", "rpm", 0, "sum", "c3slip", "max"], ["misHist", "Misfires since codes cleared", "count", 0, "stat", "misHist"],
   ["cat1.max", "Catalyst 1 peak", "°F", 0, "sum", "cat1", "max"], ["cat2.max", "Catalyst 2 peak", "°F", 0, "sum", "cat2", "max"],
   ["tpfl.avg", "Tire LF", "psi", 0, "sum", "tpfl", "avg"], ["tpfr.avg", "Tire RF", "psi", 0, "sum", "tpfr", "avg"], ["tprl.avg", "Tire LR", "psi", 0, "sum", "tprl", "avg"], ["tprr.avg", "Tire RR", "psi", 0, "sum", "tprr", "avg"]
 ];
@@ -1665,7 +1684,7 @@ const W = (type, metrics, p, d, o = {}) => ({ type, metrics, p, d, ...o });
 const PRESETS = {
  "Health check": [ W("healthcheck",[],[4,9],[6,8]), W("healthcard",[],[4,8],[6,8]), W("bands",[],[4,6],[6,6]), W("needle",["rpm"],[4,4],[4,4]), W("number",["ect"],[2,3],[4,4]), W("number",["volt"],[2,3],[4,4]) ],
  Glance: [ W("cockpit",[],[4,12],[12,12]) ],
- Transmission: [ W("learn",[],[4,3],[6,3]), W("bands",[],[4,5],[6,5]), W("gearbox",[],[4,3],[3,4]), W("needle",["trans"],[4,4],[3,4]), W("line",["slip"],[4,4],[6,4],{win:5}), W("scatter",["mph","rpm"],[4,5],[6,5]),
+ Transmission: [ W("learn",[],[4,3],[6,3]), W("bands",[],[4,5],[6,5]), W("gearbox",[],[4,3],[3,4]), W("number",["c3slip"],[2,3],[3,3]), W("number",["toss"],[2,3],[3,3]), W("needle",["trans"],[4,4],[3,4]), W("line",["slip"],[4,4],[6,4],{win:5}), W("scatter",["mph","rpm"],[4,5],[6,5]),
    W("line",["trans"],[4,4],[6,5],{win:15}), W("share",[],[4,4],[4,4],{share:"gear",view:"bars"}), W("share",[],[4,4],[4,4],{share:"temp",view:"donut"}),
    W("share",[],[4,4],[4,4],{share:"drive",view:"donut"}), W("number",["sh12"],[2,3],[3,3]), W("number",["sh23"],[2,3],[3,3]), W("number",["sh34"],[2,3],[3,3]), W("number",["ratio"],[2,3],[3,3]), W("number",["geari"],[2,3],[3,3]), W("history",["trans"],[4,4],[12,4],{stat:"max"}) ],
  Electrical: [ W("elab",[],[4,3],[4,3]), W("needle",["volt"],[2,4],[4,4]), W("number",["atrv"],[2,4],[4,4]), W("line",["volt","atrv"],[4,4],[12,4],{win:15}), W("history",["volt"],[4,4],[12,4],{stat:"min"}) ],
@@ -1673,7 +1692,7 @@ const PRESETS = {
  Phone: [ W("phone",[],[4,3],[4,3]), W("number",["speedo"],[2,3],[4,3]), W("number",["grade"],[2,3],[4,3]), W("line",["mph","gmph"],[4,4],[6,4],{win:5}), W("line",["vib"],[4,4],[6,4],{win:5}), W("line",["noise"],[4,4],[6,4],{win:5}), W("scatter",["mph","vib"],[4,5],[6,5]) ],
  Engine: [ W("misfire",[],[4,4],[6,4]), W("number",["afm"],[2,3],[3,3]), W("number",["bal1"],[2,3],[3,3]), W("line",["ect","oilt","trans"],[4,4],[6,4],{win:15}), W("line",["stft1","stft2","ltft1","ltft2"],[4,4],[6,4],{win:5}),
    W("line",["rpm"],[4,3],[6,4],{win:5}), W("number",["oilp"],[2,3],[3,3]), W("number",["oilt"],[2,3],[3,3]), W("number",["knock"],[2,3],[3,3]), W("number",["timing"],[2,3],[3,3]), W("number",["load"],[2,3],[3,3]), W("number",["hp"],[2,3],[3,3]), W("number",["oill"],[2,3],[3,3]), W("number",["map"],[2,3],[3,3]) ],
- Fuel: [ W("number",["mpg"],[2,3],[3,3]), W("needle",["fuel"],[2,3],[3,3]), W("number",["evapp"],[2,3],[3,3]), W("number",["purge"],[2,3],[3,3]), W("number",["ltft1"],[2,3],[3,3]), W("number",["ltft2"],[2,3],[3,3]), W("line",["mpg"],[4,4],[6,4],{win:15}),
+ Fuel: [ W("number",["mpg"],[2,3],[3,3]), W("needle",["fuel"],[2,3],[3,3]), W("number",["evapp"],[2,3],[3,3]), W("number",["purge"],[2,3],[3,3]), W("number",["ltft1"],[2,3],[3,3]), W("number",["ltft2"],[2,3],[3,3]), W("number",["eth"],[2,3],[3,3]), W("number",["injb1"],[2,3],[3,3]), W("number",["injb2"],[2,3],[3,3]), W("line",["mpg"],[4,4],[6,4],{win:15}),
    W("line",["lambda"],[4,3],[6,4],{win:5}), W("number",["maf"],[2,3],[3,3]), W("number",["frate"],[2,3],[3,3]), W("share",[],[4,4],[6,4],{share:"drive",view:"donut"}), W("history",["mpg"],[4,4],[6,4],{stat:"avg"}) ],
  Diagnostics: [ W("status",[],[4,3],[6,3]), W("readiness",[],[4,6],[6,6]), W("codes",[],[4,6],[6,7]), W("truck",[],[4,5],[6,5]), W("crosscheck",[],[4,5],[6,5]), W("misfire",[],[4,4],[6,3]), W("mode06",[],[4,8],[12,7]) ],
  "All sensors": [ W("allsensors",[],[4,12],[12,12]) ]
@@ -1724,6 +1743,7 @@ function loadVehicle(id) {
   // Glance v3 absorbs the old Trip screen (one cockpit tile); a Trip tab built by an earlier build is removed so the preset list stays the recommended set.
   if (store.get(vkey("glancev"), 0) !== 3) { dash.Glance = buildDash("Glance"); store.set(vkey("glancev"), 3); if (store.get(vkey("tripv"), 0)) { delete dash.Trip; delete fits.Trip; store.set(vkey("fits"), fits); } save(); }
   if (store.get(vkey("learnv"), 0) !== 2) { dash.Transmission = buildDash("Transmission"); dash["Health check"] = buildDash("Health check"); store.set(vkey("learnv"), 2); save(); }
+  if (store.get(vkey("gmv2"), 0) !== 1) { dash.Transmission = buildDash("Transmission"); dash.Fuel = buildDash("Fuel"); store.set(vkey("gmv2"), 1); save(); }
   rules = store.get(vkey("rules"), {}); customs = store.get(vkey("customs"), []); rawDids = store.get(vkey("rawdids"), []);
   customs.forEach(registerCustom); rawDids.forEach(registerRawDid);
   tab = store.get(vkey("tab"), "Health check"); if (!dash[tab] && tab !== EV) tab = "Health check";
