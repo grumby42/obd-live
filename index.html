@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261114-1542Z">
-<meta name="build-timestamp-utc" content="2026-11-14T15:42:14Z">
+<meta name="build-id" content="OBD-20261114-2202Z">
+<meta name="build-timestamp-utc" content="2026-11-14T22:02:16Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -154,7 +154,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261114-1542Z", BUILD_UTC = "2026-11-14T15:42:14Z";
+const BUILD_ID = "OBD-20261114-2202Z", BUILD_UTC = "2026-11-14T22:02:16Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1042,10 +1042,24 @@ function analyzeDrive(input) {
   // Misfire history counters (GM DIDs, since codes were last cleared): the long memory the mode-06 counters lack.
   { const last = rows.slice().reverse().find(r => typeof r.mish1 === "number" || typeof r.mish5 === "number"); if (last) { const per = []; let tot = 0; for (let c = 1; c <= 8; c++) { const v = last["mish" + c]; if (typeof v === "number") { per.push([c, v]); tot += v; } } stats.misHist = tot;
       if (tot > 0) { const top = per.slice().sort((a, b) => b[1] - a[1])[0], share = top[1] / tot; add("Combustion", share >= .6 && tot >= 10 ? "watch" : "info", tot + " misfire" + (tot === 1 ? "" : "s") + " logged since codes were cleared" + (share >= .6 && tot >= 10 ? ", " + Math.round(share * 100) + "% on cylinder " + top[0] : ""), per.filter(x => x[1] > 0).map(x => "cyl " + x[0] + ": " + x[1]).join(", ") + ".", "These counters accumulate across drives until codes are cleared, so they show which cylinder misfires over weeks rather than in the last few minutes.", share >= .6 && tot >= 10 ? ["Ignition coil or plug on that cylinder", "Injector on that cylinder", "Compression or valve on that cylinder"] : [], share >= .6 && tot >= 10 ? ["Swap that cylinder's coil with a neighbour and see whether the count follows the coil."] : [], "Unverified GM request (OBDb)"); } } }
+  // Composite KPIs: the drive-level indicators that trend better than any single reading.
+  { const med = a => a.length ? pctl(a, .5) : null, running = rows.filter(r => (r.rpm || 0) > 400), warm = running.filter(r => (r.ect || 0) >= 160), t0r = rows.length ? rows[0].t : 0;
+    const both = warm.filter(r => typeof r.ltft1 === "number" && typeof r.ltft2 === "number");
+    stats.ltftCommon = med(both.map(r => (r.ltft1 + r.ltft2) / 2)); stats.ltftDelta = med(both.map(r => r.ltft1 - r.ltft2));
+    const vr = running.filter(r => typeof r.volt === "number" && r.t - t0r > 120000); stats.voltHighShare = vr.length >= 60 ? vr.filter(r => r.volt >= 14.5).length / vr.length * 100 : null; stats.voltEcoShare = vr.length >= 60 ? vr.filter(r => r.volt <= 13.2).length / vr.length * 100 : null;
+    const amb = (rows.find(r => typeof r.amb === "number") || {}).amb, ectMax = Math.max(...rows.map(r => typeof r.ect === "number" ? r.ect : -Infinity)), oilMax = Math.max(...rows.map(r => typeof r.oilt === "number" ? r.oilt : -Infinity));
+    stats.ectPeakOverAmb = typeof amb === "number" && isFinite(ectMax) ? ectMax - amb : null; stats.oilOverEct = isFinite(ectMax) && isFinite(oilMax) ? oilMax - ectMax : null;
+    const idle = warm.filter(r => (r.mph || 0) < 2 && r.rpm < 900 && typeof r.stft1 === "number"); stats.idleStftExc = idle.length >= 30 ? idle.filter(r => Math.abs((r.stft1 + (typeof r.stft2 === "number" ? r.stft2 : r.stft1)) / 2) >= 8).length / idle.length * 100 : null;
+    const perCyl = []; for (let c = 1; c <= 8; c++) { const v = rows.map(r => r["mis" + c]).filter(x => typeof x === "number"); if (v.length) perCyl.push([c, Math.max(...v)]); } const misSum = perCyl.reduce((a, x) => a + x[1], 0);
+    if (perCyl.length) { const top = perCyl.slice().sort((a, b) => b[1] - a[1])[0]; stats.misTopShare = misSum >= 3 ? top[1] / misSum * 100 : (misSum ? null : 0); stats.misTopCyl = misSum ? top[0] : null; }
+    const ev = rows.map(r => r.evapp).filter(x => typeof x === "number"); stats.evapRange = ev.length >= 30 ? Math.max(...ev) - Math.min(...ev) : null;
+    const cr = warm.filter(r => (r.mph || 0) > 45 && typeof r.trans === "number" && typeof r.ect === "number"); stats.transOverEct = cr.length >= 60 ? med(cr.map(r => r.trans - r.ect)) : null;
+    const kn = warm.filter(r => typeof r.knock === "number" && typeof r.iat === "number"); stats.iatWarm = kn.length ? med(kn.map(r => r.iat)) : null; }
   // Compared with this vehicle's own usual bands (frozen at the last logged repair once 5+ drives precede it).
   { const prior = (history || []).filter(d => d && d.id !== meta.id), bs = baselineSet(prior, vehicle.repairs), cmp = compareBands(bs.bands, driveBandValues({ summary: meta.summary, stats }));
     const out = cmp.filter(r => r.state !== "in"), newExt = out.filter(r => /new/.test(r.state));
     stats.bandCompared = cmp.length; stats.bandOutside = out.map(r => r.key);
+    stats.v = STATS_VERSION;
     if (cmp.length >= 5 && !/Short|Stationary/.test(trip.kind)) {
       if (out.length) add("Trend", newExt.length >= 2 || out.length >= 4 ? "watch" : "info", out.length + " of " + cmp.length + " measures outside this vehicle's usual band", out.map(r => r.state + ": " + bandText(r)).join("; ") + ".", "Each band is the 10th–90th percentile of the same measure across " + bs.label + "; 'new high' or 'new low' means beyond anything logged in that set. One drive outside a band can be weather, route or load. Several, or the same one on consecutive drives, is a change.", [], newExt.length ? ["Watch the same measures on the next drive; if they stay outside, something changed."] : [], "Your own history");
       else add("Trend", "good", "Within this vehicle's usual bands on " + cmp.length + " measures", "Compared against " + bs.label + ".", "Averages and peaks of this drive sit inside the 10th–90th percentile of the drives in the baseline.", [], [], "Your own history"); } }
@@ -1598,6 +1612,7 @@ function transShopReport(drives, vehicle) {
 
 /* ---------- Usual bands: what this vehicle normally does, drive by drive, so a change after a repair shows at once ---------- */
 // Rough upshift = slip spike, flare, or completing hard with the converter locked at 30%+ throttle. Firm coast-down = rpm step 250/300+, a flare, or the engine dragged below 500 rpm. Same rule as the shop-report classifier.
+const STATS_VERSION = 3; // bump when analyzeDrive gains stats that older saved drives need back-filled
 const roughShift = s => /slipping|flare|firm|dragged/.test(s.feel) || (s.kind === "up" && s.feel === "locked" && (s.tps ?? 0) >= 30 && Math.abs(s.jump) >= 300);
 function shiftQuality(shifts) {
   const up = shifts.filter(s => s.kind === "up"), cd = shifts.filter(s => s.kind === "coast-down");
@@ -1619,7 +1634,11 @@ const BAND_DEFS = [
   ["idleMafPerL", "Idle airflow per liter", "g/s/L", 2, "stat", "idleMafPerL"], ["mpg", "Estimated mpg", "mpg", 1, "stat", "mpg"],
   ["evapp.avg", "EVAP tank pressure, average", "Pa", 0, "sum", "evapp", "avg"],
   ["eth.avg", "Ethanol estimate", "%", 0, "sum", "eth", "avg"], ["injb1.avg", "Injector pulse bank 1, average", "ms", 2, "sum", "injb1", "avg"], ["injb2.avg", "Injector pulse bank 2, average", "ms", 2, "sum", "injb2", "avg"], ["injSkew", "Injector pulse bank 1 vs 2", "%", 1, "stat", "injSkew"],
-  ["tq.max", "Engine torque peak", "Nm", 0, "sum", "tq", "max"], ["kr2.max", "Total knock retard peak", "°", 1, "sum", "kr2", "max"], ["c3slip.max", "C3 clutch slip peak", "rpm", 0, "sum", "c3slip", "max"], ["misHist", "Misfires since codes cleared", "count", 0, "stat", "misHist"],
+  ["ltftCommon", "Long-term trim, both banks (common mode)", "%", 1, "stat", "ltftCommon"], ["ltftDelta", "Long-term trim, bank 1 minus bank 2", "%", 1, "stat", "ltftDelta"],
+  ["voltHighShare", "Running time at 14.5 V or more", "%", 0, "stat", "voltHighShare"], ["voltEcoShare", "Running time at 13.2 V or less (generator resting)", "%", 0, "stat", "voltEcoShare"],
+  ["ectPeakOverAmb", "Coolant peak above ambient", "°F", 0, "stat", "ectPeakOverAmb"], ["oilOverEct", "Oil peak above coolant peak", "°F", 0, "stat", "oilOverEct"], ["transOverEct", "Trans fluid above coolant at cruise", "°F", 0, "stat", "transOverEct"],
+  ["idleStftExc", "Idle time with short-term trim beyond ±8%", "%", 0, "stat", "idleStftExc"], ["misTopShare", "Share of misfires on the worst cylinder", "%", 0, "stat", "misTopShare"], ["evapRange", "EVAP tank pressure range within the drive", "Pa", 0, "stat", "evapRange"], ["iatWarm", "Intake air temperature, warm", "°F", 0, "stat", "iatWarm"],
+  ["tq.max", "Engine torque peak", "Nm", 0, "sum", "tq", "max"], ["kr2.max", "Total knock retard peak", "°", 1, "sum", "kr2", "max"], ["c3slip.max", "C3 clutch slip peak", "rpm", 0, "sum", "c3slip", "max"], ["c1slip.max", "C1 clutch slip peak", "rpm", 0, "sum", "c1slip", "max"], ["pcsCmd.avg", "Pressure control solenoid, commanded", "mA", 0, "sum", "pcsCmd", "avg"], ["pcsAct.avg", "Pressure control solenoid, actual", "mA", 0, "sum", "pcsAct", "avg"], ["misHist", "Misfires since codes cleared", "count", 0, "stat", "misHist"],
   ["cat1.max", "Catalyst 1 peak", "°F", 0, "sum", "cat1", "max"], ["cat2.max", "Catalyst 2 peak", "°F", 0, "sum", "cat2", "max"],
   ["tpfl.avg", "Tire LF", "psi", 0, "sum", "tpfl", "avg"], ["tpfr.avg", "Tire RF", "psi", 0, "sum", "tpfr", "avg"], ["tprl.avg", "Tire LR", "psi", 0, "sum", "tprl", "avg"], ["tprr.avg", "Tire RR", "psi", 0, "sum", "tprr", "avg"]
 ];
@@ -1652,6 +1671,45 @@ function compareBands(bands, cur) {
 const bandText = r => { const f = x => x.toFixed(r.digits); return r.label + " " + f(r.value) + (r.unit && r.unit !== "count" ? " " + r.unit : "") + " (usual " + f(r.lo) + "–" + f(r.hi) + ", " + r.n + " drives)"; };
 // Values of a finished drive, from its summary and review stats, for compareBands.
 function driveBandValues(d) { const o = {}; BAND_DEFS.forEach(def => { const v = bandValueOf(d, def); if (v !== null) o[def[0]] = v; }); return o; }
+
+
+/* ---------- Per-vehicle watchlist: the hypotheses worth tracking drive by drive, each tied to the KPIs that would confirm or kill it ---------- */
+// better: "lower" | "higher" | "zero" (closer to zero is better) | "stable" (any move is a change worth noticing)
+const WATCHLIST = {
+  sierra: [
+    { title: "Transmission: is this unit better than the last two?", why: "Two remans in two weeks, 37% rough upshifts and 20% firm coast-downs over 332 mi on the second. Learning should soften shifts with miles; a mechanical fault does not.", kpis: [["upRough", "lower"], ["cdFirm", "lower"], ["sh23.avg", "lower"], ["slipCruise", "lower"], ["c1slip.max", "lower"]], test: "Rough-upshift share trending down over the first 200 mi after the repair, with no slip spikes on the 2→3 at 15–20 mph." },
+    { title: "Trans fluid runs hot on the highway", why: "235°F on a 59-mi run and 226°F on a 32-mi run; the radiator-integrated cooler and lines were replaced with the unit.", kpis: [["transOverEct", "lower"], ["trans.max", "lower"], ["transCruise", "lower"]], test: "Fluid staying within 10°F of coolant at highway cruise; a widening gap points at cooler flow or the thermal bypass valve." },
+    { title: "Pressure control: commanded vs actual", why: "Line pressure was the first check requested of the shop; the solenoid current is the ECM's own view of it.", kpis: [["pcsCmd.avg", "stable"], ["pcsAct.avg", "stable"]], test: "Commanded and actual tracking within a few mA; a steady gap is a solenoid or circuit issue." },
+    { title: "AFM lifters: does any cylinder carry the misfires?", why: "The dealer replaced the cylinder 4 lifter in October; cylinders 3 and 5 still post single counts on most drives.", kpis: [["misPerKrev", "lower"], ["misTopShare", "lower"], ["misTotal", "lower"]], test: "Misfire rate flat or falling and no cylinder above half the counts; a rising share on one AFM cylinder (1, 4, 6, 7) is the lifter signature." },
+    { title: "Charging and battery", why: "GM regulated voltage control rests the generator (12.5–13.1 V) when the battery is full and charges hard (14.5 V+) when it is not.", kpis: [["voltEcoShare", "stable"], ["voltHighShare", "lower"], ["volt.avg", "stable"]], test: "Some resting time on warm drives; a week at 14.5 V+ with no rest means the battery is not holding charge." }
+  ],
+  equinox: [
+    { title: "Bank 1 fuels leaner than bank 2 — why?", why: "Bank 1 long-term trim has sat 4.5–5% below bank 2 on every drive, and bank 1 injector pulses are 4–6% shorter. Stable, so a characteristic rather than a fault; the question is which side is biased.", kpis: [["ltftDelta", "zero"], ["injSkew", "zero"]], test: "Compare the two upstream oxygen-sensor voltages; a sensor bias moves the trim delta without moving the injector delta." },
+    { title: "Common-mode trim follows the fuel", why: "Both banks shifted +4% on Nov 12, the day the tank went 24% → 100%; short-term trims hit −12% on both banks at that fill. The ethanol estimate is now logged.", kpis: [["ltftCommon", "stable"], ["eth.avg", "stable"]], test: "At the next fill, the ethanol estimate and the common-mode trim move together; if the trim moves alone, look at the intake (air filter and box were changed the same day)." },
+    { title: "Cylinders 5 and 6 misfire on cold starts", why: "Single counts on 5 and 6 most drives, more on cold mornings; P0300 history. Rate flat so far.", kpis: [["misPerKrev", "lower"], ["misTopShare", "lower"], ["misHist", "lower"]], test: "Rate rising, or one cylinder taking over 60% of counts, says coil or injector; rate flat says ignore." },
+    { title: "Knock retard vs intake temperature", why: "98th-percentile knock retard went from 4–5° to 6–8° on the drives after the Nov 12 fill.", kpis: [["knock", "lower"], ["kr2.max", "lower"], ["iatWarm", "stable"]], test: "Knock back under 5° at the same intake temperature on the next tank; staying high across tanks is carbon or a sensor." },
+    { title: "Charging recovery after the blower failure", why: "14.8 V from the drive to the shop on Nov 12 through Nov 13, easing to 13.3 V on Nov 14: a battery drawn down by a failing blower motor, now recharged.", kpis: [["voltHighShare", "lower"], ["voltEcoShare", "higher"], ["volt.avg", "lower"]], test: "Resting-mode time returning to the pre-Nov 12 pattern within a week; if not, load-test the battery." },
+    { title: "Coolant peaks after the blower", why: "Regulated at 174–176°F at cruise in every weather; two 194–198°F peaks on short Nov 13 drives, not repeated since.", kpis: [["ectPeakOverAmb", "lower"], ["ectPlateau", "stable"], ["ect.max", "lower"]], test: "Peaks back under 190°F with the HVAC on; repeated 195°F+ peaks in mild weather are a fan or airflow question." },
+    { title: "Idle lean excursions", why: "One drive (Nov 14 13:55) idled at +10% short-term trim on both banks at 673 rpm; cleared on the next drive.", kpis: [["idleStftExc", "lower"], ["stft1.avg", "zero"]], test: "A second excursion on a hot restart makes it a pattern: purge valve or an intermittent unmetered-air path." }
+  ],
+  lucerne: [
+    { title: "P0446: the tank-pressure sensor is frozen", why: "Tank pressure read −4,121 Pa on every sample across three sessions, unchanged with the cap off, with purge never commanded. A vent restriction would move with the cap; a dead sensor or circuit would not.", kpis: [["evapRange", "higher"], ["evapp.avg", "stable"]], test: "Any in-drive range above a few hundred Pa, or a different value with the cap off, revives the vent theory; a flat line keeps it on the sensor and its circuit." },
+    { title: "Coolant runs hotter than the 3800's thermostat point", why: "221°F peak on the Nov 6 drive; the review also carries a thesis that the sensor reads low and fueling over-compensates.", kpis: [["ect.max", "lower"], ["ectPeakOverAmb", "lower"], ["ectPlateau", "stable"]], test: "Peaks above 215°F in mild weather with the fan running: airflow or fan; a steady plateau near 195–200°F is normal." },
+    { title: "Bank 1 trim slightly negative", why: "Long-term trim −3 to −4% on bank 1; the review lists a slightly leaking injector or a skewed front oxygen sensor as the candidates.", kpis: [["ltft1.avg", "zero"], ["stft1.avg", "zero"]], test: "Trim drifting past −8% or splitting between idle and cruise points at the injector; flat and small points at the sensor or nothing." },
+    { title: "4T65-E shift quality (inferred gears)", why: "No gear or slip request on this transmission: gear is inferred from rpm and speed, so shift quality is a weaker signal here than on the Sierra.", kpis: [["upRough", "lower"], ["cdFirm", "lower"]], test: "Rates rising over months; single drives mean little with inferred gears." },
+    { title: "Battery and charging", why: "Voltage dipped to 11.7–11.9 V during the Nov 6 sessions.", kpis: [["volt.avg", "stable"], ["voltMed", "higher"], ["voltEcoShare", "stable"]], test: "Running voltage holding 13.5 V+ once warm; dips below 12.5 V while running mean the generator or belt." }
+  ]
+};
+// Trend verdict for one KPI: recent = median of the last three drives that carry it, judged against the frozen band.
+function kpiTrend(def, band, recentVals, better) {
+  if (!band || !recentVals.length) return { state: "no data", recent: null };
+  const recent = pctl(recentVals, .5), width = (band.hi - band.lo) || Math.abs(band.med) * .1 || 1, diff = recent - band.med;
+  if (Math.abs(diff) < .3 * width) return { state: "same", recent };
+  if (better === "lower") return { state: diff < 0 ? "improving" : "degrading", recent };
+  if (better === "higher") return { state: diff > 0 ? "improving" : "degrading", recent };
+  if (better === "zero") return { state: Math.abs(recent) < Math.abs(band.med) ? "improving" : "degrading", recent };
+  return { state: "changed", recent };
+}
 
 function matchVehicle(vin, vehicles) {
   if (!vin || vin.length !== 17) return null;
@@ -2071,12 +2129,13 @@ addEventListener("beforeunload", e => { if (session && !session.link.sim) { save
 function usual(id) { const b = baseline && baseline.bands[id + ".avg"]; return b ? { lo: b.lo, hi: b.hi, n: b.n } : null; }
 let baseline = null, liveQ = { t: 0, v: null }, backfilling = false;
 function rebuildBaseline() { try { baseline = baselineSet(drives, (vehicles[vid] || {}).repairs); } catch (e) { baseline = null; } }
-// Drives saved by earlier builds lack the shift-quality stats; fill them in from the stored rows once, in the background, when no session is live.
+// Drives saved by earlier builds lack the newer stats (shift quality, composite KPIs): re-run the review on the stored rows once, in the background, when no session is live.
 async function backfillShiftStats() {
-  if (backfilling || session) return; backfilling = true;
-  try { for (const d of drives) { if (session) break; if (!d.review || !d.review.stats || d.review.stats.upRough !== undefined) continue;
-      const rs = await driveRows(d.id); if (rs.length < 100) { d.review.stats.upRough = null; d.review.stats.cdFirm = null; await putDrives([d]); continue; }
-      const gearOk = !!(d.summary && d.summary.gear && d.summary.gear.n >= 30), cat = shiftCatalog(rs, gearOk); Object.assign(d.review.stats, shiftQuality(cat.shifts)); await putDrives([d]); } rebuildBaseline(); } catch (e) { console.error(e); } finally { backfilling = false; }
+  if (backfilling || session) return; backfilling = true; let n = 0;
+  try { for (const d of drives) { if (session) break; const st = d.review && d.review.stats; if (st && st.v === STATS_VERSION) continue;
+      const rs = await driveRows(d.id); if (rs.length < 100) { d.review = d.review || { stats: {} }; d.review.stats = d.review.stats || {}; d.review.stats.v = STATS_VERSION; await putDrives([d]); continue; }
+      try { const rv = analyzeDrive({ rows: rs, meta: { ...d, rows: undefined }, vehicle: vehicles[vid] || {}, history: [] }); rv.stats.v = STATS_VERSION; d.review = rv; } catch (e) { d.review = d.review || { stats: {} }; d.review.stats = d.review.stats || {}; d.review.stats.v = STATS_VERSION; }
+      await putDrives([d]); n++; await new Promise(r => setTimeout(r, 30)); } if (n) { rebuildBaseline(); toast("Updated " + n + " saved drive" + (n === 1 ? "" : "s") + " with the newer measures."); } } catch (e) { console.error(e); } finally { backfilling = false; }
 }
 // Current-drive values for the usual bands. Averages after 5 min of engine time, peaks after 10 min, shift quality after 5 upshifts: earlier than that a hop says nothing.
 function liveBandValues() {
@@ -2323,6 +2382,14 @@ function openVehicleSummary() {
   const body = el("div", { class: "vsum" }, tot,
     el("p", { textContent: "Band = 10th–90th percentile of the per-drive value across " + bs.label + (bs.frozen ? " (frozen at that repair; later drives are judged against it)." : ". Log a repair in Vehicle settings to freeze it.") }),
     el("div", { class: "leg", textContent: "Chart: one dot per drive in date order (brighter = after the repair), shaded band = usual, white line = median, red dashes = the limit from the reading's rule where one exists." }));
+  // Watchlist: this vehicle's open hypotheses, each with its KPIs' latest three-drive median against the frozen band and a one-word trend.
+  const wl = WATCHLIST[vid] || [];
+  if (wl.length) { body.append(el("h3", { textContent: "KPIs and hypotheses for " + (veh.name || vid) }), el("div", { class: "leg", textContent: "Recent = median of the last three drives that carry the measure; verdict against the band's median. \"Same\" means within a third of the band's width." }));
+    wl.forEach(hy => { const rowsEl = hy.kpis.map(([key, better]) => { const def = bandDef(key), b = bs.bands[key]; if (!def) return null; const vals = use.filter(d => !bs.repair || d.start > bs.repair.t || !bs.frozen).map(d => bandValueOf(d, def)).filter(v => v !== null), recent = vals.slice(-3), tr = kpiTrend(def, b, recent, better), f = x => x == null ? "—" : x.toFixed(def[3]);
+        const col = tr.state === "improving" ? "var(--good)" : tr.state === "degrading" ? "#ff8a80" : tr.state === "changed" ? "#e0a100" : "var(--muted)";
+        return el("div", { style: "display:flex;justify-content:space-between;gap:8px;padding:2px 0;font-size:.8rem" }, el("span", { textContent: def[1] }), el("span", { style: "white-space:nowrap;color:" + col, textContent: (b ? "usual " + f(b.lo) + "–" + f(b.hi) + " · recent " + f(tr.recent) + " · " : "no band yet · ") + tr.state })); }).filter(Boolean);
+      body.append(el("div", { style: "border-top:1px solid var(--line);padding:8px 0" }, el("b", { textContent: hy.title }), el("div", { class: "sub", style: "white-space:normal", textContent: hy.why }), ...rowsEl, el("div", { class: "sub", style: "white-space:normal;margin-top:4px", textContent: "Test: " + hy.test }))); }); }
+  body.append(el("h3", { textContent: "Every measure with a band" }));
   const charts = [];
   BAND_DEFS.forEach(def => { const [key, label, unit, digits, kind, id] = def, b = bs.bands[key]; if (!b) return;
     const vals = use.map(d => ({ t: d.start, v: bandValueOf(d, def), post: !!(bs.repair && d.start > bs.repair.t) })).filter(x => x.v !== null); if (!vals.length) return;
