@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261114-2202Z">
-<meta name="build-timestamp-utc" content="2026-11-14T22:02:16Z">
+<meta name="build-id" content="OBD-20261117-0247Z">
+<meta name="build-timestamp-utc" content="2026-11-17T02:47:30Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -84,11 +84,14 @@ body.fit #grid{flex:1;min-height:0;grid-auto-rows:unset;grid-template-rows:repea
 .tires{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;height:100%;min-height:0}.tire{display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid var(--axis);border-radius:8px;padding:2px;min-height:0;overflow:hidden}.tire b{font-size:1.3em;line-height:1.1}.tire span{font-size:.7em;color:var(--muted);white-space:nowrap}.tire.good{border-color:var(--good)}.tire.bad{border-color:var(--bad)}
 body.fit .w{padding:5px 8px}body.fit .w .sub{display:none}
 .w.watch{border-color:#e0a100}
-#markBar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:20;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:var(--bg);border-top:1px solid var(--line)}
-body.live #markBar{display:block}
-#markBar button{width:100%;min-height:68px;font-size:1.4rem;font-weight:800;letter-spacing:.1em;background:var(--accent);color:#fff;border:none;border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+#markBar{display:flex;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:20;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:var(--bg);border-top:1px solid var(--line)}
+#markBar button{flex:1 1 auto;min-height:68px;font-size:1.4rem;font-weight:800;letter-spacing:.1em;background:var(--accent);color:#fff;border:none;border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+#markBar button:disabled{background:var(--raised);color:var(--muted);box-shadow:none}
+#markBar .side{flex:0 0 22%;font-size:.8rem;letter-spacing:.02em;background:var(--raised);color:var(--text);border:1px solid var(--axis);line-height:1.15;padding:4px}
+#markBar .side.on{background:#5a1a1a;color:#ffb3ad;border-color:#7a2a2a}
+#markBar .side.fs{font-size:1.5rem}
 #markBar button:active{background:#1f5fb0;transform:scale(.98)}
-body.live main{padding-bottom:calc(100px + env(safe-area-inset-bottom))}
+main{padding-bottom:calc(100px + env(safe-area-inset-bottom))}
 body.fit.live main{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 .ck{display:flex;flex-direction:column;height:100%;min-height:0;text-align:center;font-variant-numeric:tabular-nums}
 .ck small{display:block;font-size:clamp(.58rem,1.5vh,.8rem);font-weight:700;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;line-height:1.15;white-space:nowrap}
@@ -111,7 +114,7 @@ body.fit .w.ckw{padding:4px 8px}
 .cas{flex:none;display:flex;flex-wrap:wrap;gap:4px;padding:0 0 4px;cursor:pointer}.cas:empty{display:none}
 .cas span{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:3px 8px;font-weight:800;font-size:clamp(.72rem,2vh,.95rem);letter-spacing:.05em;text-transform:uppercase;line-height:1.1}
 .cas span svg{width:1.25em;height:1.25em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.cas .warnm{background:#e0a100;color:#141300}.cas .alertm{background:var(--bad);color:#fff}.cas .alertm.flash{animation:casflash .6s steps(1) infinite}
+.cas .histm{background:var(--raised);color:var(--muted);border:1px solid var(--axis)}.cas .warnm{background:#e0a100;color:#141300}.cas .alertm{background:var(--bad);color:#fff}.cas .alertm.flash{animation:casflash .6s steps(1) infinite}
 @keyframes casflash{50%{background:#5a1a1a;color:#ffb3ad}}
 .ck.declutter .ck-row:not(.keep),.ck.declutter .ck-top:not(.keep){opacity:.35}
 .ck-foot{flex:none;font-size:clamp(.62rem,1.6vh,.8rem);color:var(--muted);padding-top:3px;border-top:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ck-foot.dev{color:#e0a100}
@@ -149,12 +152,12 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="grid"></div>
 <footer><p>Read-only: only allowlisted read requests can reach the truck. Layout editing locks while moving. Set up before driving.</p><p id="stamp"></p></footer>
 </main>
-<div id="markBar"><button id="markBtn" aria-label="Mark this moment">MARK</button></div>
+<div id="markBar"><button id="connBtn2" class="side" aria-label="Connect or disconnect">Connect</button><button id="markBtn" aria-label="Mark this moment" disabled>MARK</button><button id="fsBtn" class="side fs" aria-label="Full screen" title="Full screen">⛶</button></div>
 <dialog id="dlg"></dialog>
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261114-2202Z", BUILD_UTC = "2026-11-14T22:02:16Z";
+const BUILD_ID = "OBD-20261117-0247Z", BUILD_UTC = "2026-11-17T02:47:30Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1822,7 +1825,7 @@ function resetLive() {
   shares = { gear: {}, temp: {}, drive: {} };
   METRICS.forEach(m => { if (m.orig) { Object.assign(m, m.orig); } mstate[m.id] = { status: "unknown", misses: 0, last: 0, headerIdx: 0, badSince: 0 }; });
 }
-resetLive();
+resetLive(); syncBar();
 const cols = () => innerWidth >= 760 || (innerWidth > innerHeight && innerWidth >= 560) ? 12 : 4;
 function ruleOf(m) { const o = rules[m.id]; if (o && o.off) return null; return o ? { ...(m.rule || {}), ...o } : (m.rule || null); }
 function ctx() { const v = stableBuf; return { rpm: latest.rpm, mph: latest.mph, ect: latest.ect, stable: v.length >= 5 && spread(v.map(x => x.tps)) < 4 && spread(v.map(x => x.mph)) < 3 }; }
@@ -2012,7 +2015,7 @@ async function start(link, label) {
     renderVehicleSelect(); syncEditControls(); renderTabs(); renderGrid();
     readCodes().then(() => s.can ? readMode06() : null).catch(() => {});
     s.label = label; setStatus("Live: " + label, "ok"); applyFit();
-    $("stop").disabled = false; $("connect").disabled = $("sim").disabled = true; $("vehicle").disabled = true;
+    $("stop").disabled = false; $("connect").disabled = $("sim").disabled = true; $("vehicle").disabled = true; syncBar();
     try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
     runLoop(s).catch(e => { if (session === s) fail(e); });
   } catch (e) { fail(e); }
@@ -2054,7 +2057,7 @@ async function stop(keep) {
   if (s && !s.link.sim) { if (keep) await saveDrive(); else { await saveDrive(true); store.set("active", null); } }
   if (s) await s.link.close();
   if (wakeLock) { try { await wakeLock.release(); } catch (e) {} wakeLock = null; }
-  $("stop").disabled = true; $("connect").disabled = !("serial" in navigator); $("sim").disabled = false; $("vehicle").disabled = false;
+  $("stop").disabled = true; $("connect").disabled = !("serial" in navigator); $("sim").disabled = false; $("vehicle").disabled = false; syncBar();
   if (!keep) setStatus("Not connected");
   renderGrid();
 }
@@ -2095,7 +2098,7 @@ async function saveDrive(final) {
   try {
     const summary = {}; for (const id in stats) { const s = stats[id]; if (s.n) summary[id] = { min: s.min, max: s.max, avg: s.sum / s.n, n: s.n }; }
     const end = rows.length, fresh = rows.slice(flushed, end), chunks = fresh.length ? [{ id: driveId + ":" + chunkSeq, drive: driveId, seq: chunkSeq, rows: fresh }] : [];
-    const rec = { ...sessionMeta(), vehicle: vid, end: Date.now(), summary }; rec.xlog = (lastXlog || []).slice(0, 60).concat((lastXlog || []).length > 120 ? (lastXlog || []).slice(-60) : (lastXlog || []).slice(60));
+    const rec = { ...sessionMeta(), vehicle: vid, end: Date.now(), summary, alerts: casLog.slice() }; rec.xlog = (lastXlog || []).slice(0, 60).concat((lastXlog || []).length > 120 ? (lastXlog || []).slice(-60) : (lastXlog || []).slice(60));
     rec.codes = codes;
     if (final) { const rv = analyzeDrive({ rows, meta: rec, vehicle: vehicles[vid], history: drives }); rec.review = { stats: rv.stats, verdict: rv.verdict, kind: rv.trip.kind }; }
     await putDrives([rec], chunks); flushed = end; if (fresh.length) chunkSeq++;
@@ -2423,7 +2426,7 @@ const CAS_ICON = {
   gear: "<svg viewBox='0 0 24 24'><circle cx='12' cy='12' r='3'/><path d='M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1'/></svg>",
   band: "<svg viewBox='0 0 24 24'><path d='M4 18l5-7 4 4 7-9'/><path d='M14 6h6v6'/></svg>"
 };
-const casSeen = {}; let casAckAt = 0, audioCtx = null;
+const casSeen = {}, casLog = []; let casAckAt = 0, audioCtx = null;
 function casAck() { casAckAt = Date.now(); }
 // Tap an annunciator: codes → Diagnostics screen; a metric → its drill-in (or its screen while moving); no-data → the connection log.
 function casGo(m) {
@@ -2456,13 +2459,20 @@ function casMessages() {
   if (bad("slip")) out.push({ key: "slip", level: "warn", icon: "gear", text: "TCC slip " + latest.slip.toFixed(0), say: "Converter slip at cruise", row: "slip" });
   const cmp = running ? liveBandCompare() : null; if (cmp && cmp.out.some(r => /new/.test(r.state))) { const r = cmp.out.find(x => /new/.test(x.state)); out.push({ key: "band", level: "warn", icon: "band", text: r.label.replace(/,.*$/, "") + " " + r.state, say: r.label.replace(/,.*$/, "") + " beyond anything logged", row: "band" }); }
   // First appearance (or a return after 60 s clear) chimes and speaks; red ones flash until acknowledged.
-  out.forEach(m => { const seen = casSeen[m.key]; if (!seen || now - seen.last > 60000) { chime(m.level); if (phonePrefs.speak) speak(m.say); casSeen[m.key] = { first: now, last: now }; } else seen.last = now; m.flash = m.level === "alert" && casSeen[m.key].first > casAckAt; });
+  out.forEach(m => { const seen = casSeen[m.key]; if (!seen || now - seen.last > 60000) { chime(m.level); if (phonePrefs.speak) speak(m.say); casSeen[m.key] = { first: now, last: now }; casLog.push({ t: now, level: m.level, text: m.text, key: m.key, mph: latest.mph ?? null, rpm: latest.rpm ?? null }); } else seen.last = now; m.flash = m.level === "alert" && casSeen[m.key].first > casAckAt; });
   // Amber chips retire from the strip after 15 s (the condition is still rated on its own tile and in the review); red ones stay as long as the condition does.
   return out.filter(m => m.level === "alert" || now - casSeen[m.key].first < 15000);
 }
 function renderCas(host, msgs) {
-  const sig = msgs.map(m => m.key + m.text + m.flash).join("|"); if (host.dataset.sig === sig) return; host.dataset.sig = sig; host.textContent = "";
+  const sig = msgs.map(m => m.key + m.text + m.flash).join("|") + "#" + casLog.length; if (host.dataset.sig === sig) return; host.dataset.sig = sig; host.textContent = "";
+  if (casLog.length) host.append(el("span", { class: "histm", role: "button", title: "Alert history for this drive", textContent: "⚑ " + casLog.length, onclick: e => { e.stopPropagation(); openAlertLog(); } }));
   msgs.sort((a, b) => (a.level === "alert" ? 0 : 1) - (b.level === "alert" ? 0 : 1)).forEach(m => { const sp = el("span", { class: (m.level === "alert" ? "alertm" : "warnm") + (m.flash ? " flash" : ""), role: "button", title: "Open the source", onclick: e => { e.stopPropagation(); casAck(); casGo(m); } }); sp.innerHTML = CAS_ICON[m.icon] || ""; sp.append(document.createTextNode(m.text)); host.append(sp); });
+}
+function openAlertLog() {
+  const list = el("div", { class: "scroll", style: "max-height:60vh" });
+  if (!casLog.length) list.append(el("p", { textContent: "No alerts this drive." }));
+  casLog.forEach((a, i) => list.append(el("div", { class: "row" }, el("span", { textContent: (i + 1) + ". " + new Date(a.t).toLocaleTimeString() + "  " + a.text + (a.mph != null ? "  · " + Math.round(a.mph) + " mph" : "") + (a.rpm != null ? " · " + Math.round(a.rpm) + " rpm" : "") }), el("span", { style: a.level === "alert" ? "color:#ff8a80" : "color:#e0a100", textContent: a.level === "alert" ? "red" : "amber" }))));
+  showDlg("Alerts this drive, in order", el("p", { class: "sub", style: "white-space:normal", textContent: "Each line is the moment the chime sounded. Amber chips leave the strip after 15 s; red ones stay until the condition clears. The list is saved with the drive and goes out in the export." }), list);
 }
 function unlockAudio() { if (phonePrefs.chime === false) return; try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === "suspended") audioCtx.resume(); } catch (e) {} }
 function chime(level) {
@@ -3182,11 +3192,15 @@ function openVehicle() {
 }
 
 /* ---------- Wiring ---------- */
-$("connect").onclick = async () => { unlockAudio(); for (const k in casSeen) delete casSeen[k];
+$("connBtn2").onclick = () => { if (session) $("stop").click(); else $("connect").click(); };
+function syncBar() { const live = !!session; $("connBtn2").textContent = live ? "Disconnect" : ("serial" in navigator ? "Connect" : "No serial"); $("connBtn2").className = "side" + (live ? " on" : ""); $("connBtn2").disabled = !live && !("serial" in navigator); $("markBtn").disabled = !live; }
+$("fsBtn").onclick = async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen({ navigationUI: "hide" }); } catch (e) { toast("Full screen isn't available in this browser view. Add the page to the home screen for a full-screen app."); } };
+document.addEventListener("fullscreenchange", () => { $("fsBtn").textContent = document.fullscreenElement ? "✕⛶" : "⛶"; $("fsBtn").title = document.fullscreenElement ? "Exit full screen" : "Full screen"; });
+$("connect").onclick = async () => { unlockAudio(); for (const k in casSeen) delete casSeen[k]; casLog.length = 0;
   try { const port = await navigator.serial.requestPort({ filters: [{ bluetoothServiceClassId: SPP_UUID }], allowedBluetoothServiceClassIds: [SPP_UUID] }); await start(new SerialLink(port), "OBDLink LX"); }
   catch (e) { if (e.name !== "NotFoundError") setStatus(e.message, "bad"); }
 };
-$("sim").onclick = () => { unlockAudio(); for (const k in casSeen) delete casSeen[k]; start(new SimLink(), "simulator (not vehicle data)"); };
+$("sim").onclick = () => { unlockAudio(); for (const k in casSeen) delete casSeen[k]; casLog.length = 0; start(new SimLink(), "simulator (not vehicle data)"); };
 $("stop").onclick = () => stop(false);
 $("editBtn").onclick = () => setEdit(!editMode);
 $("addBtn").onclick = openAdd;
