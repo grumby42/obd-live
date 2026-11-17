@@ -7,7 +7,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
 <meta name="build-id" content="OBD-20261117-0253Z">
-<meta name="build-timestamp-utc" content="2026-11-17T02:53:16Z">
+<meta name="build-timestamp-utc" content="2026-11-17T02:53:57Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -87,9 +87,9 @@ body.fit .w{padding:5px 8px}body.fit .w .sub{display:none}
 #markBar{display:flex;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:20;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:var(--bg);border-top:1px solid var(--line)}
 #markBar button{flex:1 1 auto;min-height:68px;font-size:1.4rem;font-weight:800;letter-spacing:.1em;background:var(--accent);color:#fff;border:none;border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.4)}
 #markBar button:disabled{background:var(--raised);color:var(--muted);box-shadow:none}
-#markBar .side{flex:0 0 22%;font-size:.8rem;letter-spacing:.02em;background:var(--raised);color:var(--text);border:1px solid var(--axis);line-height:1.15;padding:4px}
+#markBar .side{flex:0 0 60px;font-size:1.7rem;letter-spacing:0;background:var(--raised);color:var(--text);border:1px solid var(--axis);line-height:1;padding:0}
 #markBar .side.on{background:#5a1a1a;color:#ffb3ad;border-color:#7a2a2a}
-#markBar .side.fs{font-size:1.5rem}
+#markBar .side.off{color:var(--good)}
 #markBar button:active{background:#1f5fb0;transform:scale(.98)}
 main{padding-bottom:calc(100px + env(safe-area-inset-bottom))}
 body.fit.live main{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
@@ -152,12 +152,12 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="grid"></div>
 <footer><p>Read-only: only allowlisted read requests can reach the truck. Layout editing locks while moving. Set up before driving.</p><p id="stamp"></p></footer>
 </main>
-<div id="markBar"><button id="connBtn2" class="side" aria-label="Connect or disconnect">Connect</button><button id="markBtn" aria-label="Mark this moment" disabled>MARK</button><button id="fsBtn" class="side fs" aria-label="Full screen" title="Full screen">⛶</button></div>
+<div id="markBar"><button id="connBtn2" class="side off" aria-label="Connect" title="Connect">⏻</button><button id="markBtn" aria-label="Mark this moment" disabled>MARK</button><button id="fsBtn" class="side fs" aria-label="Full screen" title="Full screen">⛶</button></div>
 <dialog id="dlg"></dialog>
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261117-0253Z", BUILD_UTC = "2026-11-17T02:53:16Z";
+const BUILD_ID = "OBD-20261117-0253Z", BUILD_UTC = "2026-11-17T02:53:57Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1842,7 +1842,7 @@ function record(id, v, t) {
   latest[id] = v;
   if (v === null || v === undefined) return;
   if (labBuf && (id === "volt" || id === "atrv" || id === "rpm")) labBuf.push({ t, id, v });
-  if (mstate[id]) mstate[id].updated = t;
+  if (mstate[id]) mstate[id].updated = t; if (v !== null && v !== undefined) lastAnyUpdate = t;
   const s = series[id] || (series[id] = { t: [], v: [] }); s.t.push(t); s.v.push(v);
   if (s.t.length > 9000) { s.t.splice(0, 1000); s.v.splice(0, 1000); }
   const st = stats[id] || (stats[id] = { min: v, max: v, sum: 0, n: 0 });
@@ -1925,6 +1925,8 @@ const INTERVAL = { fast: [120, 1000], med: [1000, 3000], slow: [5000, 20000] };
 // After a mark, the EVAP pressure readings are polled once a second for three minutes so a cap test is captured before and after.
 const FOCUS_IDS = new Set(["evapp", "evapa", "evapw", "purge", "fuel"]); let focusUntil = 0;
 function focusEvap(ms = 180000) { focusUntil = Date.now() + ms; }
+const CORE_IDS = new Set(["rpm", "mph", "ect", "volt", "gear", "slip", "tps"]); // core readings retry within 5 s after a miss instead of a minute
+let lastAnyUpdate = 0, stallLogged = 0;
 function nextMetric(now) {
   if (labBuf) { const f = ["volt", "atrv", "rpm"].map(i => byId[i]).filter(m => mstate[m.id].status !== "unsupported" && mstate[m.id].status !== "failed").sort((a, b) => mstate[a.id].last - mstate[b.id].last); return f[0] || null; }
   const vis = visibleIds(); let best = null, bestScore = 1;
@@ -1932,7 +1934,7 @@ function nextMetric(now) {
     if (!m.cmd) continue; const s = mstate[m.id]; if (s.parked) continue;
     if (s.status === "unsupported") continue;
     const focused = now < focusUntil && FOCUS_IDS.has(m.id);
-    const iv = s.status === "failed" ? 60000 : focused ? 1000 : INTERVAL[m.tier][vis.has(m.id) ? 0 : 1];
+    const iv = s.status === "failed" ? (CORE_IDS.has(m.id) ? 5000 : 60000) : focused ? 1000 : INTERVAL[m.tier][vis.has(m.id) ? 0 : 1];
     // Fast metrics are never "caught up", so without a cap they starve the slow ones to a sample every few minutes.
     const raw = (now - s.last) / iv, score = (m.tier === "slow" || focused ? Math.min(raw, 99) : Math.min(raw, 2)) + raw * 1e-6; // ties broken by who has waited longest
     if (score >= bestScore && score > (best ? bestScore : 0)) { best = m; bestScore = score; }
@@ -1991,7 +1993,7 @@ async function runLoop(s) {
 async function start(link, label) {
   try {
     await link.open();
-    resetLive(); applyKnownAnswers(); const s = { link, header: null, savedAt: Date.now() }; session = s; driveId = "d" + Date.now(); driveStart = Date.now();
+    resetLive(); applyKnownAnswers(); lastAnyUpdate = Date.now(); stallLogged = 0; const s = { link, header: null, savedAt: Date.now() }; session = s; driveId = "d" + Date.now(); driveStart = Date.now();
     if (!link.sim && navigator.storage && navigator.storage.persist) { try { await navigator.storage.persist(); } catch (e) {} }
     setStatus("Initializing " + label + "…");
     // CAN first, which every vehicle so far uses and answers instantly. Only if that fails, let the adapter search protocols, which can take ten seconds or more.
@@ -2442,7 +2444,7 @@ function casGo(m) {
 function casMessages() {
   const out = [], now = Date.now(), running = latest.rpm > 400;
   const bad = id => { const v = latest[id] ?? null; return v !== null && ratingOf(byId[id], v).state === "bad"; };
-  const upd = mstate.rpm && mstate.rpm.updated; if (session && upd && now - upd > 8000) out.push({ key: "link", level: "alert", icon: "link", text: "No data " + Math.round((now - upd) / 1000) + " s", say: "No data from the adapter", row: "link" });
+  if (session && lastAnyUpdate && now - lastAnyUpdate > 8000) { out.push({ key: "link", level: "alert", icon: "link", text: "No data " + Math.round((now - lastAnyUpdate) / 1000) + " s", say: "No data from the adapter", row: "link" }); if (now - stallLogged > 30000) { stallLogged = now; logX(session, "stall", "no answers for " + Math.round((now - lastAnyUpdate) / 1000) + " s; rpm status " + (mstate.rpm && mstate.rpm.status), now); } }
   if (bad("oilp")) out.push({ key: "oilp", level: "alert", icon: "oil", text: "Oil press " + latest.oilp.toFixed(0), say: "Oil pressure low", row: "oilp" });
   if (bad("ect") && latest.ect > (ruleOf(byId.ect) || {}).hi) out.push({ key: "ect", level: "alert", icon: "temp", text: "Coolant hot " + latest.ect.toFixed(0), say: "Coolant hot", row: "ect" });
   if (bad("trans") && latest.trans > (ruleOf(byId.trans) || {}).hi) out.push({ key: "trans", level: "alert", icon: "temp", text: "Trans hot " + latest.trans.toFixed(0), say: "Transmission fluid hot", row: "trans" });
@@ -3193,9 +3195,9 @@ function openVehicle() {
 
 /* ---------- Wiring ---------- */
 $("connBtn2").onclick = () => { if (session) $("stop").click(); else $("connect").click(); };
-function syncBar() { const live = !!session; $("connBtn2").textContent = live ? "Disconnect" : ("serial" in navigator ? "Connect" : "No serial"); $("connBtn2").className = "side" + (live ? " on" : ""); $("connBtn2").disabled = !live && !("serial" in navigator); $("markBtn").disabled = !live; }
+function syncBar() { const live = !!session; $("connBtn2").textContent = "⏻"; $("connBtn2").title = live ? "Disconnect" : "Connect"; $("connBtn2").setAttribute("aria-label", live ? "Disconnect" : "Connect"); $("connBtn2").className = "side " + (live ? "on" : "off"); $("connBtn2").disabled = !live && !("serial" in navigator); $("markBtn").disabled = !live; }
 $("fsBtn").onclick = async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen({ navigationUI: "hide" }); } catch (e) { toast("Full screen isn't available in this browser view. Add the page to the home screen for a full-screen app."); } };
-document.addEventListener("fullscreenchange", () => { $("fsBtn").textContent = document.fullscreenElement ? "✕⛶" : "⛶"; $("fsBtn").title = document.fullscreenElement ? "Exit full screen" : "Full screen"; });
+document.addEventListener("fullscreenchange", () => { $("fsBtn").textContent = document.fullscreenElement ? "⤡" : "⛶"; $("fsBtn").title = document.fullscreenElement ? "Exit full screen" : "Full screen"; });
 $("connect").onclick = async () => { unlockAudio(); for (const k in casSeen) delete casSeen[k]; casLog.length = 0;
   try { const port = await navigator.serial.requestPort({ filters: [{ bluetoothServiceClassId: SPP_UUID }], allowedBluetoothServiceClassIds: [SPP_UUID] }); await start(new SerialLink(port), "OBDLink LX"); }
   catch (e) { if (e.name !== "NotFoundError") setStatus(e.message, "bad"); }
