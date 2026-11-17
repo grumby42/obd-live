@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261117-0253Z">
-<meta name="build-timestamp-utc" content="2026-11-17T02:53:57Z">
+<meta name="build-id" content="OBD-20261117-0300Z">
+<meta name="build-timestamp-utc" content="2026-11-17T03:00:09Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -90,6 +90,7 @@ body.fit .w{padding:5px 8px}body.fit .w .sub{display:none}
 #markBar .side{flex:0 0 60px;font-size:1.7rem;letter-spacing:0;background:var(--raised);color:var(--text);border:1px solid var(--axis);line-height:1;padding:0}
 #markBar .side.on{background:#5a1a1a;color:#ffb3ad;border-color:#7a2a2a}
 #markBar .side.off{color:var(--good)}
+#markBar .side svg{width:34px;height:34px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 #markBar button:active{background:#1f5fb0;transform:scale(.98)}
 main{padding-bottom:calc(100px + env(safe-area-inset-bottom))}
 body.fit.live main{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
@@ -152,12 +153,12 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="grid"></div>
 <footer><p>Read-only: only allowlisted read requests can reach the truck. Layout editing locks while moving. Set up before driving.</p><p id="stamp"></p></footer>
 </main>
-<div id="markBar"><button id="connBtn2" class="side off" aria-label="Connect" title="Connect">⏻</button><button id="markBtn" aria-label="Mark this moment" disabled>MARK</button><button id="fsBtn" class="side fs" aria-label="Full screen" title="Full screen">⛶</button></div>
+<div id="markBar"><button id="connBtn2" class="side off" aria-label="Connect" title="Connect"></button><button id="markBtn" aria-label="Mark this moment" disabled>MARK</button><button id="fsBtn" class="side fs" aria-label="Full screen" title="Full screen">⛶</button></div>
 <dialog id="dlg"></dialog>
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261117-0253Z", BUILD_UTC = "2026-11-17T02:53:57Z";
+const BUILD_ID = "OBD-20261117-0300Z", BUILD_UTC = "2026-11-17T03:00:09Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -3195,7 +3196,11 @@ function openVehicle() {
 
 /* ---------- Wiring ---------- */
 $("connBtn2").onclick = () => { if (session) $("stop").click(); else $("connect").click(); };
-function syncBar() { const live = !!session; $("connBtn2").textContent = "⏻"; $("connBtn2").title = live ? "Disconnect" : "Connect"; $("connBtn2").setAttribute("aria-label", live ? "Disconnect" : "Connect"); $("connBtn2").className = "side " + (live ? "on" : "off"); $("connBtn2").disabled = !live && !("serial" in navigator); $("markBtn").disabled = !live; }
+// Plug icons drawn inline (the ⏻ glyph has no coverage in some phone fonts): plug meeting its socket while connected, pulled apart with a slash when not.
+function plugIcon(live) { const sock = "<rect x='16' y='6' width='7' height='12' rx='2'/><path d='M18.5 10v1M18.5 13v1'/>"; return live
+  ? "<svg viewBox='0 0 24 24'><path d='M1 12h3'/><rect x='4' y='8' width='7' height='8' rx='2' fill='currentColor' fill-opacity='.35'/><path d='M11 10h5M11 14h5'/>" + sock + "<path d='M3 3l18 18' stroke-opacity='.55'/></svg>"
+  : "<svg viewBox='0 0 24 24'><path d='M0.5 12h2.5'/><rect x='3' y='8' width='6' height='8' rx='2' fill='currentColor' fill-opacity='.35'/><path d='M9 10h3M9 14h3'/>" + sock + "</svg>"; }
+function syncBar() { const live = !!session; $("connBtn2").innerHTML = plugIcon(live); $("connBtn2").title = live ? "Disconnect" : "Connect"; $("connBtn2").setAttribute("aria-label", live ? "Disconnect" : "Connect"); $("connBtn2").className = "side " + (live ? "on" : "off"); $("connBtn2").disabled = !live && !("serial" in navigator); $("markBtn").disabled = !live; }
 $("fsBtn").onclick = async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen({ navigationUI: "hide" }); } catch (e) { toast("Full screen isn't available in this browser view. Add the page to the home screen for a full-screen app."); } };
 document.addEventListener("fullscreenchange", () => { $("fsBtn").textContent = document.fullscreenElement ? "⤡" : "⛶"; $("fsBtn").title = document.fullscreenElement ? "Exit full screen" : "Full screen"; });
 $("connect").onclick = async () => { unlockAudio(); for (const k in casSeen) delete casSeen[k]; casLog.length = 0;
