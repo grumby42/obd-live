@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261117-0300Z">
-<meta name="build-timestamp-utc" content="2026-11-17T03:00:29Z">
+<meta name="build-id" content="OBD-20261118-1628Z">
+<meta name="build-timestamp-utc" content="2026-11-18T16:28:51Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -84,7 +84,7 @@ body.fit #grid{flex:1;min-height:0;grid-auto-rows:unset;grid-template-rows:repea
 .tires{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;height:100%;min-height:0}.tire{display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid var(--axis);border-radius:8px;padding:2px;min-height:0;overflow:hidden}.tire b{font-size:1.3em;line-height:1.1}.tire span{font-size:.7em;color:var(--muted);white-space:nowrap}.tire.good{border-color:var(--good)}.tire.bad{border-color:var(--bad)}
 body.fit .w{padding:5px 8px}body.fit .w .sub{display:none}
 .w.watch{border-color:#e0a100}
-#markBar{display:flex;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:20;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:var(--bg);border-top:1px solid var(--line)}
+#markBar{display:flex;flex-wrap:wrap;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:20;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:var(--bg);border-top:1px solid var(--line)}
 #markBar button{flex:1 1 auto;min-height:68px;font-size:1.4rem;font-weight:800;letter-spacing:.1em;background:var(--accent);color:#fff;border:none;border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.4)}
 #markBar button:disabled{background:var(--raised);color:var(--muted);box-shadow:none}
 #markBar .side{flex:0 0 60px;font-size:1.7rem;letter-spacing:0;background:var(--raised);color:var(--text);border:1px solid var(--axis);line-height:1;padding:0}
@@ -113,6 +113,7 @@ body.fit .w.ckw{padding:4px 8px}
 .w.ckw{container-type:size}
 @container (min-aspect-ratio: 5/4){.ck{display:grid;grid-template-columns:1.1fr 1fr;grid-template-rows:auto repeat(4,minmax(0,1fr));column-gap:12px}.cas{grid-column:1/-1}.ck-top{grid-row:2/6;grid-column:1}.ck-row{grid-column:2;border-top:none}.ck-row+.ck-row{border-top:1px solid var(--line)}.ck-foot{grid-column:1/-1}.ck-cyl{flex:0 0 58%}}
 .cas{flex:none;display:flex;flex-wrap:wrap;gap:4px;padding:0 0 4px;cursor:pointer}.cas:empty{display:none}
+#casBar{flex:1 1 100%;padding:0 0 2px}#casBar[hidden]{display:none}body.casbar main{padding-bottom:calc(136px + env(safe-area-inset-bottom))}
 .cas span{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:3px 8px;font-weight:800;font-size:clamp(.72rem,2vh,.95rem);letter-spacing:.05em;text-transform:uppercase;line-height:1.1}
 .cas span svg{width:1.25em;height:1.25em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .cas .histm{background:var(--raised);color:var(--muted);border:1px solid var(--axis)}.cas .warnm{background:#e0a100;color:#141300}.cas .alertm{background:var(--bad);color:#fff}.cas .alertm.flash{animation:casflash .6s steps(1) infinite}
@@ -153,12 +154,12 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="grid"></div>
 <footer><p>Read-only: only allowlisted read requests can reach the truck. Layout editing locks while moving. Set up before driving.</p><p id="stamp"></p></footer>
 </main>
-<div id="markBar"><button id="connBtn2" class="side off" aria-label="Connect" title="Connect"></button><button id="markBtn" aria-label="Mark this moment" disabled>MARK</button><button id="fsBtn" class="side fs" aria-label="Full screen" title="Full screen">⛶</button></div>
+<div id="markBar"><div id="casBar" class="cas" role="alert" aria-live="assertive" title="Tap to acknowledge" hidden></div><button id="connBtn2" class="side off" aria-label="Connect" title="Connect"></button><button id="markBtn" aria-label="Mark this moment" disabled>MARK</button><button id="fsBtn" class="side fs" aria-label="Full screen" title="Full screen">⛶</button></div>
 <dialog id="dlg"></dialog>
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261117-0300Z", BUILD_UTC = "2026-11-17T03:00:29Z";
+const BUILD_ID = "OBD-20261118-1628Z", BUILD_UTC = "2026-11-18T16:28:51Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -411,7 +412,7 @@ const METRICS = [
  { id:"noise",label:"Cabin noise",group:"Phone",unit:"dB rel",digits:0,min:-90,max:0,basis:"phone",tier:"med" },
  { id:"noisehz",label:"Loudest frequency",group:"Phone",unit:"Hz",digits:0,min:0,max:4000,basis:"phone",tier:"med" },
  { id:"speedo",label:"Speedometer vs GPS",group:"Phone",unit:"%",digits:1,min:-20,max:20,basis:"derived",need:["mph","gmph"],calc:v=>v.gmph>=30&&v.mph>0?(v.mph/v.gmph-1)*100:null },
- { id:"mpg",label:"Estimated MPG",group:"Fuel",unit:"mpg",digits:1,min:0,max:60,basis:"derived",need:["mph","maf"],calc:v=>v.mph>2&&v.maf>0?Math.min(99,11.44*v.mph/v.maf):null },
+ { id:"mpg",label:"Estimated MPG",group:"Fuel",unit:"mpg",digits:1,min:0,max:60,basis:"derived",need:["mph","maf"],calc:v=>v.mph>2&&v.fflow>0?Math.min(99,v.mph/v.fflow):null }, // same lambda-corrected flow as the trip and 10-minute figures, so the three agree
  { id:"fuelgal",label:"Fuel in tank",group:"Fuel",unit:"gal",digits:1,min:0,max:40,basis:"derived",need:["fuel"],calc:v=>{ const t=vehicles[vid]&&vehicles[vid].tankGal; return t>0&&typeof v.fuel==="number"?v.fuel/100*t:null; } },
  { id:"gph10",label:"Burn rate, 10 min",group:"Fuel",unit:"gal/h",digits:2,min:0,max:20,basis:"derived",need:["maf"],calc:v=>{ const w=tripWindow(); return w?w.gph:null; } },
  { id:"mpg10",label:"Specific range",group:"Fuel",unit:"mpg",digits:1,min:0,max:60,basis:"derived",need:["mph","maf"],calc:v=>{ const w=tripWindow(); return w&&w.mpg!==null?Math.min(99,w.mpg):null; } },
@@ -1644,6 +1645,7 @@ const BAND_DEFS = [
   ["idleStftExc", "Idle time with short-term trim beyond ±8%", "%", 0, "stat", "idleStftExc"], ["misTopShare", "Share of misfires on the worst cylinder", "%", 0, "stat", "misTopShare"], ["evapRange", "EVAP tank pressure range within the drive", "Pa", 0, "stat", "evapRange"], ["iatWarm", "Intake air temperature, warm", "°F", 0, "stat", "iatWarm"],
   ["tq.max", "Engine torque peak", "Nm", 0, "sum", "tq", "max"], ["kr2.max", "Total knock retard peak", "°", 1, "sum", "kr2", "max"], ["c3slip.max", "C3 clutch slip peak", "rpm", 0, "sum", "c3slip", "max"], ["c1slip.max", "C1 clutch slip peak", "rpm", 0, "sum", "c1slip", "max"], ["pcsCmd.avg", "Pressure control solenoid, commanded", "mA", 0, "sum", "pcsCmd", "avg"], ["pcsAct.avg", "Pressure control solenoid, actual", "mA", 0, "sum", "pcsAct", "avg"], ["misHist", "Misfires since codes cleared", "count", 0, "stat", "misHist"],
   ["cat1.max", "Catalyst 1 peak", "°F", 0, "sum", "cat1", "max"], ["cat2.max", "Catalyst 2 peak", "°F", 0, "sum", "cat2", "max"],
+  ["fan.avg", "Cooling fan command, average", "%", 0, "sum", "fan", "avg"], ["fan.max", "Cooling fan command, peak", "%", 0, "sum", "fan", "max"], ["grille.avg", "Grille shutter open, average", "%", 0, "sum", "grille", "avg"], ["achp.max", "A/C high-side pressure peak", "psi", 0, "sum", "achp", "max"], ["amb.avg", "Ambient air, average", "°F", 0, "sum", "amb", "avg"],
   ["tpfl.avg", "Tire LF", "psi", 0, "sum", "tpfl", "avg"], ["tpfr.avg", "Tire RF", "psi", 0, "sum", "tpfr", "avg"], ["tprl.avg", "Tire LR", "psi", 0, "sum", "tprl", "avg"], ["tprr.avg", "Tire RR", "psi", 0, "sum", "tprr", "avg"]
 ];
 const bandDef = key => BAND_DEFS.find(d => d[0] === key);
@@ -1681,8 +1683,9 @@ function driveBandValues(d) { const o = {}; BAND_DEFS.forEach(def => { const v =
 // better: "lower" | "higher" | "zero" (closer to zero is better) | "stable" (any move is a change worth noticing)
 const WATCHLIST = {
   sierra: [
-    { title: "Transmission: is this unit better than the last two?", why: "Two remans in two weeks, 37% rough upshifts and 20% firm coast-downs over 332 mi on the second. Learning should soften shifts with miles; a mechanical fault does not.", kpis: [["upRough", "lower"], ["cdFirm", "lower"], ["sh23.avg", "lower"], ["slipCruise", "lower"], ["c1slip.max", "lower"]], test: "Rough-upshift share trending down over the first 200 mi after the repair, with no slip spikes on the 2→3 at 15–20 mph." },
-    { title: "Trans fluid runs hot on the highway", why: "235°F on a 59-mi run and 226°F on a 32-mi run; the radiator-integrated cooler and lines were replaced with the unit.", kpis: [["transOverEct", "lower"], ["trans.max", "lower"], ["transCruise", "lower"]], test: "Fluid staying within 10°F of coolant at highway cruise; a widening gap points at cooler flow or the thermal bypass valve." },
+    { title: "Transmission: is this unit better than the last two?", why: "Third reman unit installed Nov 18 2026 under warranty; the second ran 37% rough upshifts and 20% firm coast-downs over 332 mi with no trend by day or by fluid temperature. Learning should soften shifts with miles; a mechanical fault does not.", kpis: [["upRough", "lower"], ["cdFirm", "lower"], ["sh23.avg", "lower"], ["slipCruise", "lower"], ["c1slip.max", "lower"]], test: "Rough-upshift share trending down over the first 200 mi after the repair, with no slip spikes on the 2→3 at 15–20 mph." },
+    { title: "Trans fluid runs hot on the highway", why: "235°F on a 59-mi run and 226°F on a 32-mi run on the second unit, while coolant held 211–213°F at highway speed on every drive from 39°F to 82°F ambient with the fan under 37%: the heat was made in the unit, not left in the cooler.", kpis: [["transOverEct", "lower"], ["trans.max", "lower"], ["transCruise", "lower"]], test: "Fluid staying within 10°F of coolant at highway cruise on the third unit; a widening gap with the same coolant points at cooler flow or the thermal bypass valve." },
+    { title: "Cooling stack after the radiator and condenser", why: "The radiator was replaced under warranty with the third unit and the A/C condenser (which carries a transmission cooler pass on this platform; unverified for this RPO build) at the shop's recommendation. Before: coolant regulated at 211–213°F at highway, fan 11–20% on the highway, 37% peak in traffic.", kpis: [["ectPlateau", "stable"], ["ect.max", "stable"], ["fan.avg", "lower"], ["fan.max", "lower"], ["achp.max", "lower"], ["transOverEct", "lower"]], test: "Coolant plateau unchanged (it was never heat-limited), fan duty the same or lower at the same ambient, and the trans-over-coolant gap at cruise smaller than before. If the gap closes, the cooler pass mattered; if it doesn't, the heat is still being made in the unit." },
     { title: "Pressure control: commanded vs actual", why: "Line pressure was the first check requested of the shop; the solenoid current is the ECM's own view of it.", kpis: [["pcsCmd.avg", "stable"], ["pcsAct.avg", "stable"]], test: "Commanded and actual tracking within a few mA; a steady gap is a solenoid or circuit issue." },
     { title: "AFM lifters: does any cylinder carry the misfires?", why: "The dealer replaced the cylinder 4 lifter in October; cylinders 3 and 5 still post single counts on most drives.", kpis: [["misPerKrev", "lower"], ["misTopShare", "lower"], ["misTotal", "lower"]], test: "Misfire rate flat or falling and no cylinder above half the counts; a rising share on one AFM cylinder (1, 4, 6, 7) is the lifter signature." },
     { title: "Charging and battery", why: "GM regulated voltage control rests the generator (12.5–13.1 V) when the battery is full and charges hard (14.5 V+) when it is not.", kpis: [["voltEcoShare", "stable"], ["voltHighShare", "lower"], ["volt.avg", "stable"]], test: "Some resting time on warm drives; a week at 14.5 V+ with no rest means the battery is not holding charge." }
@@ -1818,8 +1821,10 @@ let trip = { gal: 0, mi: 0, sec: 0, hist: [] };
 function tripWindow() { const h = trip.hist; if (h.length < 2) return null; const a = h[0], b = h[h.length - 1], hrs = (b.t - a.t) / 3600000; if (hrs < 1 / 60) return null; const gal = b.gal - a.gal, mi = b.mi - a.mi; return { gph: gal / hrs, mpg: gal > 0.005 ? mi / gal : null, mph: mi / hrs, hrs }; }
 // Which GM requests this vehicle has answered (and on which header), remembered per vehicle: the next session starts on the right header and parks known-silent requests until a 60 s retry instead of burning three tries each on every header.
 let answers = {};
-function noteAnswer(m, ok, header) { if (!session || session.link.sim || !m.cmd || !/^22/.test(m.cmd) || m.dynamic) return; const prev = answers[m.id]; if (prev && prev.ok === ok && prev.header === header) return; answers[m.id] = { ok, header: header || null, t: Date.now() }; store.set(vkey("answers"), answers); }
-function applyKnownAnswers() { const now = Date.now(); METRICS.forEach(m => { const a = answers[m.id], s = mstate[m.id]; if (!a || !s || !m.cmd) return; if (a.ok === false) { s.status = "failed"; s.last = now; } else if (a.header && m.headers) { const i = m.headers.indexOf(a.header); if (i >= 0) s.headerIdx = i; } }); }
+// route: 0 = the primary request, n = the n-th alternate (oil pressure has four routes); remembered so the next session starts on the one that answered instead of re-walking the chain.
+function noteAnswer(m, ok, header) { if (!session || session.link.sim || !m.cmd || !/^22/.test(m.cmd) || m.dynamic) return; const route = (mstate[m.id] && mstate[m.id].altIdx) || 0, prev = answers[m.id]; if (prev && prev.ok === ok && prev.header === header && (prev.route || 0) === route) return; answers[m.id] = { ok, header: header || null, route, t: Date.now() }; store.set(vkey("answers"), answers); }
+function applyRoute(m, n) { const alts = m.alts || (m.alt ? [m.alt] : []); if (!(n > 0) || n > alts.length) return false; if (!m.orig) m.orig = { cmd: m.cmd, pre: m.pre, headers: m.headers, f: m.f, basis: m.basis, label: m.label }; Object.assign(m, alts[n - 1]); mstate[m.id].altIdx = n; return true; }
+function applyKnownAnswers() { const now = Date.now(); METRICS.forEach(m => { const a = answers[m.id], s = mstate[m.id]; if (!a || !s || !m.cmd) return; if (a.ok === false) { s.status = "failed"; s.last = now; } else { if (a.route) applyRoute(m, a.route); if (a.header && m.headers) { const i = m.headers.indexOf(a.header); if (i >= 0) s.headerIdx = i; } } }); }
 function resetLive() {
   trip = { gal: 0, mi: 0, sec: 0, hist: [] };
   series = {}; stats = {}; latest = {}; rows = []; flushed = 0; chunkSeq = 0; monitor = null; truck = {}; codes = null; mode06 = null; supported = null; prevMph = null; stableBuf = [];
@@ -1843,14 +1848,15 @@ function record(id, v, t) {
   latest[id] = v;
   if (v === null || v === undefined) return;
   if (labBuf && (id === "volt" || id === "atrv" || id === "rpm")) labBuf.push({ t, id, v });
-  if (mstate[id]) mstate[id].updated = t; if (v !== null && v !== undefined) lastAnyUpdate = t;
+  if (mstate[id]) mstate[id].updated = t; if (t > lastAnyUpdate && byId[id] && byId[id].cmd) lastAnyUpdate = t; // only answers from the vehicle count as the link being alive (not derived or phone values); monotonic so a resumed drive's replayed rows don't age it
+  if (typeof v !== "number") return; // text readings (cylinder mode) have no series or statistics
   const s = series[id] || (series[id] = { t: [], v: [] }); s.t.push(t); s.v.push(v);
   if (s.t.length > 9000) { s.t.splice(0, 1000); s.v.splice(0, 1000); }
   const st = stats[id] || (stats[id] = { min: v, max: v, sum: 0, n: 0 });
   st.min = Math.min(st.min, v); st.max = Math.max(st.max, v); st.sum += v; st.n++;
 }
 const addShare = (k, c) => { shares[k][c] = (shares[k][c] || 0) + 1; };
-function tick(now) { // once per second
+function tick(now, prevTick = 0) { // once per second
   if (typeof latest.rpm === "number" && latest.rpm > 300) { const dt = trip.lastT ? Math.min(5, (now - trip.lastT) / 1000) : 1; trip.sec += dt; if (typeof latest.fflow === "number") trip.gal += latest.fflow * dt / 3600; if (typeof latest.mph === "number") trip.mi += latest.mph * dt / 3600; trip.hist.push({ t: now, gal: trip.gal, mi: trip.mi }); while (trip.hist.length && now - trip.hist[0].t > 600000) trip.hist.shift(); } trip.lastT = now;
   METRICS.filter(m => m.calc).forEach(m => { const v = m.calc(latest); record(m.id, v, now); mstate[m.id].status = v === null ? mstate[m.id].status : "ok"; });
   stableBuf.push({ tps: latest.tps ?? 0, mph: latest.mph ?? 0 }); if (stableBuf.length > 8) stableBuf.shift();
@@ -1859,9 +1865,12 @@ function tick(now) { // once per second
   // Vehicles with no gear request: fit the ratio-set anchor from this drive every 30 s until it holds, and keep it per vehicle.
   if (vehicles[vid] && vehicles[vid].ratios && !(mstate.gear && mstate.gear.status === "ok") && rows.length >= 90 && rows.length % 30 === 0) { try { const inf = inferGears(annotate(rows.slice(-1200)), vehicles[vid]); if (inf.ok) { const prev = vehicles[vid].gearK; vehicles[vid].gearK = inf.K; if (!prev || Math.abs(prev / inf.K - 1) > .01) saveVehicles(); } } catch (e) {} }
   if (latest.trans !== undefined && latest.trans !== null) addShare("temp", tempBand(latest.trans));
-  // Log only fresh values: a stale reading must not count as a new sample in the review.
-  const MAX_AGE = { fast: 3000, med: 8000, slow: 1100 };
-  phoneTick(now); const r = { t: now }; if (markPending) { r.mark = markPending; markPending = null; } if (phone.route && latest.lat !== undefined) { r.lat = latest.lat; r.lon = latest.lon; } METRICS.forEach(m => { const v = latest[m.id], st = mstate[m.id] || {}; if (v === null || v === undefined || (m.tier && now - (st.updated || 0) > MAX_AGE[m.tier])) return; r[m.id] = typeof v === "number" ? Number(v.toFixed(4)) : v; }); rows.push(r);
+  // Log only fresh values: a stale reading must not count as a new sample in the review. Slow readings (polled every 5–20 s) are logged once, on the first tick after they answer,
+  // judged against the previous tick rather than a fixed age so a tick delayed by an adapter timeout doesn't drop them.
+  const MAX_AGE = { fast: 3000, med: 8000 };
+  phoneTick(now); const r = { t: now }; if (markPending) { r.mark = markPending; markPending = null; } if (phone.route && latest.lat !== undefined) { r.lat = latest.lat; r.lon = latest.lon; } METRICS.forEach(m => { const v = latest[m.id], st = mstate[m.id] || {}; if (v === null || v === undefined) return; if (m.tier === "slow" ? !((st.updated || 0) > prevTick) : (m.tier && now - (st.updated || 0) > MAX_AGE[m.tier])) return; r[m.id] = typeof v === "number" ? Number(v.toFixed(4)) : v; }); rows.push(r);
+  // Annunciators are judged here, on every screen, so a chime, a spoken line and the alert log don't depend on which tab is showing.
+  if (session) { try { casNow = casMessages(); } catch (e) { console.error(e); } renderCasBar(); }
 }
 
 /* ---------- Adapter link ---------- */
@@ -1966,15 +1975,14 @@ async function pollOnce(m) {
     if (s.status !== "ok" && s.headerIdx < headers.length - 1 && !s.zeros) { s.headerIdx++; s.misses = 0; }
     else if (s.misses >= 3) { s.status = "failed"; s.headerIdx = 0; s.misses = 0; s.zeros = 0; noteAnswer(m, false, null);
       // Some data lives at a different address on other GM generations: fall back to the next alternate request once this one is exhausted.
-      const alts = m.alts || (m.alt ? [m.alt] : []); s.altIdx = s.altIdx || 0;
-      if (s.altIdx < alts.length) { if (!m.orig) m.orig = { cmd: m.cmd, pre: m.pre, headers: m.headers, f: m.f, basis: m.basis, label: m.label }; Object.assign(m, alts[s.altIdx++]); s.status = "unknown"; if (session) logX(session, "route " + m.id, "→ " + m.cmd + " " + (m.basis || ""), Date.now()); } }
+      if (applyRoute(m, (s.altIdx || 0) + 1)) { s.status = "unknown"; if (session) logX(session, "route " + m.id, "→ " + m.cmd + " " + (m.basis || ""), Date.now()); } }
   } else { if (s.status !== "ok") noteAnswer(m, true, headers[s.headerIdx] || headers[0]); s.misses = 0; s.status = "ok"; }
   record(m.id, v, Date.now());
 }
 async function runLoop(s) {
   while (session === s) {
     const now = Date.now();
-    if (now - lastTick >= 1000) { lastTick = now; tick(now); if (!s.link.sim && now - s.savedAt > 5000) { s.savedAt = now; saveDrive(); } }
+    if (now - lastTick >= 1000) { const prev = lastTick; lastTick = now; tick(now, prev); if (!s.link.sim && now - s.savedAt > 5000) { s.savedAt = now; saveDrive(); } }
     const m = nextMetric(now);
     if (m) {
       try { await pollOnce(m); s.timeouts = 0; }
@@ -1982,7 +1990,7 @@ async function runLoop(s) {
         if (!/timed out/.test(e.message) || session !== s) throw e;
         // One silent request is not a lost adapter: count it against that metric, resync the prompt, and carry on. Three in a row is.
         // A request the module never finishes answering is that request's problem: park it for the session. The adapter itself is judged by whether it still answers ATI.
-        const st = mstate[m.id]; if (st) { st.silent = (st.silent || 0) + 1; st.last = now; st.status = "failed"; st.misses = 0; if (st.silent >= 2) st.parked = true; }
+        const st = mstate[m.id]; if (st) { st.silent = (st.silent || 0) + 1; st.last = now; st.status = "failed"; st.misses = 0; if (st.silent >= 2) st.parked = true; } record(m.id, null, now); // a silent request shows "--", not its last value, until it answers again
         let alive = false; try { const r = await exclusive(() => ask("ATI", 2500)); alive = /ELM|STN|OBD/i.test(r) || r.includes(">"); } catch (e2) {} // a bare CR would repeat the last command on an ELM; ATI is a harmless prompt check
         if (alive) { s.timeouts = 0; if (session === s) setStatus("Live: " + (s.label || "") + " (skipped " + m.cmd + ")", "ok"); }
         else { s.timeouts = (s.timeouts || 0) + 1; setStatus("Adapter not answering (" + s.timeouts + "/3)…", "warn"); if (s.timeouts >= 3) throw new Error("Adapter stopped answering (last: " + m.cmd + ")"); }
@@ -1994,6 +2002,7 @@ async function runLoop(s) {
 async function start(link, label) {
   try {
     await link.open();
+    unlockAudio(); for (const k in casSeen) delete casSeen[k]; casLog.length = 0; casNow = []; // every way in (Connect, Simulator, Reconnect and continue) arms the chime and starts a fresh alert log
     resetLive(); applyKnownAnswers(); lastAnyUpdate = Date.now(); stallLogged = 0; const s = { link, header: null, savedAt: Date.now() }; session = s; driveId = "d" + Date.now(); driveStart = Date.now();
     if (!link.sim && navigator.storage && navigator.storage.persist) { try { await navigator.storage.persist(); } catch (e) {} }
     setStatus("Initializing " + label + "…");
@@ -2090,7 +2099,9 @@ async function deleteDrive(id) {
   await new Promise((res, rej) => { const t = d.transaction(["drives", "chunks"], "readwrite"); t.objectStore("drives").delete(id); keys.forEach(k => t.objectStore("chunks").delete(k)); t.oncomplete = res; t.onerror = () => rej(t.error); });
   await loadDrives();
 }
-const sessionMeta = () => ({ id: driveId, start: driveStart, build: BUILD_ID, codes, monitor, mode06, supported: supported ? [...supported] : [], xlog: (lastXlog || []).slice(0, 60).concat((lastXlog || []).length > 120 ? (lastXlog || []).slice(-60) : (lastXlog || []).slice(60)), fpChanged: !!truck.fpChanged, fp: { cal: truck.calSet || null, cvn: truck.cvn || null, was: truck.fpWas || null }, ecus: truck.ecus || [] });
+// First and last 60 adapter exchanges: the connect sequence and whatever happened at the end.
+const xlogSample = () => { const L = lastXlog || []; return L.slice(0, 60).concat(L.length > 120 ? L.slice(-60) : L.slice(60)); };
+const sessionMeta = () => ({ id: driveId, start: driveStart, build: BUILD_ID, codes, monitor, mode06, supported: supported ? [...supported] : [], xlog: xlogSample(), fpChanged: !!truck.fpChanged, fp: { cal: truck.calSet || null, cvn: truck.cvn || null, was: truck.fpWas || null }, ecus: truck.ecus || [] });
 let saving = false;
 async function saveDrive(final) {
   if (!driveId || saving) return;
@@ -2101,8 +2112,7 @@ async function saveDrive(final) {
   try {
     const summary = {}; for (const id in stats) { const s = stats[id]; if (s.n) summary[id] = { min: s.min, max: s.max, avg: s.sum / s.n, n: s.n }; }
     const end = rows.length, fresh = rows.slice(flushed, end), chunks = fresh.length ? [{ id: driveId + ":" + chunkSeq, drive: driveId, seq: chunkSeq, rows: fresh }] : [];
-    const rec = { ...sessionMeta(), vehicle: vid, end: Date.now(), summary, alerts: casLog.slice() }; rec.xlog = (lastXlog || []).slice(0, 60).concat((lastXlog || []).length > 120 ? (lastXlog || []).slice(-60) : (lastXlog || []).slice(60));
-    rec.codes = codes;
+    const rec = { ...sessionMeta(), vehicle: vid, end: Date.now(), summary, alerts: casLog.slice() };
     if (final) { const rv = analyzeDrive({ rows, meta: rec, vehicle: vehicles[vid], history: drives }); rec.review = { stats: rv.stats, verdict: rv.verdict, kind: rv.trip.kind }; }
     await putDrives([rec], chunks); flushed = end; if (fresh.length) chunkSeq++;
     if (!final) store.set("active", { id: driveId, vid, start: driveStart, last: Date.now(), seq: chunkSeq });
@@ -2122,7 +2132,7 @@ function showRecovery() {
   if (!ac || session) { box.hidden = true; return; }
   const mins = Math.max(1, Math.round((ac.last - ac.start) / 60000)); box.hidden = false; box.textContent = "";
   box.append(el("b", { textContent: "Unfinished " + (vehicles[ac.vid] ? vehicles[ac.vid].name : "drive") + " drive saved (" + mins + " min)" }), el("div", { class: "bar" },
-    el("button", { class: "primary", textContent: "Reconnect and continue", onclick: async () => { if (ac.vid !== vid) switchVehicle(ac.vid); const ports = navigator.serial ? await navigator.serial.getPorts() : []; if (ports.length) start(new SerialLink(ports[0]), "OBDLink LX"); else $("connect").click(); } }),
+    el("button", { class: "primary", textContent: "Reconnect and continue", onclick: async () => { unlockAudio(); if (ac.vid !== vid) await switchVehicle(ac.vid); const ports = navigator.serial ? await navigator.serial.getPorts() : []; if (ports.length) start(new SerialLink(ports[0]), "OBDLink LX"); else $("connect").click(); } }),
     el("button", { textContent: "Review it", onclick: async () => { if (ac.vid !== vid) { switchVehicle(ac.vid); await loadDrives(); } store.set("active", null); box.hidden = true; openReview(ac.id); } }),
     el("button", { textContent: "Dismiss", onclick: () => { store.set("active", null); box.hidden = true; } })));
 }
@@ -2368,7 +2378,7 @@ R.cockpit = (w, box) => {
     cyl.title = misAny ? "Misfire counter per cylinder (current or last drive cycle). Dimmed cylinders are deactivated in V4." : "Misfire counters not read yet";
     let tbad = false; ["tpfl","tprl","tpfr","tprr"].forEach(id => { const v = latest[id] ?? null, r = v === null ? { state: "none" } : ratingOf(byId[id], v); tc[id].textContent = v === null ? "--" : v.toFixed(0); tc[id].className = "tv " + (v === null ? "off" : r.state === "bad" ? "bad" : v !== null && v <= (ruleOf(byId[id]) || {}).lo + 2 ? "warn" : ""); if (r.state === "bad") tbad = true; });
     // Annunciators (crew-alerting style): red flashes until tapped, amber stays steady; unrelated rows dim while a red one is up.
-    const msgs = casMessages(); renderCas(cas, msgs); const red = msgs.some(m => m.level === "alert"), fresh = msgs.some(m => m.flash);
+    const msgs = casFlash(casNow); renderCas(cas, msgs); const red = msgs.some(m => m.level === "alert"), fresh = msgs.some(m => m.flash);
     // Declutter and flashing last until the strip is tapped; the chip itself stays as long as the condition does.
     ck.classList.toggle("declutter", fresh); [rowTop, rowTemp, rowCyl, rowFuel, rowTire].forEach(r => r.classList.remove("keep")); if (fresh) msgs.filter(m => m.flash).forEach(m => { const r = rowFor[m.row]; if (r) r.classList.add("keep"); });
     box.title = cmp && cmp.out.length ? "Outside usual: " + cmp.out.map(r => r.label.replace(/,.*$/, "") + " " + r.value.toFixed(r.digits) + " (" + r.lo.toFixed(r.digits) + "–" + r.hi.toFixed(r.digits) + ")").join(" · ") : "";
@@ -2429,8 +2439,12 @@ const CAS_ICON = {
   gear: "<svg viewBox='0 0 24 24'><circle cx='12' cy='12' r='3'/><path d='M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1'/></svg>",
   band: "<svg viewBox='0 0 24 24'><path d='M4 18l5-7 4 4 7-9'/><path d='M14 6h6v6'/></svg>"
 };
-const casSeen = {}, casLog = []; let casAckAt = 0, audioCtx = null;
-function casAck() { casAckAt = Date.now(); }
+const casSeen = {}, casLog = []; let casAckAt = 0, audioCtx = null, casNow = []; // casNow: the conditions up right now, judged once a second in tick() on every screen
+function casAck() { casAckAt = Date.now(); renderCasBar(true); }
+// Flash state is re-read at paint time so a tap stops the flashing at once rather than on the next tick.
+function casFlash(msgs) { msgs.forEach(m => { const s = casSeen[m.key]; m.flash = m.level === "alert" && !!s && s.first > casAckAt; }); return msgs; }
+// On screens without the cockpit, the same chips sit in a strip above the MARK bar; the cockpit's own strip takes over when it is showing.
+function renderCasBar(force) { const bar = $("casBar"); if (!bar) return; const cockpitShown = !!(tab !== EV && (dash[tab] || []).some(w => w.type === "cockpit")) && !$("dlg").open; const msgs = session && !cockpitShown ? casFlash(casNow.slice()) : []; bar.hidden = !msgs.length; document.body.classList.toggle("casbar", !!msgs.length); if (!msgs.length) { if (bar.dataset.sig) { bar.dataset.sig = ""; bar.textContent = ""; } return; } if (force) bar.dataset.sig = ""; renderCas(bar, msgs); }
 // Tap an annunciator: codes → Diagnostics screen; a metric → its drill-in (or its screen while moving); no-data → the connection log.
 function casGo(m) {
   const go = (t) => { if (!dash[t]) return; tab = t; store.set(vkey("tab"), t); syncEditControls(); renderTabs(); renderGrid(); };
@@ -2676,7 +2690,7 @@ function applyPos(w, node) { const p = posOf(w); node.style.gridColumn = (p.x + 
 function save() { store.set(vkey("dash"), dash); }
 function renderGrid() {
   const g = $("grid"); g.textContent = ""; g.className = ""; g.style.setProperty("--cols", cols()); painters = [];
-  if (tab === EV) { applyFit(); return renderEverything(g); }
+  if (tab === EV) { applyFit(); renderEverything(g); renderCasBar(true); return; }
   const items = dash[tab]; compactTab(); applyFit();
   if (!items.length) g.append(el("div", { class: "emptyhint", textContent: "This screen is empty. Long-press anything on another screen, or on Everything, and choose Copy to." }));
   items.forEach(w => {
@@ -2687,6 +2701,7 @@ function renderGrid() {
     node.append(cog, handle, mover); applyPos(w, node); g.append(node); w._node = node; bindDrag(w, node, handle); bindLongPress(node, w);
     if (fn) painters.push(fn);
   });
+  renderCasBar(true);
 }
 function isFit() { return !editMode && tab !== EV && (tab === "Glance" || !!fits[tab]); }
 function applyFit() {
@@ -2894,7 +2909,7 @@ function exportCsv() {
   download(vid + "-obd-" + stampName() + ".csv", rowsCsv(rows, !!(session && session.link.sim)), "text/csv");
 }
 async function exportHistory() {
-  const full = []; for (const d of drives) { const { review, ...rest } = d; full.push({ ...rest, review, rows: stripRows(await driveRows(d.id)) }); }
+  const full = []; for (const d of drives) full.push({ ...d, rows: stripRows(await driveRows(d.id)) });
   download(vid + "-obd-history-" + stampName() + ".json", JSON.stringify({ build: BUILD_ID, exported: new Date().toISOString(), vehicle: vid, vehicleProfile: vehicles[vid], scans: store.get(vkey("scans"), []), drives: full }, null, 0), "application/json");
 }
 function importHistory() {
@@ -3196,6 +3211,8 @@ function openVehicle() {
 
 /* ---------- Wiring ---------- */
 $("connBtn2").onclick = () => { if (session) $("stop").click(); else $("connect").click(); };
+$("casBar").onclick = () => casAck();
+$("dlg").addEventListener("close", () => renderCasBar(true));
 // Plug icons drawn inline (the ⏻ glyph has no coverage in some phone fonts): plug meeting its socket while connected, pulled apart with a slash when not.
 function plugIcon(live) { const sock = "<rect x='16' y='6' width='7' height='12' rx='2'/><path d='M18.5 10v1M18.5 13v1'/>"; return live
   ? "<svg viewBox='0 0 24 24'><path d='M1 12h3'/><rect x='4' y='8' width='7' height='8' rx='2' fill='currentColor' fill-opacity='.35'/><path d='M11 10h5M11 14h5'/>" + sock + "<path d='M3 3l18 18' stroke-opacity='.55'/></svg>"
@@ -3203,11 +3220,11 @@ function plugIcon(live) { const sock = "<rect x='16' y='6' width='7' height='12'
 function syncBar() { const live = !!session; $("connBtn2").innerHTML = plugIcon(live); $("connBtn2").title = live ? "Disconnect" : "Connect"; $("connBtn2").setAttribute("aria-label", live ? "Disconnect" : "Connect"); $("connBtn2").className = "side " + (live ? "on" : "off"); $("connBtn2").disabled = !live && !("serial" in navigator); $("markBtn").disabled = !live; }
 $("fsBtn").onclick = async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen({ navigationUI: "hide" }); } catch (e) { toast("Full screen isn't available in this browser view. Add the page to the home screen for a full-screen app."); } };
 document.addEventListener("fullscreenchange", () => { $("fsBtn").textContent = document.fullscreenElement ? "⤡" : "⛶"; $("fsBtn").title = document.fullscreenElement ? "Exit full screen" : "Full screen"; });
-$("connect").onclick = async () => { unlockAudio(); for (const k in casSeen) delete casSeen[k]; casLog.length = 0;
+$("connect").onclick = async () => { unlockAudio(); // inside the tap, before the port picker, so the browser lets audio start
   try { const port = await navigator.serial.requestPort({ filters: [{ bluetoothServiceClassId: SPP_UUID }], allowedBluetoothServiceClassIds: [SPP_UUID] }); await start(new SerialLink(port), "OBDLink LX"); }
   catch (e) { if (e.name !== "NotFoundError") setStatus(e.message, "bad"); }
 };
-$("sim").onclick = () => { unlockAudio(); for (const k in casSeen) delete casSeen[k]; casLog.length = 0; start(new SimLink(), "simulator (not vehicle data)"); };
+$("sim").onclick = () => { unlockAudio(); start(new SimLink(), "simulator (not vehicle data)"); };
 $("stop").onclick = () => stop(false);
 $("editBtn").onclick = () => setEdit(!editMode);
 $("addBtn").onclick = openAdd;
