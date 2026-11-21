@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261118-1628Z">
-<meta name="build-timestamp-utc" content="2026-11-18T16:28:51Z">
+<meta name="build-id" content="OBD-20261121-1528Z">
+<meta name="build-timestamp-utc" content="2026-11-21T15:28:18Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -159,7 +159,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261118-1628Z", BUILD_UTC = "2026-11-18T16:28:51Z";
+const BUILD_ID = "OBD-20261121-1528Z", BUILD_UTC = "2026-11-21T15:28:18Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1617,7 +1617,7 @@ function transShopReport(drives, vehicle) {
 
 /* ---------- Usual bands: what this vehicle normally does, drive by drive, so a change after a repair shows at once ---------- */
 // Rough upshift = slip spike, flare, or completing hard with the converter locked at 30%+ throttle. Firm coast-down = rpm step 250/300+, a flare, or the engine dragged below 500 rpm. Same rule as the shop-report classifier.
-const STATS_VERSION = 3; // bump when analyzeDrive gains stats that older saved drives need back-filled
+const STATS_VERSION = 4; // bump when analyzeDrive gains stats that older saved drives need back-filled
 const roughShift = s => /slipping|flare|firm|dragged/.test(s.feel) || (s.kind === "up" && s.feel === "locked" && (s.tps ?? 0) >= 30 && Math.abs(s.jump) >= 300);
 function shiftQuality(shifts) {
   const up = shifts.filter(s => s.kind === "up"), cd = shifts.filter(s => s.kind === "coast-down");
@@ -1716,6 +1716,79 @@ function kpiTrend(def, band, recentVals, better) {
   if (better === "higher") return { state: diff > 0 ? "improving" : "degrading", recent };
   if (better === "zero") return { state: Math.abs(recent) < Math.abs(band.med) ? "improving" : "degrading", recent };
   return { state: "changed", recent };
+}
+
+/* ---------- Maintenance brief: everything the app has flagged across the saved drives, rolled up system → class → type with frequency and trend,
+   every banded measure seen vs usual vs limit, and the actions that pattern recommends. The answer to "what brings you in today?". ---------- */
+// What a saved drive keeps of its review: stats, verdict, kind, plus the findings (watch/attention) and system statuses the brief rolls up.
+function compactReview(rv) {
+  return { stats: rv.stats, verdict: rv.verdict, kind: rv.trip ? rv.trip.kind : undefined,
+    findings: (rv.findings || []).filter(f => f.level === "attention" || f.level === "watch").map(f => ({ system: f.system, level: f.level, title: String(f.title).slice(0, 120), next: f.next && f.next.length ? String(f.next[0]).slice(0, 200) : "" })),
+    systems: (rv.systems || []).map(s => ({ id: s.id, name: s.name, status: s.status })) };
+}
+const ALERT_SYS = { oilp: ["Engine oil", "Oil pressure low"], oilt: ["Engine oil", "Oil temperature high"], ect: ["Engine cooling", "Coolant hot"], trans: ["Transmission", "Trans fluid hot"], slip: ["Transmission", "Converter slip at cruise"],
+  volt: ["Battery and charging", "Voltage out of range"], fuel: ["Fuel and air", "Fuel low"], evapp: ["Emissions system", "EVAP tank pressure beyond limit"], mil: ["Computer-reported faults", "Check-engine light on"], newcode: ["Computer-reported faults", "New trouble code during a drive"],
+  tire: ["Tires", "Tire pressure low"], link: ["Adapter link", "No data from the adapter"], band: ["Compared with this vehicle's history", "Measure beyond anything logged"] };
+function alertSys(key) { const m = /^mis(\d)$/.exec(key); if (m) return ["Ignition and combustion", "Misfire counter rising, cylinder " + m[1]]; return ALERT_SYS[key] || ["Other", key]; }
+function findingSys(system) { const s = SYSTEMS.find(x => x.from.includes(system)); return s ? s.name : system; }
+// Share of drives affected in the later half against the earlier half of the chronological list.
+function shareTrend(hitIdx, n) {
+  if (n < 4) return "too few drives"; if (hitIdx.length === 1) return "once"; const half = Math.floor(n / 2), a = hitIdx.filter(i => i < half).length / half, b = hitIdx.filter(i => i >= half).length / (n - half);
+  if (!a && b) return hitIdx.every(i => i >= n - Math.max(2, Math.ceil(n / 4))) ? "new" : "rising"; if (a && !b) return "cleared"; if (b > a * 1.5) return "rising"; if (b < a * .5) return "falling"; return "steady";
+}
+function maintenanceBrief(drives, vehicle, baseline, ruleFor) {
+  const ds = (drives || []).slice().sort((a, b) => a.start - b.start), n = ds.length, idx = new Map(ds.map((d, i) => [d.id, i]));
+  const groups = {}; // system → class → type → {occ, drives:Set, first, last, idx:[], detail}
+  // Finding titles carry their numbers ("2→3 flared 312 rpm at 27 mph"), so types group on the title with numbers blanked and show the latest wording.
+  const typeKey = t => String(t).split(":")[0].replace(/[\d.,]+/g, "#").replace(/\s+/g, " ").trim();
+  const put = (sys, cls, type, d, detail, occ = 1) => { const g = ((groups[sys] = groups[sys] || {})[cls] = groups[sys][cls] || {}), k = typeKey(type); const t = g[k] = g[k] || { name: type, occ: 0, drives: new Set(), first: d.start, last: d.start, detail: "", lastT: 0 }; t.occ += occ; t.drives.add(d.id); t.first = Math.min(t.first, d.start); t.last = Math.max(t.last, d.start); if (d.start >= t.lastT) { t.lastT = d.start; t.name = type; if (detail) t.detail = detail; } };
+  ds.forEach(d => {
+    const byKey = {}; (d.alerts || []).forEach(a => { byKey[a.key] = byKey[a.key] || { n: 0, text: a.text, level: a.level }; byKey[a.key].n++; });
+    for (const k in byKey) { const [sys, type] = alertSys(k); put(sys, byKey[k].level === "alert" ? "Red alert" : "Amber alert", type, d, byKey[k].text, byKey[k].n); }
+    const rv = d.review || {}; (rv.findings || []).forEach(f => put(findingSys(f.system), f.level === "attention" ? "Finding: needs attention" : "Finding: watch", f.title, d, f.next));
+    const c = d.codes || {}; [["stored", "stored"], ["pending", "pending"], ["permanent", "permanent"]].forEach(([k, lab]) => (c[k] || []).forEach(code => put("Computer-reported faults", "Trouble code", code, d, lab)));
+  });
+  const CLASS_RANK = { "Red alert": 0, "Trouble code": 1, "Finding: needs attention": 2, "Amber alert": 3, "Finding: watch": 4 };
+  const systems = Object.keys(groups).map(sys => ({ name: sys, classes: Object.keys(groups[sys]).sort((a, b) => (CLASS_RANK[a] ?? 9) - (CLASS_RANK[b] ?? 9)).map(cls => ({ name: cls, types: Object.keys(groups[sys][cls]).map(type => { const t = groups[sys][cls][type], hits = [...t.drives].map(id => idx.get(id)).sort((a, b) => a - b);
+    return { name: t.name, occurrences: t.occ, drives: t.drives.size, share: n ? t.drives.size / n : 0, first: t.first, last: t.last, trend: shareTrend(hits, n), detail: t.detail }; }).sort((a, b) => b.drives - a.drives || b.occurrences - a.occurrences) })) }));
+  const worst = s => Math.min(...s.classes.map(c => CLASS_RANK[c.name] ?? 9)); systems.sort((a, b) => worst(a) - worst(b) || b.classes.reduce((x, c) => x + c.types.reduce((y, t) => y + t.drives, 0), 0) - a.classes.reduce((x, c) => x + c.types.reduce((y, t) => y + t.drives, 0), 0));
+  // Measures: every band definition this vehicle has values for.
+  const use = ds.filter(d => d.summary && d.summary.rpm && d.summary.rpm.n >= 300), bands = (baseline && baseline.bands) || {}, measures = [];
+  BAND_DEFS.forEach(def => { const [key, label, unit, digits, kind, id] = def, vals = use.map(d => ({ t: d.start, v: bandValueOf(d, def) })).filter(x => x.v !== null); if (vals.length < 2) return;
+    const vs = vals.map(x => x.v), b = bands[key] || null, rule0 = kind === "sum" && ruleFor ? (ruleFor(id) || null) : null, stat = def[6], rule = rule0 && rule0.when !== "cruise" && (stat === "max" || stat === "min") ? { hi: stat === "max" ? rule0.hi : undefined, lo: stat === "min" ? rule0.lo : undefined } : null; // a drive's peak is judged against the high limit, its minimum against the low one; averages and cruise-only rules are not comparable
+    const beyond = rule ? vals.filter(x => (rule.hi != null && x.v > rule.hi) || (rule.lo != null && x.v < rule.lo)).length : 0, recent = pctl(vs.slice(-3), .5), tr = b ? kpiTrend(def, b, vs.slice(-3), "stable").state : "no band";
+    measures.push({ key, label, unit, digits, n: vals.length, min: Math.min(...vs), med: pctl(vs, .5), max: Math.max(...vs), band: b ? { lo: b.lo, hi: b.hi } : null, rule, beyond, recent, trend: tr, outsideBand: b ? vals.filter(x => x.v > b.hi || x.v < b.lo).length : 0 }); });
+  // Status now: the latest reviewed drive's system statuses.
+  const lastRv = [...ds].reverse().find(d => d.review && d.review.systems), statusNow = lastRv ? lastRv.review.systems : [];
+  // Recommended actions, from the pattern rather than any one drive.
+  const actions = [], A = (priority, text, why) => actions.push({ priority, text, why });
+  systems.forEach(s => s.classes.forEach(c => c.types.forEach(t => {
+    const when = t.drives + " of " + n + " drives, last " + new Date(t.last).toLocaleDateString() + ", " + t.trend;
+    if (c.name === "Red alert" && t.drives >= 2 && s.name !== "Adapter link") A(1, "Check " + t.name.toLowerCase() + " (" + s.name.toLowerCase() + ")", when + (t.detail ? "; last read: " + t.detail : ""));
+    else if (c.name === "Trouble code") A(1, "Ask about code " + t.name, when + " (" + t.detail + ")");
+    else if (c.name === "Finding: needs attention" && t.share >= .25) A(1, t.name, when + (t.detail ? ". " + t.detail : ""));
+    else if (c.name === "Finding: needs attention" && t.drives >= 2) A(2, t.name, when + (t.detail ? ". " + t.detail : ""));
+    else if (c.name === "Amber alert" && t.share >= .5 && !/Fuel low|anything logged/.test(t.name)) A(2, "Review " + t.name.toLowerCase(), when);
+    else if (c.name === "Finding: watch" && t.share >= .5) A(3, t.name, when);
+    if (s.name === "Adapter link" && t.drives >= 3) A(3, "Adapter or connection: data dropped out on " + t.drives + " drives", "Not a vehicle fault; check the OBDLink seating and Bluetooth before blaming a module.");
+  })));
+  measures.forEach(m => { if (m.rule && m.beyond >= 2) A(2, m.label + " beyond its limit on " + m.beyond + " of " + m.n + " drives", "Seen " + m.min.toFixed(m.digits) + "–" + m.max.toFixed(m.digits) + " " + m.unit + ", limit " + (m.rule.lo != null ? "low " + m.rule.lo + " " : "") + (m.rule.hi != null ? "high " + m.rule.hi : "")); });
+  const wl = (typeof WATCHLIST === "object" && vehicle && WATCHLIST[vehicle.id]) || [];
+  wl.forEach(hy => hy.kpis.forEach(([key, better]) => { const def = bandDef(key), b = bands[key]; if (!def || !b) return; const vals = use.map(d => bandValueOf(d, def)).filter(v => v !== null), tr = kpiTrend(def, b, vals.slice(-3), better); if (tr.state === "degrading" && (tr.recent > b.hi || tr.recent < b.lo)) A(2, "Degrading: " + def[1] + " (" + hy.title + ")", "Recent " + tr.recent.toFixed(def[3]) + " " + def[2] + " vs usual " + b.lo.toFixed(def[3]) + "–" + b.hi.toFixed(def[3]) + ". " + hy.test); }));
+  const seen = new Set(); const dedup = actions.filter(a => { const k = a.text.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => a.priority - b.priority);
+  return { drives: n, reviewed: ds.filter(d => d.review).length, span: n ? [ds[0].start, ds[n - 1].start] : null, miles: ds.reduce((a, d) => a + ((d.summary && d.summary.tripmi && d.summary.tripmi.max) || (d.review && d.review.stats && d.review.stats.miles) || 0), 0), systems, measures, statusNow, actions: dedup.slice(0, 15), baselineLabel: baseline ? baseline.label : "" };
+}
+function briefMarkdown(br, vehicle) {
+  const L = [], f = (v, d) => v == null ? "–" : v.toFixed(d), dt = t => new Date(t).toLocaleDateString();
+  L.push("# Maintenance brief: " + (vehicle.name || "vehicle"), "", "Generated " + new Date().toISOString() + " from " + br.drives + " logged drives (" + br.reviewed + " reviewed), " + br.miles.toFixed(0) + " miles, " + (br.span ? dt(br.span[0]) + " to " + dt(br.span[1]) : "") + ". Read-only OBD-II data at one sample per second; GM-specific values are community-sourced and marked Unverified in the app. Nothing here is a diagnosis: it is what the vehicle reported and how often.", "");
+  if (vehicle.repairs && vehicle.repairs.length) { L.push("## Repairs logged", ""); vehicle.repairs.slice().sort((a, b) => a.t - b.t).forEach(r => L.push("- " + dt(r.t) + ": " + (r.note || "") + " [" + (r.tags || []).join(", ") + "]")); L.push(""); }
+  L.push("## What brings me in", ""); if (!br.actions.length) L.push("- Nothing recurring. Routine service only."); br.actions.forEach(a => L.push("- " + ["", "**Priority:** ", "Check: ", "Watch: "][a.priority] + a.text + " — " + a.why)); L.push("");
+  if (br.statusNow.length) { L.push("## System status on the latest reviewed drive", ""); br.statusNow.forEach(s => L.push("- " + s.name + ": " + s.status)); L.push(""); }
+  L.push("## Everything flagged, by system", ""); br.systems.forEach(s => { L.push("### " + s.name, ""); s.classes.forEach(c => { L.push("**" + c.name + "**", "", "| Type | Drives | Share | Occurrences | First | Last | Trend | Last detail |", "|---|---|---|---|---|---|---|---|"); c.types.forEach(t => L.push("| " + t.name + " | " + t.drives + " of " + br.drives + " | " + Math.round(t.share * 100) + "% | " + t.occurrences + " | " + dt(t.first) + " | " + dt(t.last) + " | " + t.trend + " | " + (t.detail || "").replace(/\|/g, "/") + " |")); L.push(""); }); });
+  L.push("## Measures: seen vs usual vs limit", "", "Usual = 10th–90th percentile across " + (br.baselineLabel || "the saved drives") + ". Limit = the app's rule (starting guides unless noted in the app). Trend = last three drives against the usual median.", "", "| Measure | Drives | Min | Median | Max | Usual | Limit | Beyond limit | Outside usual | Recent | Trend |", "|---|---|---|---|---|---|---|---|---|---|---|");
+  br.measures.forEach(m => L.push("| " + m.label + (m.unit && m.unit !== "count" ? " (" + m.unit + ")" : "") + " | " + m.n + " | " + f(m.min, m.digits) + " | " + f(m.med, m.digits) + " | " + f(m.max, m.digits) + " | " + (m.band ? f(m.band.lo, m.digits) + "–" + f(m.band.hi, m.digits) : "–") + " | " + (m.rule ? (m.rule.lo != null ? "≥" + m.rule.lo + " " : "") + (m.rule.hi != null ? "≤" + m.rule.hi : "") : "none") + " | " + (m.rule ? m.beyond : "–") + " | " + (m.band ? m.outsideBand : "–") + " | " + f(m.recent, m.digits) + " | " + m.trend + " |"));
+  L.push("", "Automated summary from OBD Live. It records what the vehicle reported; it doesn't diagnose.");
+  return L.join("\n");
 }
 
 function matchVehicle(vin, vehicles) {
@@ -2113,7 +2186,7 @@ async function saveDrive(final) {
     const summary = {}; for (const id in stats) { const s = stats[id]; if (s.n) summary[id] = { min: s.min, max: s.max, avg: s.sum / s.n, n: s.n }; }
     const end = rows.length, fresh = rows.slice(flushed, end), chunks = fresh.length ? [{ id: driveId + ":" + chunkSeq, drive: driveId, seq: chunkSeq, rows: fresh }] : [];
     const rec = { ...sessionMeta(), vehicle: vid, end: Date.now(), summary, alerts: casLog.slice() };
-    if (final) { const rv = analyzeDrive({ rows, meta: rec, vehicle: vehicles[vid], history: drives }); rec.review = { stats: rv.stats, verdict: rv.verdict, kind: rv.trip.kind }; }
+    if (final) { const rv = analyzeDrive({ rows, meta: rec, vehicle: vehicles[vid], history: drives }); rec.review = compactReview(rv); rec.review.stats.v = STATS_VERSION; }
     await putDrives([rec], chunks); flushed = end; if (fresh.length) chunkSeq++;
     if (!final) store.set("active", { id: driveId, vid, start: driveStart, last: Date.now(), seq: chunkSeq });
     await loadDrives();
@@ -2150,7 +2223,7 @@ async function backfillShiftStats() {
   if (backfilling || session) return; backfilling = true; let n = 0;
   try { for (const d of drives) { if (session) break; const st = d.review && d.review.stats; if (st && st.v === STATS_VERSION) continue;
       const rs = await driveRows(d.id); if (rs.length < 100) { d.review = d.review || { stats: {} }; d.review.stats = d.review.stats || {}; d.review.stats.v = STATS_VERSION; await putDrives([d]); continue; }
-      try { const rv = analyzeDrive({ rows: rs, meta: { ...d, rows: undefined }, vehicle: vehicles[vid] || {}, history: [] }); rv.stats.v = STATS_VERSION; d.review = rv; } catch (e) { d.review = d.review || { stats: {} }; d.review.stats = d.review.stats || {}; d.review.stats.v = STATS_VERSION; }
+      try { const rv = analyzeDrive({ rows: rs, meta: { ...d, rows: undefined }, vehicle: vehicles[vid] || {}, history: [] }); rv.stats.v = STATS_VERSION; d.review = compactReview(rv); } catch (e) { d.review = d.review || { stats: {} }; d.review.stats = d.review.stats || {}; d.review.stats.v = STATS_VERSION; }
       await putDrives([d]); n++; await new Promise(r => setTimeout(r, 30)); } if (n) { rebuildBaseline(); toast("Updated " + n + " saved drive" + (n === 1 ? "" : "s") + " with the newer measures."); } } catch (e) { console.error(e); } finally { backfilling = false; }
 }
 // Current-drive values for the usual bands. Averages after 5 min of engine time, peaks after 10 min, shift quality after 5 upshifts: earlier than that a hop says nothing.
@@ -2872,7 +2945,7 @@ function openMore() {
   const xl = el("div", { class: "scroll", style: "max-height:240px;font:11px ui-monospace,monospace;white-space:pre-wrap" }); const renderXlog = () => { const L = lastXlog || []; xl.textContent = L.length ? L.map(x => new Date(x.t).toISOString().slice(11, 19) + " " + String(x.ms).padStart(5) + "ms  " + x.cmd + "  →  " + (x.r || "(empty)")).join("\n") : "No adapter traffic yet."; }; renderXlog();
   const xlBtn = el("button", { textContent: "Copy connection log", onclick: async () => { try { await navigator.clipboard.writeText(xl.textContent); toast("Copied " + (lastXlog || []).length + " exchanges."); } catch (e) { toast("Select and copy the text instead."); } } });
   showDlg("Data and sources",
-    el("div", { class: "bar" }, el("button", { textContent: "Export session CSV", onclick: exportCsv }), el("button", { textContent: "Export history", onclick: exportHistory }), el("button", { textContent: "Import history", onclick: importHistory }), el("button", { textContent: "Vehicle summary", onclick: openVehicleSummary })),
+    el("div", { class: "bar" }, el("button", { textContent: "Export session CSV", onclick: exportCsv }), el("button", { textContent: "Export history", onclick: exportHistory }), el("button", { textContent: "Import history", onclick: importHistory }), el("button", { textContent: "Vehicle summary", onclick: openVehicleSummary }), el("button", { class: "primary", textContent: "Maintenance brief", onclick: openBrief })),
     el("h3", { textContent: "Connection log (last 300 adapter exchanges, this session or the one that just ended)" }), xlBtn, xl,
     el("h3", { textContent: "This session (table view of all readings)" }), stat,
     el("h3", { textContent: "What the green and red colors mean" }),
@@ -2955,19 +3028,19 @@ async function openReview(pickId) {
   if (rows.length) sel.append(el("option", { value: "__live", textContent: "Current session" + (session && session.link.sim ? " (simulator)" : "") }));
   [...drives].reverse().forEach(d => sel.append(el("option", { value: d.id, textContent: new Date(d.start).toLocaleString() + (d.review ? " · " + d.review.kind : "") })));
   if (typeof pickId === "string") sel.value = pickId;
-  const del = el("button", { textContent: "Delete this drive" }), cfBtn = el("button", { textContent: "Case file: all drives", onclick: () => openCaseFile() });
+  const del = el("button", { textContent: "Delete this drive" }), cfBtn = el("button", { textContent: "Case file: all drives", onclick: () => openCaseFile() }), brBtn = el("button", { textContent: "Maintenance brief", onclick: openBrief });
   const show = async () => {
     host.textContent = "Analyzing…"; del.hidden = sel.value === "__live" || !sel.value; del.textContent = "Delete this drive"; del.dataset.arm = "";
     if (!sel.value) { host.textContent = "No drives yet. Connect, drive for at least a minute, then disconnect."; return; }
     let meta, rs;
     if (sel.value === "__live") { meta = sessionMeta(); rs = rows; } else { meta = drives.find(d => d.id === sel.value); rs = await driveRows(sel.value); }
     const rep = analyzeDrive({ rows: rs, meta, vehicle: vehicles[vid], history: drives.filter(d => d.start < (meta.start || Infinity)) });
-    if (sel.value !== "__live" && !(session && meta.id === driveId)) { const rec = { ...meta, review: { stats: rep.stats, verdict: rep.verdict, kind: rep.trip.kind } }; try { await putDrives([rec]); const i = drives.findIndex(d => d.id === rec.id); if (i >= 0) drives[i] = rec; } catch (e) {} }
+    if (sel.value !== "__live" && !(session && meta.id === driveId)) { const rec = { ...meta, review: compactReview(rep) }; rec.review.stats.v = STATS_VERSION; try { await putDrives([rec]); const i = drives.findIndex(d => d.id === rec.id); if (i >= 0) drives[i] = rec; } catch (e) {} }
     renderReport(host, rep, vehicles[vid], meta, rs);
   };
   del.onclick = async () => { if (del.dataset.arm !== "1") { del.dataset.arm = "1"; del.textContent = "Tap again to delete"; return; } const id = sel.value; await deleteDrive(id); openReview(); };
   sel.onchange = show; $("dlg").classList.add("wide");
-  showDlg("Drive review: " + vehicles[vid].name, el("p", { textContent: "An automated review using generic OBD data, vehicle self-tests, your own history, and published diagnostic methods. It points you where to look; it can't confirm a diagnosis." }), el("div", { class: "bar" }, sel, del, cfBtn), host);
+  showDlg("Drive review: " + vehicles[vid].name, el("p", { textContent: "An automated review using generic OBD data, vehicle self-tests, your own history, and published diagnostic methods. It points you where to look; it can't confirm a diagnosis." }), el("div", { class: "bar" }, sel, del, cfBtn, brBtn), host);
   show();
 }
 /* ---------- Copy to, custom screens, Everything ---------- */
@@ -3177,7 +3250,28 @@ async function openCaseFile() {
     host.append(el("table", {}, el("thead", {}, el("tr", {}, ["Measure", "Drives", "Low", "Median", "High", "Drift"].map((h, i) => el("th", { class: i ? "n" : "", textContent: h })))), el("tbody", {}, cf.trends.map(t => el("tr", {}, el("td", { textContent: t.label + (t.unit ? " (" + t.unit + ")" : "") }), el("td", { class: "n", textContent: String(t.n) }), el("td", { class: "n", textContent: t.n > 1 ? t.lo.toFixed(t.d) : t.pts[0].v.toFixed(2) }), el("td", { class: "n", textContent: t.n > 1 ? t.med.toFixed(t.d) : "" }), el("td", { class: "n", textContent: t.n > 1 ? t.hi.toFixed(t.d) : "" }), el("td", { class: "n", textContent: t.drift === null ? "" : (t.drift > 0 ? "+" : "") + t.drift.toFixed(t.d) }))))));
     host.append(el("p", { class: "sub", style: "white-space:normal", textContent: "Drift compares the later half of drives with the earlier half. Measures only count on drives where they could be rated, so highway and city drives contribute different rows." }));
   }
-  showDlg("Case file: " + vehicles[vid].name, el("p", { textContent: "Every saved drive for this vehicle, pooled. Theses are judged on consistency across drives, not on any one drive." }), host, el("div", { class: "bar" }, el("button", { class: "primary", textContent: "Transmission report for the shop", onclick: () => download(vid + "-transmission-report-" + stampName() + ".md", transShopReport(drives, vehicles[vid]), "text/markdown") }), el("button", { textContent: "Back to drive review", onclick: () => openReview() })));
+  showDlg("Case file: " + vehicles[vid].name, el("p", { textContent: "Every saved drive for this vehicle, pooled. Theses are judged on consistency across drives, not on any one drive." }), host, el("div", { class: "bar" }, el("button", { class: "primary", textContent: "Transmission report for the shop", onclick: () => download(vid + "-transmission-report-" + stampName() + ".md", transShopReport(drives, vehicles[vid]), "text/markdown") }), el("button", { textContent: "Maintenance brief", onclick: openBrief }), el("button", { textContent: "Back to drive review", onclick: () => openReview() })));
+}
+/* ---------- Maintenance brief: the "what brings you in today?" answer for the selected vehicle ---------- */
+async function openBrief() {
+  await loadDrives(); const veh = vehicles[vid] || {}, br = maintenanceBrief(drives, veh, baseline, id => byId[id] ? ruleOf(byId[id]) : null), host = el("div", { class: "vsum" }), dt = t => new Date(t).toLocaleDateString(), f = (v, d) => v == null ? "–" : v.toFixed(d);
+  $("dlg").classList.add("wide");
+  host.append(el("div", { class: "tot" }, el("div", {}, el("b", { textContent: String(br.drives) }), "drives (" + br.reviewed + " reviewed)"), el("div", {}, el("b", { textContent: br.miles.toFixed(0) }), "miles"), el("div", {}, el("b", { textContent: br.span ? dt(br.span[0]) + " – " + dt(br.span[1]) : "—" }), "first to last"), el("div", {}, el("b", { textContent: String(br.actions.filter(a => a.priority === 1).length) }), "priority items")));
+  const PRI = { 1: ["Priority", "#ff8a80"], 2: ["Check", "#e0a100"], 3: ["Watch", "var(--muted)"] };
+  host.append(el("h3", { textContent: "What brings me in" }));
+  if (!br.actions.length) host.append(el("p", { textContent: "Nothing recurring across the saved drives. Routine service only." }));
+  br.actions.forEach(a => host.append(el("div", { style: "padding:5px 0;border-top:1px solid var(--line)" }, el("b", { style: "color:" + PRI[a.priority][1], textContent: PRI[a.priority][0] + ": " }), el("span", { textContent: a.text }), el("div", { class: "sub", style: "white-space:normal", textContent: a.why }))));
+  if (br.statusNow.length) { host.append(el("h3", { textContent: "System status, latest reviewed drive" })); br.statusNow.forEach(s => host.append(el("div", { class: "row" }, el("span", { textContent: s.name }), el("span", { class: "pill " + (s.status === "good" ? "good" : s.status === "attention" ? "bad" : ""), textContent: SICON[s.status] + " " + s.status })))); }
+  host.append(el("h3", { textContent: "Everything flagged, by system → class → type" }), el("p", { class: "sub", style: "white-space:normal", textContent: "Classes: red alert, trouble code, finding (needs attention), amber alert, finding (watch). Share = drives affected. Trend compares the later half of the drives with the earlier half: new, rising, steady, falling, cleared." }));
+  if (!br.systems.length) host.append(el("p", { textContent: "Nothing flagged yet. Alerts, codes and review findings accumulate as drives are saved; older drives are re-reviewed in the background so their findings join the brief." }));
+  br.systems.forEach(s => { const d = el("details", { class: "f", open: s.classes.some(c => /Red|code|attention/.test(c.name)) }, el("summary", { textContent: s.name + " · " + s.classes.reduce((x, c) => x + c.types.length, 0) + " type" + (s.classes.reduce((x, c) => x + c.types.length, 0) === 1 ? "" : "s") }));
+    s.classes.forEach(c => { d.append(el("div", { class: "sub", style: "margin-top:6px;color:" + (/Red|attention|code/.test(c.name) ? "#ff8a80" : "#e0a100"), textContent: c.name }));
+      d.append(el("table", {}, el("thead", {}, el("tr", {}, ["Type", "Drives", "Occ.", "First", "Last", "Trend"].map((h, i) => el("th", { class: i ? "n" : "", textContent: h })))), el("tbody", {}, c.types.map(t => el("tr", { title: t.detail || "" }, el("td", { textContent: t.name }), el("td", { class: "n", textContent: t.drives + " (" + Math.round(t.share * 100) + "%)" }), el("td", { class: "n", textContent: String(t.occurrences) }), el("td", { class: "n", textContent: dt(t.first) }), el("td", { class: "n", textContent: dt(t.last) }), el("td", { class: "n", style: /rising|new/.test(t.trend) ? "color:#ff8a80" : /falling|cleared/.test(t.trend) ? "color:var(--good)" : "", textContent: t.trend })))))); });
+    host.append(d); });
+  host.append(el("h3", { textContent: "Measures: seen vs usual vs limit" }), el("p", { class: "sub", style: "white-space:normal", textContent: "Usual = 10th–90th percentile across " + (br.baselineLabel || "the saved drives") + ". Limit = the reading's rule. Beyond = drives past the limit; Outside = drives outside the usual band. Trend = last three drives against the usual median." }));
+  host.append(el("div", { class: "scroll", style: "max-height:50vh" }, el("table", {}, el("thead", {}, el("tr", {}, ["Measure", "n", "Min", "Med", "Max", "Usual", "Limit", "Beyond", "Outside", "Trend"].map((h, i) => el("th", { class: i ? "n" : "", textContent: h })))), el("tbody", {}, br.measures.map(m => el("tr", { style: m.rule && m.beyond ? "color:#ff8a80" : m.outsideBand > m.n * .3 ? "color:#e0a100" : "" /* a 10–90% band leaves a fifth of drives outside by construction; amber only when clearly more */ }, el("td", { textContent: m.label + (m.unit && m.unit !== "count" ? " (" + m.unit + ")" : "") }), el("td", { class: "n", textContent: String(m.n) }), el("td", { class: "n", textContent: f(m.min, m.digits) }), el("td", { class: "n", textContent: f(m.med, m.digits) }), el("td", { class: "n", textContent: f(m.max, m.digits) }), el("td", { class: "n", textContent: m.band ? f(m.band.lo, m.digits) + "–" + f(m.band.hi, m.digits) : "–" }), el("td", { class: "n", textContent: m.rule ? (m.rule.lo != null ? "≥" + m.rule.lo + " " : "") + (m.rule.hi != null ? "≤" + m.rule.hi : "") : "none" }), el("td", { class: "n", textContent: m.rule ? String(m.beyond) : "–" }), el("td", { class: "n", textContent: m.band ? String(m.outsideBand) : "–" }), el("td", { class: "n", textContent: m.trend })))))));
+  showDlg("Maintenance brief: " + (veh.name || vid), el("p", { textContent: "Every alert, trouble code and review finding across the saved drives, rolled up by system, with how often and whether it is rising; every measure against its usual band and limit; and what that pattern suggests asking the shop. Automated and read-only: it records what the vehicle reported, it doesn't diagnose." }), host,
+    el("div", { class: "bar", style: "margin-top:10px" }, el("button", { class: "primary", textContent: "Download brief for the shop", onclick: () => download(vid + "-maintenance-brief-" + stampName() + ".md", briefMarkdown(br, veh), "text/markdown") }), el("button", { textContent: "Vehicle summary", onclick: openVehicleSummary }), el("button", { textContent: "Case file", onclick: openCaseFile })));
 }
 function renderVehicleSelect() { const v = $("vehicle"); v.textContent = ""; Object.values(vehicles).forEach(x => v.append(el("option", { value: x.id, textContent: x.name, selected: x.id === vid }))); }
 function openVehicle() {
