@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261121-1528Z">
-<meta name="build-timestamp-utc" content="2026-11-21T15:28:18Z">
+<meta name="build-id" content="OBD-20261124-1710Z">
+<meta name="build-timestamp-utc" content="2026-11-24T17:10:35Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -159,7 +159,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261121-1528Z", BUILD_UTC = "2026-11-21T15:28:18Z";
+const BUILD_ID = "OBD-20261124-1710Z", BUILD_UTC = "2026-11-24T17:10:35Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -905,6 +905,8 @@ function analyzeDrive(input) {
     const tb = /6L80/.test(vehicle.trans || "") ? " GM TechLink (2022) covers overheating diagnosis on 6L80 trucks, including the thermal bypass valve." : "";
     const a = nums(rows, "trans"), pk = pctl(a, .99), hot = secondsTrue(rows, r => r.trans > 220), hotter = secondsTrue(rows, r => r.trans > 240); stats.transPeak = pk; stats.transAboveGuideSeconds = hot;
     const cruiseT = nums(rows, "trans", r => r._cruise); if (cruiseT.length >= 60) stats.transCruise = pctl(cruiseT, .5);
+    // Warm-up: minutes of running from a cold start (first fluid reading under 120°F) to the first reading at 180°F. The 6L80's thermal bypass valve routes fluid around the cooler until warm; a valve stuck open warms slowly, one stuck closed warms fast and then runs hot.
+    { const tr = rows.filter(r => typeof r.trans === "number"); if (tr.length && tr[0].trans < 120) { const i = tr.findIndex(r => r.trans >= 180); if (i > 0) { const run = rows.filter(r => r.t >= tr[0].t && r.t <= tr[i].t && (r.rpm || 0) > 400).length; stats.transWarmMin = +(run / 60).toFixed(1); } } }
     if (hotter >= 60 || pk >= 250) add("Transmission", "attention", "Transmission fluid ran very hot", "Peak " + rnd(pk) + "°F, above 240°F for " + rnd(hotter) + " seconds." + unverified("trans"), "Sustained heat ages fluid and clutches quickly.", ["Towing or grades", "Converter slip", "Cooler flow or thermal bypass fault"], ["Check the fluid condition and cooler flow. Keep the data for your transmission shop." + tb]);
     else if (hot >= 60) add("Transmission", "watch", "Transmission fluid spent time above the guide", "Peak " + rnd(pk) + "°F, above 220°F for " + rnd(hot) + " seconds." + unverified("trans"), "This may be load-related, but it's worth comparing with similar drives.", ["Load, heat, or stop-and-go traffic", "Converter slip"], ["Note the conditions at the hottest point." + tb]);
     else if (trip.runningSeconds >= 600 && val.trans === "ok") add("Transmission", "good", "Transmission temperature stayed moderate", "Peak " + rnd(pk) + "°F" + (stats.transCruise ? ", " + rnd(stats.transCruise) + "°F at steady cruise." : "."), "No heat concern on this drive. GM uses 190°F as a diagnostic warm-up reference.", [], [], LIT.techlink);
@@ -1617,7 +1619,7 @@ function transShopReport(drives, vehicle) {
 
 /* ---------- Usual bands: what this vehicle normally does, drive by drive, so a change after a repair shows at once ---------- */
 // Rough upshift = slip spike, flare, or completing hard with the converter locked at 30%+ throttle. Firm coast-down = rpm step 250/300+, a flare, or the engine dragged below 500 rpm. Same rule as the shop-report classifier.
-const STATS_VERSION = 4; // bump when analyzeDrive gains stats that older saved drives need back-filled
+const STATS_VERSION = 5; // bump when analyzeDrive gains stats that older saved drives need back-filled
 const roughShift = s => /slipping|flare|firm|dragged/.test(s.feel) || (s.kind === "up" && s.feel === "locked" && (s.tps ?? 0) >= 30 && Math.abs(s.jump) >= 300);
 function shiftQuality(shifts) {
   const up = shifts.filter(s => s.kind === "up"), cd = shifts.filter(s => s.kind === "coast-down");
@@ -1628,7 +1630,7 @@ const BAND_DEFS = [
   ["upRough", "Rough upshifts", "%", 0, "stat", "upRough"], ["cdFirm", "Firm coast-down shifts", "%", 0, "stat", "cdFirm"],
   ["slip.avg", "Converter slip, average", "rpm", 0, "sum", "slip", "avg"], ["slipCruise", "Converter slip at cruise", "rpm", 0, "stat", "slipCruise"],
   ["sh12.avg", "1-2 shift time", "s", 2, "sum", "sh12", "avg"], ["sh23.avg", "2-3 shift time", "s", 2, "sum", "sh23", "avg"], ["sh34.avg", "3-4 shift time", "s", 2, "sum", "sh34", "avg"],
-  ["trans.max", "Trans fluid peak", "°F", 0, "sum", "trans", "max"], ["transCruise", "Trans fluid at cruise", "°F", 0, "stat", "transCruise"], ["transHeatRate", "Trans fluid warm-up rate", "°F/min", 1, "stat", "transHeatRate"],
+  ["trans.max", "Trans fluid peak", "°F", 0, "sum", "trans", "max"], ["transCruise", "Trans fluid at cruise", "°F", 0, "stat", "transCruise"], ["transWarmMin", "Trans warm-up, cold to 180°F", "min", 1, "stat", "transWarmMin"], ["transHeatRate", "Trans fluid heat-build at 65+ mph", "°F/min", 1, "stat", "transHeatRate"],
   ["ect.max", "Coolant peak", "°F", 0, "sum", "ect", "max"], ["ectPlateau", "Coolant at cruise", "°F", 0, "stat", "ectPlateau"],
   ["oilt.max", "Oil temperature peak", "°F", 0, "sum", "oilt", "max"], ["oilp.avg", "Oil pressure, average", "psi", 0, "sum", "oilp", "avg"], ["oilIdle", "Oil pressure at hot idle", "psi", 0, "stat", "oilIdle"],
   ["volt.avg", "Voltage, running average", "V", 2, "sum", "volt", "avg"], ["voltMed", "Running voltage (median)", "V", 2, "stat", "voltMed"],
@@ -1685,7 +1687,7 @@ const WATCHLIST = {
   sierra: [
     { title: "Transmission: is this unit better than the last two?", why: "Third reman unit installed Nov 18 2026 under warranty; the second ran 37% rough upshifts and 20% firm coast-downs over 332 mi with no trend by day or by fluid temperature. Learning should soften shifts with miles; a mechanical fault does not.", kpis: [["upRough", "lower"], ["cdFirm", "lower"], ["sh23.avg", "lower"], ["slipCruise", "lower"], ["c1slip.max", "lower"]], test: "Rough-upshift share trending down over the first 200 mi after the repair, with no slip spikes on the 2→3 at 15–20 mph." },
     { title: "Trans fluid runs hot on the highway", why: "235°F on a 59-mi run and 226°F on a 32-mi run on the second unit, while coolant held 211–213°F at highway speed on every drive from 39°F to 82°F ambient with the fan under 37%: the heat was made in the unit, not left in the cooler.", kpis: [["transOverEct", "lower"], ["trans.max", "lower"], ["transCruise", "lower"]], test: "Fluid staying within 10°F of coolant at highway cruise on the third unit; a widening gap with the same coolant points at cooler flow or the thermal bypass valve." },
-    { title: "Cooling stack after the radiator and condenser", why: "The radiator was replaced under warranty with the third unit and the A/C condenser (which carries a transmission cooler pass on this platform; unverified for this RPO build) at the shop's recommendation. Before: coolant regulated at 211–213°F at highway, fan 11–20% on the highway, 37% peak in traffic.", kpis: [["ectPlateau", "stable"], ["ect.max", "stable"], ["fan.avg", "lower"], ["fan.max", "lower"], ["achp.max", "lower"], ["transOverEct", "lower"]], test: "Coolant plateau unchanged (it was never heat-limited), fan duty the same or lower at the same ambient, and the trans-over-coolant gap at cruise smaller than before. If the gap closes, the cooler pass mattered; if it doesn't, the heat is still being made in the unit." },
+    { title: "Cooling stack after the radiator and condenser", why: "The radiator was replaced under warranty with the third unit and the A/C condenser (which carries a transmission cooler pass on this platform; unverified for this RPO build) at the shop's recommendation. Before: coolant regulated at 211–213°F at highway, fan 11–20% on the highway, 37% peak in traffic.", kpis: [["ectPlateau", "stable"], ["ect.max", "stable"], ["fan.avg", "lower"], ["fan.max", "lower"], ["achp.max", "lower"], ["transOverEct", "lower"], ["transHeatRate", "lower"], ["transWarmMin", "stable"]], test: "Coolant plateau unchanged (it was never heat-limited), fan duty the same or lower at the same ambient, and the trans-over-coolant gap at cruise smaller than before. If the gap closes, the cooler pass mattered; if it doesn't, the heat is still being made in the unit." },
     { title: "Pressure control: commanded vs actual", why: "Line pressure was the first check requested of the shop; the solenoid current is the ECM's own view of it.", kpis: [["pcsCmd.avg", "stable"], ["pcsAct.avg", "stable"]], test: "Commanded and actual tracking within a few mA; a steady gap is a solenoid or circuit issue." },
     { title: "AFM lifters: does any cylinder carry the misfires?", why: "The dealer replaced the cylinder 4 lifter in October; cylinders 3 and 5 still post single counts on most drives.", kpis: [["misPerKrev", "lower"], ["misTopShare", "lower"], ["misTotal", "lower"]], test: "Misfire rate flat or falling and no cylinder above half the counts; a rising share on one AFM cylinder (1, 4, 6, 7) is the lifter signature." },
     { title: "Charging and battery", why: "GM regulated voltage control rests the generator (12.5–13.1 V) when the battery is full and charges hard (14.5 V+) when it is not.", kpis: [["voltEcoShare", "stable"], ["voltHighShare", "lower"], ["volt.avg", "stable"]], test: "Some resting time on warm drives; a week at 14.5 V+ with no rest means the battery is not holding charge." }
@@ -1823,9 +1825,9 @@ function toast(t) { const n = $("toast"); n.textContent = t; n.hidden = false; c
 /* ---------- Presets: the recommended combinations ---------- */
 const W = (type, metrics, p, d, o = {}) => ({ type, metrics, p, d, ...o });
 const PRESETS = {
- "Health check": [ W("healthcheck",[],[4,9],[6,8]), W("healthcard",[],[4,8],[6,8]), W("bands",[],[4,6],[6,6]), W("needle",["rpm"],[4,4],[4,4]), W("number",["ect"],[2,3],[4,4]), W("number",["volt"],[2,3],[4,4]) ],
+ "Health check": [ W("healthcheck",[],[4,9],[6,8]), W("healthcard",[],[4,8],[6,8]), W("bands",[],[4,6],[6,6]), W("needle",["rpm"],[4,4],[4,4]), W("number",["ect"],[2,3],[4,4]), W("number",["volt"],[2,3],[4,4]), W("number",["trans"],[2,3],[3,3]), W("number",["fan"],[2,3],[3,3]) ],
  Glance: [ W("cockpit",[],[4,12],[12,12]) ],
- Transmission: [ W("learn",[],[4,3],[6,3]), W("bands",[],[4,5],[6,5]), W("gearbox",[],[4,3],[3,4]), W("number",["c1slip"],[2,3],[3,3]), W("number",["c3slip"],[2,3],[3,3]), W("number",["pcsCmd"],[2,3],[3,3]), W("number",["pcsAct"],[2,3],[3,3]), W("number",["toss"],[2,3],[3,3]), W("needle",["trans"],[4,4],[3,4]), W("line",["slip"],[4,4],[6,4],{win:5}), W("scatter",["mph","rpm"],[4,5],[6,5]),
+ Transmission: [ W("learn",[],[4,3],[6,3]), W("bands",[],[4,5],[6,5]), W("gearbox",[],[4,3],[3,4]), W("number",["fan"],[2,3],[3,3]), W("number",["grille"],[2,3],[3,3]), W("number",["achp"],[2,3],[3,3]), W("number",["amb"],[2,3],[3,3]), W("number",["c1slip"],[2,3],[3,3]), W("number",["c3slip"],[2,3],[3,3]), W("number",["pcsCmd"],[2,3],[3,3]), W("number",["pcsAct"],[2,3],[3,3]), W("number",["toss"],[2,3],[3,3]), W("needle",["trans"],[4,4],[3,4]), W("line",["slip"],[4,4],[6,4],{win:5}), W("scatter",["mph","rpm"],[4,5],[6,5]),
    W("line",["trans"],[4,4],[6,5],{win:15}), W("share",[],[4,4],[4,4],{share:"gear",view:"bars"}), W("share",[],[4,4],[4,4],{share:"temp",view:"donut"}),
    W("share",[],[4,4],[4,4],{share:"drive",view:"donut"}), W("number",["sh12"],[2,3],[3,3]), W("number",["sh23"],[2,3],[3,3]), W("number",["sh34"],[2,3],[3,3]), W("number",["ratio"],[2,3],[3,3]), W("number",["geari"],[2,3],[3,3]), W("history",["trans"],[4,4],[12,4],{stat:"max"}) ],
  Electrical: [ W("elab",[],[4,3],[4,3]), W("needle",["volt"],[2,4],[4,4]), W("number",["atrv"],[2,4],[4,4]), W("line",["volt","atrv"],[4,4],[12,4],{win:15}), W("history",["volt"],[4,4],[12,4],{stat:"min"}) ],
@@ -1883,7 +1885,7 @@ function loadVehicle(id) {
   fits = store.get(vkey("fits"), {});
   // Glance v3 absorbs the old Trip screen (one cockpit tile); a Trip tab built by an earlier build is removed so the preset list stays the recommended set.
   if (store.get(vkey("glancev"), 0) !== 3) { dash.Glance = buildDash("Glance"); store.set(vkey("glancev"), 3); if (store.get(vkey("tripv"), 0)) { delete dash.Trip; delete fits.Trip; store.set(vkey("fits"), fits); } save(); }
-  if (store.get(vkey("learnv"), 0) !== 2) { dash.Transmission = buildDash("Transmission"); dash["Health check"] = buildDash("Health check"); store.set(vkey("learnv"), 2); save(); }
+  if (store.get(vkey("learnv"), 0) !== 3) { dash.Transmission = buildDash("Transmission"); dash["Health check"] = buildDash("Health check"); store.set(vkey("learnv"), 3); save(); } // v3: cooling-stack tiles (fan, grille shutter, A/C high side, ambient) on Transmission; trans fluid and fan on Health check
   if (store.get(vkey("gmv2"), 0) !== 2) { dash.Transmission = buildDash("Transmission"); dash.Fuel = buildDash("Fuel"); store.set(vkey("gmv2"), 2); save(); }
   rules = store.get(vkey("rules"), {}); customs = store.get(vkey("customs"), []); rawDids = store.get(vkey("rawdids"), []);
   customs.forEach(registerCustom); rawDids.forEach(registerRawDid);
