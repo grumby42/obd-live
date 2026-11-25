@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261124-1710Z">
-<meta name="build-timestamp-utc" content="2026-11-24T17:10:35Z">
+<meta name="build-id" content="OBD-20261125-1830Z">
+<meta name="build-timestamp-utc" content="2026-11-25T18:30:33Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -159,7 +159,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261124-1710Z", BUILD_UTC = "2026-11-24T17:10:35Z";
+const BUILD_ID = "OBD-20261125-1830Z", BUILD_UTC = "2026-11-25T18:30:33Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -2514,7 +2514,7 @@ const CAS_ICON = {
   gear: "<svg viewBox='0 0 24 24'><circle cx='12' cy='12' r='3'/><path d='M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1'/></svg>",
   band: "<svg viewBox='0 0 24 24'><path d='M4 18l5-7 4 4 7-9'/><path d='M14 6h6v6'/></svg>"
 };
-const casSeen = {}, casLog = []; let casAckAt = 0, audioCtx = null, casNow = []; // casNow: the conditions up right now, judged once a second in tick() on every screen
+const casSeen = {}, casLog = [], casHold = {}; let casAckAt = 0, audioCtx = null, casNow = []; // casNow: the conditions up right now, judged once a second in tick() on every screen
 function casAck() { casAckAt = Date.now(); renderCasBar(true); }
 // Flash state is re-read at paint time so a tap stops the flashing at once rather than on the next tick.
 function casFlash(msgs) { msgs.forEach(m => { const s = casSeen[m.key]; m.flash = m.level === "alert" && !!s && s.first > casAckAt; }); return msgs; }
@@ -2534,6 +2534,8 @@ function casGo(m) {
 function casMessages() {
   const out = [], now = Date.now(), running = latest.rpm > 400;
   const bad = id => { const v = latest[id] ?? null; return v !== null && ratingOf(byId[id], v).state === "bad"; };
+  // Some readings are only a concern when they stay out of limits: tank vacuum dips past -1000 Pa for a few seconds on every purge pull, and GM's P0446 logic looks for vacuum held over time, not a moment.
+  const sustained = (id, ms) => { const now = Date.now(); if (!bad(id)) { delete casHold[id]; return false; } casHold[id] = casHold[id] || now; return now - casHold[id] >= ms; };
   if (session && lastAnyUpdate && now - lastAnyUpdate > 8000) { out.push({ key: "link", level: "alert", icon: "link", text: "No data " + Math.round((now - lastAnyUpdate) / 1000) + " s", say: "No data from the adapter", row: "link" }); if (now - stallLogged > 30000) { stallLogged = now; logX(session, "stall", "no answers for " + Math.round((now - lastAnyUpdate) / 1000) + " s; rpm status " + (mstate.rpm && mstate.rpm.status), now); } }
   if (bad("oilp")) out.push({ key: "oilp", level: "alert", icon: "oil", text: "Oil press " + latest.oilp.toFixed(0), say: "Oil pressure low", row: "oilp" });
   if (bad("ect") && latest.ect > (ruleOf(byId.ect) || {}).hi) out.push({ key: "ect", level: "alert", icon: "temp", text: "Coolant hot " + latest.ect.toFixed(0), say: "Coolant hot", row: "ect" });
@@ -2547,7 +2549,7 @@ function casMessages() {
   for (let c = 1; c <= 8; c++) { const v = latest["mis" + c]; const base = casSeen["mis0" + c]; if (typeof v !== "number") continue; if (base === undefined) casSeen["mis0" + c] = v; else if (v > base) out.push({ key: "mis" + c, level: "warn", icon: "engine", text: "Misfire cyl " + c + " +" + (v - base), say: "Misfire cylinder " + c, row: "mis" }); }
   const low = ["tpfl","tprl","tpfr","tprr"].filter(bad); if (low.length) out.push({ key: "tire", level: "warn", icon: "tire", text: "Tire low " + low.map(i => ({ tpfl: "DF", tprl: "DR", tpfr: "PF", tprr: "PR" })[i]).join(" "), say: "Tire pressure low", row: "tire" });
   if ((latest.fuel ?? null) !== null && latest.fuel <= 15) out.push({ key: "fuel", level: "warn", icon: "fuel", text: "Fuel " + latest.fuel.toFixed(0) + "%", say: "Fuel low", row: "fuel" });
-  if (bad("evapp")) out.push({ key: "evapp", level: "warn", icon: "fuel", text: "EVAP " + latest.evapp.toFixed(0) + " Pa", say: "EVAP tank pressure outside limits", row: "evapp" });
+  if (sustained("evapp", 20000)) out.push({ key: "evapp", level: "warn", icon: "fuel", text: "EVAP " + latest.evapp.toFixed(0) + " Pa", say: "EVAP tank pressure outside limits", row: "evapp" });
   if (bad("slip")) out.push({ key: "slip", level: "warn", icon: "gear", text: "TCC slip " + latest.slip.toFixed(0), say: "Converter slip at cruise", row: "slip" });
   const cmp = running ? liveBandCompare() : null; if (cmp && cmp.out.some(r => /new/.test(r.state))) { const r = cmp.out.find(x => /new/.test(x.state)); out.push({ key: "band", level: "warn", icon: "band", text: r.label.replace(/,.*$/, "") + " " + r.state, say: r.label.replace(/,.*$/, "") + " beyond anything logged", row: "band" }); }
   // First appearance (or a return after 60 s clear) chimes and speaks; red ones flash until acknowledged.
