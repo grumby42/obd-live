@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261126-1034Z">
-<meta name="build-timestamp-utc" content="2026-11-26T10:34:24Z">
+<meta name="build-id" content="OBD-20261126-2203Z">
+<meta name="build-timestamp-utc" content="2026-11-26T22:03:43Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -159,7 +159,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261126-1034Z", BUILD_UTC = "2026-11-26T10:34:24Z";
+const BUILD_ID = "OBD-20261126-2203Z", BUILD_UTC = "2026-11-26T22:03:43Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1621,15 +1621,17 @@ function transShopReport(drives, vehicle) {
 
 /* ---------- Usual bands: what this vehicle normally does, drive by drive, so a change after a repair shows at once ---------- */
 // Rough upshift = slip spike, flare, or completing hard with the converter locked at 30%+ throttle. Firm coast-down = rpm step 250/300+, a flare, or the engine dragged below 500 rpm. Same rule as the shop-report classifier.
-const STATS_VERSION = 5; // bump when analyzeDrive gains stats that older saved drives need back-filled
+const STATS_VERSION = 6; // bump when analyzeDrive gains stats that older saved drives need back-filled
 const roughShift = s => /slipping|flare|firm|dragged/.test(s.feel) || (s.kind === "up" && s.feel === "locked" && (s.tps ?? 0) >= 30 && Math.abs(s.jump) >= 300);
 function shiftQuality(shifts) {
   const up = shifts.filter(s => s.kind === "up"), cd = shifts.filter(s => s.kind === "coast-down");
-  return { upN: up.length, cdN: cd.length, upRough: up.length >= 5 ? up.filter(roughShift).length / up.length * 100 : null, cdFirm: cd.length >= 5 ? cd.filter(roughShift).length / cd.length * 100 : null };
+  // Rough splits two ways that feel different from the seat: harsh (completed hard with the converter locked, or a flare) is the jolt; soft (slip spike while the converter is released) is the slur. A unit can trade one for the other and keep the same rough total.
+  const harsh = s => roughShift(s) && !/slipping/.test(s.feel), soft = s => /slipping/.test(s.feel), pct = (a, f) => a.length >= 5 ? a.filter(f).length / a.length * 100 : null;
+  return { upN: up.length, cdN: cd.length, upRough: pct(up, roughShift), upHarsh: pct(up, harsh), upSoft: pct(up, soft), cdFirm: pct(cd, roughShift) };
 }
 // [key, label, unit, digits, kind, id, stat]. kind "sum" reads the per-drive summary (min/avg/max of a live metric); "stat" reads the drive review's computed stats.
 const BAND_DEFS = [
-  ["upRough", "Rough upshifts", "%", 0, "stat", "upRough"], ["cdFirm", "Firm coast-down shifts", "%", 0, "stat", "cdFirm"],
+  ["upRough", "Rough upshifts", "%", 0, "stat", "upRough"], ["upHarsh", "Harsh upshifts (locked hard or flared)", "%", 0, "stat", "upHarsh"], ["upSoft", "Soft upshifts (slip spike, converter released)", "%", 0, "stat", "upSoft"], ["cdFirm", "Firm coast-down shifts", "%", 0, "stat", "cdFirm"],
   ["slip.avg", "Converter slip, average", "rpm", 0, "sum", "slip", "avg"], ["slipCruise", "Converter slip at cruise", "rpm", 0, "stat", "slipCruise"],
   ["sh12.avg", "1-2 shift time", "s", 2, "sum", "sh12", "avg"], ["sh23.avg", "2-3 shift time", "s", 2, "sum", "sh23", "avg"], ["sh34.avg", "3-4 shift time", "s", 2, "sum", "sh34", "avg"],
   ["trans.max", "Trans fluid peak", "°F", 0, "sum", "trans", "max"], ["transCruise", "Trans fluid at cruise", "°F", 0, "stat", "transCruise"], ["transWarmMin", "Trans warm-up, cold to 180°F", "min", 1, "stat", "transWarmMin"], ["transHeatRate", "Trans fluid heat-build at 65+ mph", "°F/min", 1, "stat", "transHeatRate"],
@@ -1687,7 +1689,7 @@ function driveBandValues(d) { const o = {}; BAND_DEFS.forEach(def => { const v =
 // better: "lower" | "higher" | "zero" (closer to zero is better) | "stable" (any move is a change worth noticing)
 const WATCHLIST = {
   sierra: [
-    { title: "Transmission: is this unit better than the last two?", why: "Third reman unit installed Nov 18 2026 under warranty; the second ran 37% rough upshifts and 20% firm coast-downs over 332 mi with no trend by day or by fluid temperature. Learning should soften shifts with miles; a mechanical fault does not.", kpis: [["upRough", "lower"], ["cdFirm", "lower"], ["sh23.avg", "lower"], ["slipCruise", "lower"], ["c1slip.max", "lower"]], test: "Rough-upshift share trending down over the first 200 mi after the repair, with no slip spikes on the 2→3 at 15–20 mph." },
+    { title: "Transmission: is this unit better than the last two?", why: "Third reman unit installed Nov 18 2026 under warranty; the second ran 37% rough upshifts and 20% firm coast-downs over 332 mi with no trend by day or by fluid temperature. Learning should soften shifts with miles; a mechanical fault does not.", kpis: [["upHarsh", "lower"], ["upSoft", "stable"], ["upRough", "lower"], ["cdFirm", "lower"], ["sh23.avg", "lower"], ["slipCruise", "lower"], ["c1slip.max", "lower"]], test: "Harsh upshifts (the jolt: locked hard or flared) are the measure that tracks the seat; at warm fluid the second unit ran 32% harsh, the third 18% in its first 280 mi. Harsh trending down and soft not rising over the first 500 mi; 5→6 is the gear still completing hard." },
     { title: "Trans fluid runs hot on the highway", why: "235°F on a 59-mi run and 226°F on a 32-mi run on the second unit, while coolant held 211–213°F at highway speed on every drive from 39°F to 82°F ambient with the fan under 37%: the heat was made in the unit, not left in the cooler.", kpis: [["transOverEct", "lower"], ["trans.max", "lower"], ["transCruise", "lower"]], test: "Fluid staying within 10°F of coolant at highway cruise on the third unit; a widening gap with the same coolant points at cooler flow or the thermal bypass valve." },
     { title: "Cooling stack after the radiator and condenser", why: "The radiator was replaced under warranty with the third unit and the A/C condenser (which carries a transmission cooler pass on this platform; unverified for this RPO build) at the shop's recommendation. Before: coolant regulated at 211–213°F at highway, fan 11–20% on the highway, 37% peak in traffic.", kpis: [["ectPlateau", "stable"], ["ect.max", "stable"], ["fan.avg", "lower"], ["fan.max", "lower"], ["achp.max", "lower"], ["transOverEct", "lower"], ["transHeatRate", "lower"], ["transWarmMin", "stable"]], test: "Coolant plateau unchanged (it was never heat-limited), fan duty the same or lower at the same ambient, and the trans-over-coolant gap at cruise smaller than before. If the gap closes, the cooler pass mattered; if it doesn't, the heat is still being made in the unit." },
     { title: "Pressure control: commanded vs actual", why: "Line pressure was the first check requested of the shop; the solenoid current is the ECM's own view of it.", kpis: [["pcsCmd.avg", "stable"], ["pcsAct.avg", "stable"]], test: "Commanded and actual tracking within a few mA; a steady gap is a solenoid or circuit issue." },
