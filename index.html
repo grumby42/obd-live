@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261127-1836Z">
-<meta name="build-timestamp-utc" content="2026-11-27T18:36:26Z">
+<meta name="build-id" content="OBD-20261127-1938Z">
+<meta name="build-timestamp-utc" content="2026-11-27T19:38:21Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -159,7 +159,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261127-1836Z", BUILD_UTC = "2026-11-27T18:36:26Z";
+const BUILD_ID = "OBD-20261127-1938Z", BUILD_UTC = "2026-11-27T19:38:21Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -180,7 +180,9 @@ function isAllowedCommand(cmd) {
     || /^0[37A]$/.test(c)
     || /^06[0-9A-F]{2}$/.test(c)
     || /^09[0-9A-F]{2}$/.test(c)
-    || /^22[0-9A-F]{4}$/.test(c);
+    || /^22[0-9A-F]{4}$/.test(c)
+    || /^1902[0-9A-F]{2}$/.test(c)   // ISO 14229 ReadDTCInformation, reportDTCByStatusMask: a read of a module's stored codes
+    || /^A981[0-9A-F]{2}$/.test(c);  // GMLAN ReadDiagnosticInformation, readStatusOfDTCByStatusMask: the same read in GM's own dialect
 }
 function cleanLines(raw) {
   return String(raw).toUpperCase().split(/[\r\n]+/).map(l => l.replace(/[\s>]/g, "")).filter(Boolean).filter(l => !/^SEARCHING/.test(l));
@@ -241,6 +243,18 @@ function parseDtc(raw, resp) {
     }
   }
   return [...codes];
+}
+function udsStatus(b) { const f = []; if (b & 1) f.push("test failed"); if (b & 2) f.push("failed this cycle"); if (b & 4) f.push("pending"); if (b & 8) f.push("confirmed"); if (b & 0x20) f.push("failed since clear"); if (b & 0x80) f.push("warning lamp"); return f.join(", ") || "status 0x" + b.toString(16); }
+function parseDtcRecords(raw, module) {
+  const out = [], msgs = toMessages(raw);
+  for (const m of msgs) {
+    if (/^7F(19|A9)/.test(m)) { out.push({ module, code: null, note: "not supported (" + m.slice(0, 6) + ")", raw: m }); continue; }
+    if (m.startsWith("5902")) { const body = m.slice(6); for (let i = 0; i + 8 <= body.length; i += 8) { const a = parseInt(body.substr(i, 2), 16), b = parseInt(body.substr(i + 2, 2), 16), ftb = body.substr(i + 4, 2), st = parseInt(body.substr(i + 6, 2), 16); if (a || b) out.push({ module, code: decodeDtcBytes(a, b), ftb, status: udsStatus(st), raw: m, basis: "ISO 14229" }); } if (!out.some(x => x.raw === m)) out.push({ module, code: null, note: "no codes", raw: m, basis: "ISO 14229" }); continue; }
+    if (m.startsWith("E9")) { const body = m.startsWith("E981") ? m.slice(4) : m.slice(2); let any = false; for (let i = 0; i + 6 <= body.length; i += 6) { const a = parseInt(body.substr(i, 2), 16), b = parseInt(body.substr(i + 2, 2), 16), st = parseInt(body.substr(i + 4, 2), 16); if (a || b) { any = true; out.push({ module, code: decodeDtcBytes(a, b), status: "status 0x" + st.toString(16), raw: m, basis: "GMLAN (layout unverified: treat as raw)" }); } } if (!any) out.push({ module, code: null, note: "answered, no codes decoded", raw: m, basis: "GMLAN" }); continue; }
+    out.push({ module, code: null, note: "unrecognised answer", raw: m });
+  }
+  if (!msgs.length) out.push({ module, code: null, note: "no answer", raw: "" });
+  return out;
 }
 function parseMode06(raw, mid) {
   const bytes = dataBytes(raw, "46" + mid), out = {};
@@ -1760,6 +1774,7 @@ function maintenanceBrief(drives, vehicle, baseline, ruleFor) {
     for (const k in byKey) { const [sys, type] = alertSys(k); put(sys, byKey[k].level === "alert" ? "Red alert" : "Amber alert", type, d, byKey[k].text, byKey[k].n); }
     const rv = d.review || {}; (rv.findings || []).forEach(f => put(findingSys(f.system), f.level === "attention" ? "Finding: needs attention" : "Finding: watch", f.title, d, f.next));
     const c = d.codes || {}; [["stored", "stored"], ["pending", "pending"], ["permanent", "permanent"]].forEach(([k, lab]) => (c[k] || []).forEach(code => put("Computer-reported faults", "Trouble code", code, d, lab)));
+    ((d.chassis && d.chassis.results) || []).filter(r => r.code).forEach(r => put("Chassis and body modules (experimental read)", "Trouble code", r.code + " · " + r.module, d, r.status || ""));
   });
   const CLASS_RANK = { "Red alert": 0, "Trouble code": 1, "Finding: needs attention": 2, "Amber alert": 3, "Finding: watch": 4 };
   const systems = Object.keys(groups).map(sys => ({ name: sys, classes: Object.keys(groups[sys]).sort((a, b) => (CLASS_RANK[a] ?? 9) - (CLASS_RANK[b] ?? 9)).map(cls => ({ name: cls, types: Object.keys(groups[sys][cls]).map(type => { const t = groups[sys][cls][type], hits = [...t.drives].map(id => idx.get(id)).sort((a, b) => a - b);
@@ -2093,7 +2108,7 @@ async function ask(cmd, timeout) {
 function logX(s, cmd, r, t0) { (s.xlog = s.xlog || []).push({ t: t0, ms: Date.now() - t0, cmd, r: String(r).replace(/[\r\n>]+/g, " ").trim().slice(0, 120) }); if (s.xlog.length > 300) s.xlog.splice(0, s.xlog.length - 300); lastXlog = s.xlog; }
 let lastXlog = [];
 // A module outside the 7E0–7E7 range (the body module answers 241 → 641) needs the adapter's receive filter set, then cleared again.
-const RX_FOR = { "241": "641" };
+const RX_FOR = { "241": "641", "243": "643", "24C": "64C" }; // GMLAN physical request ids and the response ids they answer on (body, brake/stability, cluster)
 async function askH(header, cmd) {
   return exclusive(async () => { if (session && session.header !== header) { const rx = RX_FOR[header] || null; if (session.rx && !rx) { try { await ask("ATCRA"); } catch (e) {} try { await ask("ATAR"); } catch (e) {} session.rx = null; } await ask("ATSH" + header); session.header = header; if (rx && session.rx !== rx) { await ask("ATCRA" + rx); session.rx = rx; } } return ask(cmd); });
 }
@@ -2186,7 +2201,7 @@ async function runLoop(s) {
 async function start(link, label) {
   try {
     await link.open();
-    unlockAudio(); for (const k in casSeen) delete casSeen[k]; casLog.length = 0; casNow = []; // every way in (Connect, Simulator, Reconnect and continue) arms the chime and starts a fresh alert log
+    unlockAudio(); for (const k in casSeen) delete casSeen[k]; casLog.length = 0; casNow = []; chassisCodes = null; // every way in (Connect, Simulator, Reconnect and continue) arms the chime and starts a fresh alert log
     resetLive(); applyKnownAnswers(); lastAnyUpdate = Date.now(); stallLogged = 0; const s = { link, header: null, savedAt: Date.now() }; session = s; driveId = "d" + Date.now(); driveStart = Date.now();
     if (!link.sim && navigator.storage && navigator.storage.persist) { try { await navigator.storage.persist(); } catch (e) {} }
     setStatus("Initializing " + label + "…");
@@ -2285,7 +2300,7 @@ async function deleteDrive(id) {
 }
 // First and last 60 adapter exchanges: the connect sequence and whatever happened at the end.
 const xlogSample = () => { const L = lastXlog || []; return L.slice(0, 60).concat(L.length > 120 ? L.slice(-60) : L.slice(60)); };
-const sessionMeta = () => ({ id: driveId, start: driveStart, build: BUILD_ID, codes, monitor, mode06, supported: supported ? [...supported] : [], xlog: xlogSample(), fpChanged: !!truck.fpChanged, fp: { cal: truck.calSet || null, cvn: truck.cvn || null, was: truck.fpWas || null }, ecus: truck.ecus || [] });
+const sessionMeta = () => ({ id: driveId, start: driveStart, build: BUILD_ID, codes, monitor, mode06, chassis: chassisCodes, supported: supported ? [...supported] : [], xlog: xlogSample(), fpChanged: !!truck.fpChanged, fp: { cal: truck.calSet || null, cvn: truck.cvn || null, was: truck.fpWas || null }, ecus: truck.ecus || [] });
 let saving = false;
 async function saveDrive(final) {
   if (!driveId || saving) return;
@@ -2751,6 +2766,23 @@ R.codes = (w, box) => {
     if (!codes.stored.length && !codes.pending.length && !codes.permanent.length) list.append(el("div", { class: "pill good", textContent: "✓ No codes returned" }));
     if (codes.freeze.length) { list.append(el("div", { class: "sub", textContent: "Freeze frame" + (codes.freezeFor ? " for " + codes.freezeFor : "") })); const story = freezeStory(codes.freeze); if (story) list.append(el("div", { class: "sub", style: "white-space:normal", textContent: story })); codes.freeze.forEach(f => add(f[0], f[1])); } };
 };
+/* ---------- Chassis and body codes (experimental, read-only) ----------
+   The emissions code read (mode 03/07/0A) is answered only by the engine and transmission computers. The brake/stability, body and cluster modules keep their own
+   codes (C- and B-codes) behind a different service: ISO 14229 $19 02 (status mask) or, on GMLAN cars, GM's $A9 81. Both are reads. Which one a given module answers,
+   and the exact response layout, is unverified until it has been seen on the vehicle, so the raw answer is kept alongside whatever decodes. */
+let chassisCodes = null;
+const CHASSIS_MODULES = [["243", "Brake / stability (EBCM)"], ["241", "Body (BCM)"], ["24C", "Instrument cluster"], ["7E0", "Engine (ECM)"], ["7E2", "Transmission (TCM)"]];
+async function readChassisCodes(progress) {
+  if (!session) return null; const results = [];
+  for (const [hdr, name] of CHASSIS_MODULES) {
+    for (const cmd of ["1902FF", "A98112"]) { if (progress) progress(name + " · " + cmd); let raw; try { raw = await askH(hdr, cmd); } catch (e) { results.push({ module: name, hdr, cmd, code: null, note: e.message, raw: "" }); continue; } const recs = parseDtcRecords(raw, name).map(r => ({ ...r, hdr, cmd })); results.push(...recs); if (recs.some(r => r.code || /no codes/.test(r.note || ""))) break; } // the second dialect is tried only when the first isn't understood
+  }
+  try { await askH("7DF", "0100"); } catch (e) {} // back to the broadcast header before polling resumes
+  chassisCodes = { t: Date.now(), results }; logX(session, "chassis codes", results.filter(r => r.code).map(r => r.module + " " + r.code).join("; ") || "none decoded", Date.now()); return chassisCodes;
+}
+function renderChassis(box, r) { box.textContent = ""; if (!r) return; box.append(el("div", { class: "sub", textContent: "Read " + new Date(r.t).toLocaleTimeString() + ". Tap a code for its definition; C- and B-codes outside the generic ranges show their family only." }));
+  const byMod = {}; r.results.forEach(x => (byMod[x.module] = byMod[x.module] || []).push(x));
+  for (const mod in byMod) { box.append(el("div", { class: "sub", style: "margin-top:6px;color:var(--text)", textContent: mod })); byMod[mod].forEach(x => { if (x.code) box.append(el("div", { class: "row", style: "cursor:pointer;align-items:flex-start", onclick: () => openDtc(x.code) }, el("span", {}, el("b", { textContent: x.code + (x.ftb ? "-" + x.ftb : "") }), el("div", { class: "sub", style: "white-space:normal", textContent: dtcInfo(x.code).known ? dtcInfo(x.code).text : dtcInfo(x.code).family })), el("span", { class: "sub", style: "white-space:normal;text-align:right", textContent: (x.status || "") + (x.basis ? " · " + x.basis : "") }))); else box.append(el("div", { class: "sub", style: "white-space:normal", textContent: x.cmd + ": " + (x.note || "") + (x.raw ? " · raw " + x.raw.slice(0, 48) : "") })); }); } }
 async function readCodes() {
   if (!session) return;
   try {
@@ -3010,6 +3042,8 @@ function openMore() {
   const copyScan = el("button", { textContent: "Copy scan results", onclick: async () => { const t = [...scanOut.children].map(r => r.textContent).join("\n") || scanOut.textContent; try { await navigator.clipboard.writeText(hdr.value + " " + range.options[range.selectedIndex].textContent + "\n" + t); toast("Copied " + scanOut.children.length + " answers."); } catch (e) { toast("Select and copy the text instead."); } } });
   // Scan everything: every module × every range in one run, results kept per vehicle and included in the history export. Nothing is auto-registered (190 extra polls would starve the live readings); each row still has "Add as reading".
   const SCAN_MODULES = [["7E0", "engine"], ["7E2", "transmission"], ["7E1", "alternate"], ["241", "body"]], SCAN_RANGES = ["1100", "1200", "1400", "1600", "1900", "1A00", "1C00", "2000", "2300", "2800", "3000", "0000", "0100"];
+  const chassisBox = el("div", { class: "scroll", style: "max-height:260px" }), chassisBtn = el("button", { textContent: "Read chassis and body codes", onclick: async () => { if (!session) { chassisBox.textContent = "Connect first."; return; } chassisBtn.disabled = true; chassisBox.textContent = "Asking…"; try { const r = await readChassisCodes(t => { chassisBox.textContent = "Asking " + t; }); renderChassis(chassisBox, r); } catch (e) { chassisBox.textContent = e.message; } chassisBtn.disabled = false; } });
+  if (chassisCodes) renderChassis(chassisBox, chassisCodes);
   let scanAbort = false; const allOut = el("div", { class: "scroll", style: "max-height:260px" }), allProg = el("div", { style: "white-space:normal;min-height:1.4em;padding:6px 8px;margin:6px 0;border-radius:8px;background:var(--raised);font-variant-numeric:tabular-nums", textContent: "Idle. Tap Scan everything with the vehicle parked and the engine running." });
   // Probe: every GM request the app knows, once each on each of its headers, so a new vehicle's request set is settled in under a minute.
   const reqOut = el("div", { class: "scroll", style: "max-height:260px;font-size:.8rem" }), reqStat = el("div", { class: "sub", style: "white-space:normal" });
@@ -3055,6 +3089,7 @@ function openMore() {
   const watchBtn = el("button", { textContent: "Watch during this drive", onclick: () => { const n = watchDids(hdr.value, watchIn.value.trim().split(/[\s,]+/).filter(Boolean)); watchStat.textContent = n ? "Watching " + METRICS.filter(m => m.watch).length + " addresses on " + hdr.value + ", about once a second, on every screen. They log into this drive's rows and the export." : "Nothing new to watch (check the addresses: four hex digits each)."; } });
   const unwatchBtn = el("button", { textContent: "Stop watching", onclick: () => { const n = stopWatching(); watchStat.textContent = n ? "Stopped watching " + n + " addresses." : "Not watching anything."; } });
   ex.append(el("p", { textContent: "Asks the vehicle which GM read requests it answers. It sends read requests only. Anything that answers is logged raw from then on (and rides along in every history export). Its meaning stays unknown until you check it against a known value." }), hdr, range, scan, copyScan, scanOut,
+    el("h3", { textContent: "Chassis and body codes (experimental, read-only)" }), el("p", { textContent: "The normal code read is answered only by the engine and transmission computers. This asks the brake/stability, body and cluster modules for their own stored codes (C- and B-codes, the kind behind a Service StabiliTrak message) using the standard read service, then GM's own dialect if the first isn't understood. Nothing is cleared or written. Which service each module answers, and the layout of its answer, is unverified until seen on this vehicle: the raw answer is shown with whatever decodes." }), chassisBox, el("div", { class: "bar" }, chassisBtn),
     el("h3", { textContent: "Watch addresses through a drive" }), el("p", { textContent: "A scan samples each address once, parked. To learn what an address is, watch it while driving: pick the module above, list the addresses, tap Watch, then drive. Each is read about once a second alongside rpm, speed and temperatures, so a pressure shows up as the value that rises with rpm and a temperature as the one that creeps. Watching ends with the session." }), watchIn, el("div", { class: "bar" }, watchBtn, unwatchBtn), watchStat,
     el("h3", { textContent: "Requests this vehicle answers" }), reqStat, el("div", { class: "bar" }, probeBtn, reqShow), reqOut,
     el("h3", { textContent: "Compare the last two full scans" }), el("p", { textContent: "Lists addresses that appeared, disappeared or changed between the two most recent full scans of this vehicle: engine-off against engine-running is the quickest way to see which addresses are live values." }), el("div", { class: "bar" }, cmpBtn), cmpOut,
