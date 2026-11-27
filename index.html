@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#111110">
-<meta name="build-id" content="OBD-20261127-1835Z">
-<meta name="build-timestamp-utc" content="2026-11-27T18:35:45Z">
+<meta name="build-id" content="OBD-20261127-1836Z">
+<meta name="build-timestamp-utc" content="2026-11-27T18:36:26Z">
 <title>OBD Live</title>
 <style>
 :root{color-scheme:dark;--bg:#111110;--surface:#1a1a19;--raised:#242422;--text:#f0efec;--muted:#c3c2b7;--faint:#8f8e85;--grid:#2c2c2a;--axis:#383835;--line:rgba(255,255,255,.1);--good:#0ca30c;--bad:#d03b3b;--accent:#3987e5}
@@ -159,7 +159,7 @@ footer{margin-top:14px;font-size:.72rem;color:var(--faint)}footer p{margin:2px 0
 <div id="toast" hidden></div>
 <script>
 "use strict";
-const BUILD_ID = "OBD-20261127-1835Z", BUILD_UTC = "2026-11-27T18:35:45Z";
+const BUILD_ID = "OBD-20261127-1836Z", BUILD_UTC = "2026-11-27T18:36:26Z";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 
 /*PURE-START*/
@@ -1754,7 +1754,9 @@ function maintenanceBrief(drives, vehicle, baseline, ruleFor) {
   const typeKey = t => String(t).split(":")[0].replace(/[\d.,]+/g, "#").replace(/\s+/g, " ").trim();
   const put = (sys, cls, type, d, detail, occ = 1) => { const g = ((groups[sys] = groups[sys] || {})[cls] = groups[sys][cls] || {}), k = typeKey(type); const t = g[k] = g[k] || { name: type, occ: 0, drives: new Set(), first: d.start, last: d.start, detail: "", lastT: 0 }; t.occ += occ; t.drives.add(d.id); t.first = Math.min(t.first, d.start); t.last = Math.max(t.last, d.start); if (d.start >= t.lastT) { t.lastT = d.start; t.name = type; if (detail) t.detail = detail; } };
   ds.forEach(d => {
-    const byKey = {}; (d.alerts || []).forEach(a => { byKey[a.key] = byKey[a.key] || { n: 0, text: a.text, level: a.level }; byKey[a.key].n++; });
+    // Alerts logged under rules since tightened are left out so the brief doesn't carry their noise: misfire chips below +5, and EVAP chips from builds before the -1,500 Pa / 60 s rule (Nov 27 2026).
+    const alertOk = a => !(/^mis\d$/.test(a.key) && (+((/\+(\d+)/.exec(a.text) || [])[1] || 0)) < 5) && !(a.key === "evapp" && String(d.build || "") < "OBD-20261127-1800Z");
+    const byKey = {}; (d.alerts || []).filter(alertOk).forEach(a => { byKey[a.key] = byKey[a.key] || { n: 0, text: a.text, level: a.level }; byKey[a.key].n++; });
     for (const k in byKey) { const [sys, type] = alertSys(k); put(sys, byKey[k].level === "alert" ? "Red alert" : "Amber alert", type, d, byKey[k].text, byKey[k].n); }
     const rv = d.review || {}; (rv.findings || []).forEach(f => put(findingSys(f.system), f.level === "attention" ? "Finding: needs attention" : "Finding: watch", f.title, d, f.next));
     const c = d.codes || {}; [["stored", "stored"], ["pending", "pending"], ["permanent", "permanent"]].forEach(([k, lab]) => (c[k] || []).forEach(code => put("Computer-reported faults", "Trouble code", code, d, lab)));
@@ -2656,7 +2658,8 @@ function casMessages() {
   for (let c = 1; c <= 8; c++) { const v = latest["mis" + c]; const base = casSeen["mis0" + c]; if (typeof v !== "number") continue; if (base === undefined) casSeen["mis0" + c] = v; else if (v - base >= 5) out.push({ key: "mis" + c, level: v - base >= 20 ? "alert" : "warn", icon: "engine", text: "Misfire cyl " + c + " +" + (v - base), say: "Misfire cylinder " + c, row: "mis" }); } // a handful of counts per drive is background on a high-mileage engine; five on one cylinder is worth a glance, twenty is a problem
   const low = ["tpfl","tprl","tpfr","tprr"].filter(bad); if (low.length) out.push({ key: "tire", level: "warn", icon: "tire", text: "Tire low " + low.map(i => ({ tpfl: "DF", tprl: "DR", tpfr: "PF", tprr: "PR" })[i]).join(" "), say: "Tire pressure low", row: "tire" });
   if ((latest.fuel ?? null) !== null && latest.fuel <= 15) out.push({ key: "fuel", level: "warn", icon: "fuel", text: "Fuel " + latest.fuel.toFixed(0) + "%", say: "Fuel low", row: "fuel" });
-  if (sustained("evapp", 20000)) out.push({ key: "evapp", level: "warn", icon: "fuel", text: "EVAP " + latest.evapp.toFixed(0) + " Pa", say: "EVAP tank pressure outside limits", row: "evapp" });
+  // This truck pulls -1,000 to -1,400 Pa of tank vacuum for 40 s to several minutes on most drives while purging, before and after the repair, with no code in 5,000+ miles: GM's -7.5 mmHg figure belongs to its vent-restriction test, which runs under narrower conditions than ordinary driving. The chip therefore needs -1,500 Pa held for 60 s.
+  if (sustained("evapp", 60000) && latest.evapp <= -1500) out.push({ key: "evapp", level: "warn", icon: "fuel", text: "EVAP " + latest.evapp.toFixed(0) + " Pa", say: "EVAP tank pressure outside limits", row: "evapp" });
   if (bad("slip")) out.push({ key: "slip", level: "warn", icon: "gear", text: "TCC slip " + latest.slip.toFixed(0), say: "Converter slip at cruise", row: "slip" });
   const cmp = running ? liveBandCompare() : null; if (cmp && cmp.out.some(r => /new/.test(r.state))) { const r = cmp.out.find(x => /new/.test(x.state)); out.push({ key: "band", level: "warn", icon: "band", text: r.label.replace(/,.*$/, "") + " " + r.state, say: r.label.replace(/,.*$/, "") + " beyond anything logged", row: "band" }); }
   // First appearance (or a return after 60 s clear) chimes and speaks; red ones flash until acknowledged.
